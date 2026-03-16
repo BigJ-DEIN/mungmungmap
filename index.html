@@ -7,6 +7,11 @@
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700;900&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
+  <!-- Kakao Maps SDK (Services library for Places search) -->
+  <!-- ★ API 키 설정 필요: developers.kakao.com → 내 애플리케이션 → JavaScript 키 입력 -->
+  <script>
+    window.KAKAO_JS_KEY = '8636f71c9fd0f4b857622a9ba0be7dcb';
+  </script>
   <!-- Firebase -->
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
@@ -280,6 +285,57 @@
     .legend-item:last-child { margin-bottom:0; }
     .legend-dot { width:11px; height:11px; border-radius:50%; border:2px solid white; box-shadow:0 1px 4px rgba(0,0,0,.15); }
     .ld-fee { border:2px solid #FFD700; }
+
+    /* ── KAKAO LIVE SEARCH ── */
+    #live-search-btn {
+      position:absolute; top:14px; right:14px; z-index:600;
+      background:white; border:2px solid #FF6B35; color:#FF6B35;
+      border-radius:22px; padding:7px 14px; font-size:13px; font-weight:700;
+      font-family:inherit; cursor:pointer; box-shadow:0 2px 12px rgba(0,0,0,.12);
+      display:flex; align-items:center; gap:6px; transition:all .2s;
+      white-space:nowrap;
+    }
+    #live-search-btn:hover { background:#FFF0E8; }
+    #live-search-btn.loading { opacity:.7; pointer-events:none; }
+    #live-search-btn.active { background:#FF6B35; color:white; }
+
+    #live-results-panel {
+      position:absolute; top:58px; right:14px; z-index:600;
+      background:white; border-radius:14px; padding:0;
+      box-shadow:0 4px 24px rgba(0,0,0,.14);
+      width:260px; max-height:340px; display:none; flex-direction:column;
+      overflow:hidden;
+    }
+    #live-results-panel.visible { display:flex; }
+    .lrp-header {
+      padding:10px 14px 8px; border-bottom:1px solid #F0F0F0;
+      font-size:12px; font-weight:700; color:#555;
+      display:flex; align-items:center; justify-content:space-between;
+    }
+    .lrp-count { color:#FF6B35; }
+    .lrp-close { background:none; border:none; font-size:16px; cursor:pointer; color:#999; padding:0; }
+    .lrp-list { overflow-y:auto; max-height:290px; }
+    .lrp-item {
+      padding:10px 14px; border-bottom:1px solid #F7F7F7; cursor:pointer;
+      transition:background .15s;
+    }
+    .lrp-item:hover { background:#FFF8F5; }
+    .lrp-item:last-child { border-bottom:none; }
+    .lrp-name { font-size:13px; font-weight:700; color:#2D2D2D; margin-bottom:2px; }
+    .lrp-cat { font-size:11px; color:#FF6B35; font-weight:600; margin-bottom:2px; }
+    .lrp-addr { font-size:11px; color:#999; line-height:1.4; }
+    .lrp-in-db { font-size:10px; color:#4CAF50; font-weight:700; }
+    .lrp-empty { padding:24px; text-align:center; font-size:13px; color:#AAA; }
+
+    /* Live markers (teal/blue dots) */
+    .live-dot {
+      width:18px; height:18px; border-radius:50%;
+      background:#1976D2; border:2.5px solid white;
+      box-shadow:0 2px 8px rgba(25,118,210,.5);
+      cursor:pointer; transition:transform .15s;
+    }
+    .live-dot:hover { transform:scale(1.3); }
+    .live-dot.in-db { background:#4CAF50; }
 
     /* ── TOAST ── */
     #toast {
@@ -657,6 +713,19 @@
       <div class="legend-item"><div class="legend-dot" style="background:#FF6B35"></div><span>🐾 확인 완료</span></div>
       <div class="legend-item"><div class="legend-dot" style="background:#C8C8C8"></div><span>❓ 확인 필요</span></div>
       <div class="legend-item"><div class="legend-dot ld-fee" style="background:#FF6B35; border-color:#FFD700"></div><span>💰 입장료 있음</span></div>
+      <div class="legend-item"><div class="legend-dot" style="background:#1976D2"></div><span>🔍 카카오 검색 결과</span></div>
+      <div class="legend-item"><div class="legend-dot" style="background:#4CAF50"></div><span>✅ 이미 등록됨</span></div>
+    </div>
+    <!-- Kakao Live Search -->
+    <button id="live-search-btn" onclick="toggleLiveSearch()">
+      🔍 주변 애견 장소 더 찾기
+    </button>
+    <div id="live-results-panel">
+      <div class="lrp-header">
+        <span>카카오 검색 결과 <span class="lrp-count" id="lrp-count"></span></span>
+        <button class="lrp-close" onclick="clearLiveSearch()">✕</button>
+      </div>
+      <div class="lrp-list" id="lrp-list"></div>
     </div>
   </div>
 
@@ -754,12 +823,12 @@
 
 // ▼ Firebase Console > 프로젝트 설정 > 웹 앱에서 복사
 const firebaseConfig = {
-  apiKey:            "YOUR_API_KEY",
-  authDomain:        "YOUR_PROJECT_ID.firebaseapp.com",
-  projectId:         "YOUR_PROJECT_ID",
-  storageBucket:     "YOUR_PROJECT_ID.appspot.com",
-  messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-  appId:             "YOUR_APP_ID"
+  apiKey:            "AIzaSyCvIrQTs-WzrqYY6VpxCjDeXF5c2Ofol1E",
+  authDomain:        "hongsi-map.firebaseapp.com",
+  projectId:         "hongsi-map",
+  storageBucket:     "hongsi-map.firebasestorage.app",
+  messagingSenderId: "335853214795",
+  appId:             "1:335853214795:web:8353e465d2ef5723e901ce"
 };
 
 
@@ -3257,6 +3326,215 @@ function setMarkerActive(id, active) {
   const dot = el.querySelector('.m-dot'); if (!dot) return;
   dot.style.background = active ? '#D32F2F' : m.color;
   if (active) dot.classList.add('active'); else dot.classList.remove('active');
+}
+
+// ══════════════════════════════════════════════════════
+//  KAKAO LIVE SEARCH  (실시간 주변 애견 장소 검색)
+// ══════════════════════════════════════════════════════
+let liveMarkers = [];
+let kakaoPS = null;
+let kakaoReady = false;
+
+function initKakaoSearch() {
+  if (kakaoReady) return;
+  const key = window.KAKAO_JS_KEY;
+  if (!key || key === 'YOUR_KAKAO_JS_KEY') return;
+  if (window.kakao && window.kakao.maps) {
+    try {
+      kakaoPS = new kakao.maps.services.Places();
+      kakaoReady = true;
+    } catch(e) {}
+    return;
+  }
+  // Dynamically load Kakao SDK
+  const s = document.createElement('script');
+  s.src = `//dapi.kakao.com/v2/maps/sdk.js?appkey=${key}&libraries=services&autoload=false`;
+  s.onload = () => {
+    kakao.maps.load(() => {
+      try {
+        kakaoPS = new kakao.maps.services.Places();
+        kakaoReady = true;
+      } catch(e) { console.warn('Kakao Places init failed', e); }
+    });
+  };
+  document.head.appendChild(s);
+}
+
+function toggleLiveSearch() {
+  const btn = document.getElementById('live-search-btn');
+  if (btn.classList.contains('active')) {
+    clearLiveSearch();
+    return;
+  }
+  const key = window.KAKAO_JS_KEY;
+  if (!key || key === 'YOUR_KAKAO_JS_KEY') {
+    showKakaoKeyGuide();
+    return;
+  }
+  initKakaoSearch();
+  // Wait for SDK to load if needed
+  let tries = 0;
+  const trySearch = () => {
+    if (kakaoReady) {
+      doLiveSearch();
+    } else if (tries++ < 20) {
+      setTimeout(trySearch, 200);
+    } else {
+      showToast('카카오 API 로드 실패. API 키를 확인해주세요.');
+    }
+  };
+  trySearch();
+}
+
+function doLiveSearch() {
+  const btn = document.getElementById('live-search-btn');
+  btn.classList.add('loading');
+  btn.textContent = '⏳ 검색 중...';
+
+  const center = map.getCenter();
+  const bounds = map.getBounds();
+  // Calc radius from map bounds (rough estimate)
+  const latDiff = bounds.getNorth() - bounds.getSouth();
+  const lngDiff = bounds.getEast() - bounds.getWest();
+  const radiusKm = Math.min(Math.max((latDiff * 111 + lngDiff * 88) / 4 * 1000, 2000), 20000);
+
+  const queries = ['애견동반', '반려견동반', '애견카페', '펫카페'];
+  let allResults = [];
+  let pending = queries.length;
+
+  queries.forEach(q => {
+    kakaoPS.keywordSearch(q, (data, status) => {
+      if (status === kakao.maps.services.Status.OK) {
+        allResults = allResults.concat(data);
+      }
+      pending--;
+      if (pending === 0) renderLiveResults(allResults);
+    }, {
+      x: center.lng,
+      y: center.lat,
+      radius: Math.round(radiusKm),
+      size: 15
+    });
+  });
+}
+
+function renderLiveResults(rawData) {
+  const btn = document.getElementById('live-search-btn');
+  btn.classList.remove('loading');
+
+  // Deduplicate by place_name + address
+  const seen = new Set();
+  const data = rawData.filter(d => {
+    const key = d.place_name + '|' + d.road_address_name;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+
+  clearLiveMarkers();
+
+  if (data.length === 0) {
+    showToast('주변에서 추가 장소를 찾지 못했어요');
+    btn.textContent = '🔍 주변 애견 장소 더 찾기';
+    return;
+  }
+
+  // Check which are already in our DB
+  const dbNames = new Set(places.map(p => p.name.trim()));
+  const dbCoords = places.map(p => [p.lat, p.lng]);
+
+  function coordInDB(lat, lng) {
+    return dbCoords.some(([dlat, dlng]) =>
+      Math.abs(dlat - lat) < 0.0005 && Math.abs(dlng - lng) < 0.0005
+    );
+  }
+
+  let listHtml = '';
+  data.forEach((d, i) => {
+    const lat = parseFloat(d.y);
+    const lng = parseFloat(d.x);
+    const inDB = dbNames.has(d.place_name.trim()) || coordInDB(lat, lng);
+    const dotClass = inDB ? 'live-dot in-db' : 'live-dot';
+    const dotHtml = `<div class="${dotClass}" data-idx="${i}"></div>`;
+    const icon = L.divIcon({ html: dotHtml, className:'', iconSize:[18,18], iconAnchor:[9,9] });
+    const m = L.marker([lat, lng], { icon })
+      .addTo(map)
+      .on('click', () => showLivePopup(d, inDB));
+    liveMarkers.push(m);
+
+    const statusBadge = inDB
+      ? `<div class="lrp-in-db">✅ 이미 등록된 장소</div>`
+      : `<div style="font-size:10px;color:#1976D2;font-weight:700;">🔵 미등록 장소</div>`;
+    listHtml += `
+      <div class="lrp-item" onclick="flyToLive(${lat},${lng},${i})">
+        <div class="lrp-name">${d.place_name}</div>
+        <div class="lrp-cat">${d.category_name.split(' > ').pop()}</div>
+        <div class="lrp-addr">${d.road_address_name || d.address_name}</div>
+        ${statusBadge}
+      </div>`;
+  });
+
+  document.getElementById('lrp-list').innerHTML = listHtml;
+  document.getElementById('lrp-count').textContent = `${data.length}개`;
+  document.getElementById('live-results-panel').classList.add('visible');
+  btn.classList.add('active');
+  btn.textContent = '✕ 검색 닫기';
+
+  const newCount = data.filter(d => {
+    const lat = parseFloat(d.y), lng = parseFloat(d.x);
+    return !dbNames.has(d.place_name.trim()) && !coordInDB(lat, lng);
+  }).length;
+  showToast(`🔍 ${data.length}개 발견 (미등록 ${newCount}개)`);
+}
+
+function flyToLive(lat, lng, idx) {
+  map.flyTo([lat, lng], 17, { animate:true, duration:0.7 });
+}
+
+function showLivePopup(d, inDB) {
+  const lat = parseFloat(d.y), lng = parseFloat(d.x);
+  const phone = d.phone ? `<div style="margin-top:6px;font-size:12px;color:#555">📞 ${d.phone}</div>` : '';
+  const kakaoLink = d.place_url ? `<a href="${d.place_url}" target="_blank" style="display:inline-block;margin-top:8px;padding:6px 12px;background:#FFEB00;color:#3C1E1E;border-radius:8px;font-size:12px;font-weight:700;text-decoration:none;">카카오맵에서 보기</a>` : '';
+  const status = inDB
+    ? `<div style="margin-top:6px;font-size:12px;color:#4CAF50;font-weight:700;">✅ 이미 앱에 등록된 장소입니다</div>`
+    : `<div style="margin-top:6px;font-size:12px;color:#1976D2;font-weight:700;">🔵 앱에 미등록된 장소 — 제보 가능!</div>`;
+  const popup = L.popup({ maxWidth: 220, className:'live-popup' })
+    .setLatLng([lat, lng])
+    .setContent(`
+      <div style="font-size:13px;font-weight:700;color:#2D2D2D">${d.place_name}</div>
+      <div style="font-size:11px;color:#FF6B35;margin-top:2px">${d.category_name.split(' > ').pop()}</div>
+      <div style="font-size:11px;color:#888;margin-top:3px">${d.road_address_name || d.address_name}</div>
+      ${phone}${status}${kakaoLink}
+    `)
+    .openOn(map);
+}
+
+function clearLiveSearch() {
+  clearLiveMarkers();
+  document.getElementById('live-results-panel').classList.remove('visible');
+  const btn = document.getElementById('live-search-btn');
+  btn.classList.remove('active','loading');
+  btn.textContent = '🔍 주변 애견 장소 더 찾기';
+}
+
+function clearLiveMarkers() {
+  liveMarkers.forEach(m => map.removeLayer(m));
+  liveMarkers = [];
+}
+
+function showKakaoKeyGuide() {
+  const msg = `카카오 API 키 설정 방법:
+
+1. developers.kakao.com 접속 → 로그인
+2. [내 애플리케이션] → [애플리케이션 추가하기]
+3. 앱 이름 입력 후 저장
+4. [앱 키] 탭 → JavaScript 키 복사
+5. [플랫폼] → Web → 사이트 도메인에
+   https://bigj-dein.github.io 추가
+6. index.html 상단의
+   KAKAO_JS_KEY = 'YOUR_KAKAO_JS_KEY'
+   부분을 복사한 키로 교체 후 GitHub에 업로드`;
+  alert(msg);
 }
 
 // ══════════════════════════════════════════════════════
