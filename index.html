@@ -654,15 +654,9 @@
   <!-- Map -->
   <div id="map">
     <div class="map-legend">
-      <div class="legend-item"><div class="legend-dot" style="background:#FF6B35"></div><span>분당·판교</span></div>
-      <div class="legend-item"><div class="legend-dot" style="background:#7C4DFF"></div><span>보정동</span></div>
-      <div class="legend-item"><div class="legend-dot" style="background:#1565C0"></div><span>수원·하남·광주</span></div>
-      <div class="legend-item"><div class="legend-dot" style="background:#C62828"></div><span>용인</span></div>
-      <div class="legend-item"><div class="legend-dot" style="background:#D84315"></div><span>화성·평택</span></div>
-      <div class="legend-item"><div class="legend-dot" style="background:#6A1B9A"></div><span>파주·고양</span></div>
-      <div class="legend-item"><div class="legend-dot" style="background:#2E7D32"></div><span>가평·포천</span></div>
-      <div class="legend-item"><div class="legend-dot" style="background:#0097A7"></div><span>양평·남양주</span></div>
-      <div class="legend-item"><div class="legend-dot ld-fee" style="background:#FF6B35"></div><span>입장료 있음</span></div>
+      <div class="legend-item"><div class="legend-dot" style="background:#FF6B35"></div><span>🐾 확인 완료</span></div>
+      <div class="legend-item"><div class="legend-dot" style="background:#C8C8C8"></div><span>❓ 확인 필요</span></div>
+      <div class="legend-item"><div class="legend-dot ld-fee" style="background:#FF6B35; border-color:#FFD700"></div><span>💰 입장료 있음</span></div>
     </div>
   </div>
 
@@ -805,7 +799,7 @@ const places = [
      분당·판교
   ══════════════════════════════ */
   {
-    id:1, name:"더독 애견카페", cat:"애견카페", area:"분당",
+    id:1, name:"더독 애견카페", cat:"애견카페", area:"분당", petConfirmed:true,
     addr:"경기 성남시 분당구 석운로120번길 4", phone:"010-7337-4884",
     hours:[{d:"월–금",t:"12:00 – 19:00"},{d:"토–일",t:"10:00 – 19:00"}],
     lat:37.3690, lng:127.0820,
@@ -816,7 +810,7 @@ const places = [
     emoji:"🐕"
   },
   {
-    id:2, name:"카페 종화", cat:"카페", area:"분당",
+    id:2, name:"카페 종화", cat:"카페", area:"분당", petConfirmed:false,
     addr:"경기 성남시 분당구 이매로89번길 24 1층", phone:"0507-1393-9770",
     hours:[{d:"월·수–일",t:"11:00 – 22:00"},{d:"화",t:"휴무"}],
     lat:37.3924, lng:127.1140,
@@ -827,7 +821,7 @@ const places = [
     emoji:"☕"
   },
   {
-    id:3, name:"도넛 드로잉", cat:"카페", area:"분당",
+    id:3, name:"도넛 드로잉", cat:"카페", area:"분당", petConfirmed:false,
     addr:"경기 성남시 분당구 대왕판교로 103", phone:"0507-1345-0993",
     hours:[{d:"월–금",t:"11:00 – 22:00"},{d:"토–일",t:"10:30 – 22:00"}],
     lat:37.4021, lng:127.1080,
@@ -838,7 +832,7 @@ const places = [
     emoji:"🍩"
   },
   {
-    id:4, name:"다독다독", cat:"애견카페", area:"분당",
+    id:4, name:"다독다독", cat:"애견카페", area:"분당", petConfirmed:true,
     addr:"경기 성남시 분당구 운중동 552-2", phone:"031-698-5566",
     hours:[{d:"토–일",t:"11:00 – 21:00 (카페)"},{d:"월–금",t:"데이케어·훈련 전용"}],
     lat:37.3843, lng:127.0852,
@@ -849,7 +843,7 @@ const places = [
     emoji:"🏡"
   },
   {
-    id:5, name:"잼앤브레드 BREAKFAST BAR", cat:"브런치카페", area:"분당",
+    id:5, name:"잼앤브레드 BREAKFAST BAR", cat:"브런치카페", area:"분당", petConfirmed:false,
     addr:"경기 성남시 분당구 판교공원로1길 16", phone:"0507-1353-5555",
     hours:[{d:"월",t:"09:00 – 14:30"},{d:"화–토",t:"08:00 – 16:00"},{d:"일",t:"휴무"}],
     lat:37.3993, lng:127.1071,
@@ -860,7 +854,7 @@ const places = [
     emoji:"🥐"
   },
   {
-    id:6, name:"월페이퍼", cat:"브런치카페", area:"분당",
+    id:6, name:"월페이퍼", cat:"브런치카페", area:"분당", petConfirmed:false,
     addr:"경기 성남시 분당구 분당로 264 (율동공원 인근)", phone:"031-714-1010",
     hours:[{d:"매일",t:"10:00 – 21:00"}],
     lat:37.3831, lng:127.1352,
@@ -871,7 +865,7 @@ const places = [
     emoji:"🖼️"
   },
   {
-    id:10, name:"드윝 (Drwip)", cat:"카페", area:"분당",
+    id:10, name:"드윝 (Drwip)", cat:"카페", area:"분당", petConfirmed:false,
     addr:"경기 성남시 분당구 정자일로 136 3단지 110호", phone:"0507-1488-9898",
     hours:[{d:"매일",t:"10:00 – 21:00"}],
     lat:37.3620, lng:127.1185,
@@ -882,7 +876,7 @@ const places = [
     emoji:"🫖"
   },
   {
-    id:11, name:"유메노키친", cat:"레스토랑", area:"분당",
+    id:11, name:"유메노키친", cat:"레스토랑", area:"분당", petConfirmed:false,
     addr:"경기 성남시 분당구 성남대로 51 분당 포스빌 116호", phone:"031-788-5255",
     hours:[{d:"월–금",t:"11:30 – 21:30"},{d:"토–일",t:"11:00 – 21:30"}],
     lat:37.3700, lng:127.1050,
@@ -893,7 +887,7 @@ const places = [
     emoji:"🍱"
   },
   {
-    id:12, name:"빠리다옥", cat:"브런치카페", area:"분당",
+    id:12, name:"빠리다옥", cat:"브런치카페", area:"분당", petConfirmed:false,
     addr:"경기 성남시 분당구 정자일로 230 (정자동)", phone:"031-712-8789",
     hours:[{d:"매일",t:"10:00 – 22:00"}],
     lat:37.3630, lng:127.1200,
@@ -904,7 +898,7 @@ const places = [
     emoji:"🥗"
   },
   {
-    id:13, name:"앤드커피 (&Coffee)", cat:"펫카페", area:"분당",
+    id:13, name:"앤드커피 (&Coffee)", cat:"펫카페", area:"분당", petConfirmed:true,
     addr:"경기 성남시 분당구 느티로77번길 23 1층", phone:"0507-1436-3484",
     hours:[{d:"매일",t:"11:00 – 20:30"}],
     lat:37.3596, lng:127.1200,
@@ -915,7 +909,7 @@ const places = [
     emoji:"🐱"
   },
   {
-    id:14, name:"에그드랍 판교테크노밸리점", cat:"카페", area:"분당",
+    id:14, name:"에그드랍 판교테크노밸리점", cat:"카페", area:"분당", petConfirmed:false,
     addr:"경기 성남시 분당구 판교역로 231 H스퀘어 S동 104호", phone:"031-601-2290",
     hours:[{d:"월–금",t:"08:00 – 21:00"},{d:"토–일",t:"10:00 – 20:00"}],
     lat:37.3948, lng:127.1085,
@@ -926,7 +920,7 @@ const places = [
     emoji:"🥚"
   },
   {
-    id:15, name:"블루보틀 판교점", cat:"카페", area:"분당",
+    id:15, name:"블루보틀 판교점", cat:"카페", area:"분당", petConfirmed:false,
     addr:"경기 성남시 분당구 판교역로 166 카카오판교아지트 1층", phone:"031-8018-1905",
     hours:[{d:"월–금",t:"07:30 – 19:00"},{d:"토–일",t:"09:00 – 18:00"}],
     lat:37.3960, lng:127.1100,
@@ -937,7 +931,7 @@ const places = [
     emoji:"🫐"
   },
   {
-    id:16, name:"더가든 카페", cat:"카페", area:"분당",
+    id:16, name:"더가든 카페", cat:"카페", area:"분당", petConfirmed:false,
     addr:"경기 성남시 분당구 야탑로81번길 10 (야탑동)", phone:"031-702-7799",
     hours:[{d:"매일",t:"10:00 – 22:00"}],
     lat:37.4100, lng:127.1270,
@@ -948,7 +942,7 @@ const places = [
     emoji:"🌻"
   },
   {
-    id:17, name:"세로브 (SEROV)", cat:"디저트카페", area:"분당",
+    id:17, name:"세로브 (SEROV)", cat:"디저트카페", area:"분당", petConfirmed:false,
     addr:"경기 성남시 분당구 동판교로52번길 25-3 1층 102호", phone:"031-604-7878",
     hours:[{d:"화–일",t:"11:00 – 19:00"},{d:"월",t:"휴무"}],
     lat:37.3873, lng:127.1082,
@@ -959,7 +953,7 @@ const places = [
     emoji:"🎂"
   },
   {
-    id:18, name:"에잇이얼스 (8 YEARS)", cat:"브런치카페", area:"분당",
+    id:18, name:"에잇이얼스 (8 YEARS)", cat:"브런치카페", area:"분당", petConfirmed:false,
     addr:"경기 성남시 분당구 판교역로2번길 12 1층", phone:"031-601-8008",
     hours:[{d:"화–일",t:"09:00 – 17:00 (LO 15:00)"},{d:"월",t:"휴무"}],
     lat:37.3865, lng:127.1096,
@@ -970,7 +964,7 @@ const places = [
     emoji:"🌅"
   },
   {
-    id:19, name:"루프엑스 (RUFXXX)", cat:"카페·바", area:"분당",
+    id:19, name:"루프엑스 (RUFXXX)", cat:"카페·바", area:"분당", petConfirmed:true,
     addr:"경기 성남시 분당구 백현동 5853", phone:"031-695-8535",
     hours:[{d:"매일",t:"17:00 – 01:00"}],
     lat:37.3870, lng:127.1094,
@@ -981,7 +975,7 @@ const places = [
     emoji:"🍷"
   },
   {
-    id:20, name:"아브뉴프랑 수제버거", cat:"음식점", area:"분당",
+    id:20, name:"아브뉴프랑 수제버거", cat:"음식점", area:"분당", petConfirmed:false,
     addr:"경기 성남시 분당구 동판교로177번길 25 아브뉴프랑 2층", phone:"031-602-8880",
     hours:[{d:"매일",t:"11:30 – 22:00"}],
     lat:37.3888, lng:127.1040,
@@ -992,7 +986,7 @@ const places = [
     emoji:"🍔"
   },
   {
-    id:21, name:"카페 랄로 (운중저수지)", cat:"카페", area:"분당",
+    id:21, name:"카페 랄로 (운중저수지)", cat:"카페", area:"분당", petConfirmed:false,
     addr:"경기 성남시 분당구 하오개로 246 (운중동)", phone:"031-709-5711",
     hours:[{d:"매일",t:"10:00 – 23:00"}],
     lat:37.3842, lng:127.0843,
@@ -1007,7 +1001,7 @@ const places = [
      보정동·기흥구
   ══════════════════════════════ */
   {
-    id:22, name:"See Ya! 카페", cat:"카페", area:"보정동",
+    id:22, name:"See Ya! 카페", cat:"카페", area:"보정동", petConfirmed:false,
     addr:"경기 용인시 기흥구 보정동 카페거리 일원", phone:"0507-1311-8895",
     hours:[{d:"수–일",t:"09:30 – 21:00"},{d:"월",t:"10:00 – 19:00"},{d:"화",t:"휴무"}],
     lat:37.3097, lng:127.1158,
@@ -1018,7 +1012,7 @@ const places = [
     emoji:"👋"
   },
   {
-    id:23, name:"헤이그 (Hey G)", cat:"애견카페", area:"보정동",
+    id:23, name:"헤이그 (Hey G)", cat:"애견카페", area:"보정동", petConfirmed:true,
     addr:"경기 용인시 기흥구 중부대로 769-10", phone:"0507-1425-6696",
     hours:[{d:"매일",t:"10:00 – 20:00"}],
     lat:37.3149, lng:127.1194,
@@ -1029,7 +1023,7 @@ const places = [
     emoji:"🐾"
   },
   {
-    id:24, name:"커피먹고멍멍", cat:"애견카페", area:"보정동",
+    id:24, name:"커피먹고멍멍", cat:"애견카페", area:"보정동", petConfirmed:true,
     addr:"경기 용인시 기흥구 보정동 카페거리", phone:"0507-1300-5566",
     hours:[{d:"매일",t:"11:00 – 20:00"}],
     lat:37.3120, lng:127.1130,
@@ -1040,7 +1034,7 @@ const places = [
     emoji:"☕"
   },
   {
-    id:25, name:"포레스트 아웃팅스 용인점", cat:"카페", area:"보정동",
+    id:25, name:"포레스트 아웃팅스 용인점", cat:"카페", area:"보정동", petConfirmed:true,
     addr:"경기 용인시 기흥구 농서로 4", phone:"031-282-1220",
     hours:[{d:"매일",t:"10:00 – 22:00"}],
     lat:37.3050, lng:127.1030,
@@ -1051,7 +1045,7 @@ const places = [
     emoji:"🌲"
   },
   {
-    id:26, name:"에코의 서재", cat:"북카페", area:"보정동",
+    id:26, name:"에코의 서재", cat:"북카페", area:"보정동", petConfirmed:false,
     addr:"경기 용인시 기흥구 보정로 47 (보정동)", phone:"031-898-0555",
     hours:[{d:"매일",t:"11:00 – 23:00"}],
     lat:37.3088, lng:127.1148,
@@ -1062,7 +1056,7 @@ const places = [
     emoji:"📚"
   },
   {
-    id:27, name:"민가 카페", cat:"카페", area:"보정동",
+    id:27, name:"민가 카페", cat:"카페", area:"보정동", petConfirmed:false,
     addr:"경기 용인시 기흥구 마북동 9-6 1층", phone:"031-283-1000",
     hours:[{d:"매일",t:"10:00 – 21:00"}],
     lat:37.3215, lng:127.1170,
@@ -1073,7 +1067,7 @@ const places = [
     emoji:"🌸"
   },
   {
-    id:28, name:"스타벅스 죽전DT점", cat:"카페", area:"보정동",
+    id:28, name:"스타벅스 죽전DT점", cat:"카페", area:"보정동", petConfirmed:false,
     addr:"경기 용인시 기흥구 죽전로 64 (죽전동)", phone:"1522-3232",
     hours:[{d:"매일",t:"07:00 – 22:00"}],
     lat:37.3198, lng:127.1068,
@@ -1084,7 +1078,7 @@ const places = [
     emoji:"🟢"
   },
   {
-    id:29, name:"도도미미", cat:"음식점", area:"보정동",
+    id:29, name:"도도미미", cat:"음식점", area:"보정동", petConfirmed:false,
     addr:"경기 용인시 기흥구 보정동 카페거리 내", phone:"0507-1388-7757",
     hours:[{d:"매일",t:"11:00 – 21:00"}],
     lat:37.3102, lng:127.1162,
@@ -1095,7 +1089,7 @@ const places = [
     emoji:"🍽️"
   },
   {
-    id:30, name:"ER커피 (ER COFFEE)", cat:"카페", area:"보정동",
+    id:30, name:"ER커피 (ER COFFEE)", cat:"카페", area:"보정동", petConfirmed:false,
     addr:"경기 용인시 기흥구 구성로 543 2층 (죽전 인근)", phone:"0507-1399-4747",
     hours:[{d:"매일",t:"10:00 – 22:00"}],
     lat:37.3118, lng:127.1065,
@@ -1110,7 +1104,7 @@ const places = [
      가평
   ══════════════════════════════ */
   {
-    id:31, name:"가평 애견동반카페 아웃팅", cat:"애견카페", area:"가평",
+    id:31, name:"가평 애견동반카페 아웃팅", cat:"애견카페", area:"가평", petConfirmed:true,
     addr:"경기 가평군 상면 수목원로 135", phone:"0503-7153-6774",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.76571212, lng:127.363463,
@@ -1121,7 +1115,7 @@ const places = [
     emoji:"🌿"
   },
   {
-    id:32, name:"디그르르", cat:"카페", area:"가평",
+    id:32, name:"디그르르", cat:"카페", area:"가평", petConfirmed:false,
     addr:"경기 가평군 청평면 경춘로 89-2", phone:"0507-1487-0337",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.68430803, lng:127.37777041,
@@ -1132,7 +1126,7 @@ const places = [
     emoji:"☕"
   },
   {
-    id:33, name:"가보자도그빌리지", cat:"애견카페", area:"가평",
+    id:33, name:"가보자도그빌리지", cat:"애견카페", area:"가평", petConfirmed:true,
     addr:"경기 가평군 상면 서대길 58", phone:"010-8631-4268",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.77659192, lng:127.38120324,
@@ -1143,7 +1137,7 @@ const places = [
     emoji:"🏘️"
   },
   {
-    id:34, name:"까끼토끼놀이터", cat:"애견카페", area:"가평",
+    id:34, name:"까끼토끼놀이터", cat:"애견카페", area:"가평", petConfirmed:true,
     addr:"경기 가평군 가평읍 경춘로 1983-12", phone:"031-582-3876",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.8104349, lng:127.49732139,
@@ -1154,7 +1148,7 @@ const places = [
     emoji:"🐇"
   },
   {
-    id:35, name:"에이바이독", cat:"애견카페", area:"가평",
+    id:35, name:"에이바이독", cat:"애견카페", area:"가평", petConfirmed:true,
     addr:"경기 가평군 가평읍 태봉두밀로596번길 55", phone:"",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.81184381, lng:127.43302599,
@@ -1169,7 +1163,7 @@ const places = [
      양평
   ══════════════════════════════ */
   {
-    id:36, name:"듀먼카페", cat:"카페", area:"양평",
+    id:36, name:"듀먼카페", cat:"카페", area:"양평", petConfirmed:true,
     addr:"경기 양평군 서종면 당목뿌리길 64", phone:"",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.59992381, lng:127.34675152,
@@ -1180,7 +1174,7 @@ const places = [
     emoji:"☕"
   },
   {
-    id:37, name:"클럽더독스", cat:"애견카페", area:"양평",
+    id:37, name:"클럽더독스", cat:"애견카페", area:"양평", petConfirmed:true,
     addr:"경기 양평군 옥천면 당곡길 42-18", phone:"070-8249-7289",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.51573792, lng:127.43662554,
@@ -1191,7 +1185,7 @@ const places = [
     emoji:"🐶"
   },
   {
-    id:38, name:"시로네운동장", cat:"애견운동장", area:"양평",
+    id:38, name:"시로네운동장", cat:"애견운동장", area:"양평", petConfirmed:true,
     addr:"경기 양평군 강상면 강남로899번길 23-13", phone:"",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.49085557, lng:127.47680769,
@@ -1202,7 +1196,7 @@ const places = [
     emoji:"🏟️"
   },
   {
-    id:39, name:"위드독", cat:"애견카페", area:"양평",
+    id:39, name:"위드독", cat:"애견카페", area:"양평", petConfirmed:true,
     addr:"경기 양평군 양평읍 중앙로111번길 53-4", phone:"031-771-0504",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.4982956, lng:127.50340305,
@@ -1217,7 +1211,7 @@ const places = [
      수원
   ══════════════════════════════ */
   {
-    id:40, name:"카페도기", cat:"카페", area:"수원",
+    id:40, name:"카페도기", cat:"카페", area:"수원", petConfirmed:false,
     addr:"경기 수원시 영통구 대학1로8번길 23", phone:"031-217-7741",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.29783425, lng:127.04307081,
@@ -1228,7 +1222,7 @@ const places = [
     emoji:"☕"
   },
   {
-    id:41, name:"바로나도 영통점", cat:"애견카페", area:"수원",
+    id:41, name:"바로나도 영통점", cat:"애견카페", area:"수원", petConfirmed:true,
     addr:"경기 수원시 영통구 청명로21번길 16", phone:"0503-7151-5540",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.25020897, lng:127.07941576,
@@ -1239,7 +1233,7 @@ const places = [
     emoji:"🐕"
   },
   {
-    id:42, name:"루프독스", cat:"애견카페", area:"수원",
+    id:42, name:"루프독스", cat:"애견카페", area:"수원", petConfirmed:true,
     addr:"경기 수원시 팔달구 정조로 775-5", phone:"010-3527-2864",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.27696933, lng:127.01608903,
@@ -1250,7 +1244,7 @@ const places = [
     emoji:"🏙️"
   },
   {
-    id:43, name:"언니네애견카페", cat:"애견카페", area:"수원",
+    id:43, name:"언니네애견카페", cat:"애견카페", area:"수원", petConfirmed:true,
     addr:"경기 수원시 영통구 동수원로 542-49", phone:"031-215-7271",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.27412598, lng:127.05234346,
@@ -1261,7 +1255,7 @@ const places = [
     emoji:"🐶"
   },
   {
-    id:61, name:"딩굴댕굴 반려견놀이터", cat:"애견운동장", area:"수원",
+    id:61, name:"딩굴댕굴 반려견놀이터", cat:"애견운동장", area:"수원", petConfirmed:true,
     addr:"경기 수원시 권선구 칠보로88번길 155-11", phone:"0503-7151-4535",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.26247278, lng:126.94179232,
@@ -1272,7 +1266,7 @@ const places = [
     emoji:"🏟️"
   },
   {
-    id:62, name:"도그베이 수원점", cat:"애견카페", area:"수원",
+    id:62, name:"도그베이 수원점", cat:"애견카페", area:"수원", petConfirmed:true,
     addr:"경기 수원시 권선구 서부로 1616", phone:"031-278-7535",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.25345067, lng:126.97537292,
@@ -1283,7 +1277,7 @@ const places = [
     emoji:"🐕"
   },
   {
-    id:63, name:"디아즈 인계점", cat:"카페", area:"수원",
+    id:63, name:"디아즈 인계점", cat:"카페", area:"수원", petConfirmed:false,
     addr:"경기 수원시 팔달구 인계로166번길 48-7", phone:"031-235-0712",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.2642049, lng:127.03435068,
@@ -1294,7 +1288,7 @@ const places = [
     emoji:"☕"
   },
   {
-    id:64, name:"홍라드 행궁본점", cat:"카페", area:"수원",
+    id:64, name:"홍라드 행궁본점", cat:"카페", area:"수원", petConfirmed:false,
     addr:"경기 수원시 팔달구 정조로 844-1", phone:"070-4243-3736",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.28350002, lng:127.01644112,
@@ -1305,7 +1299,7 @@ const places = [
     emoji:"🏯"
   },
   {
-    id:65, name:"콜링우드", cat:"카페", area:"수원",
+    id:65, name:"콜링우드", cat:"카페", area:"수원", petConfirmed:false,
     addr:"경기 수원시 팔달구 정조로 888", phone:"",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.28732868, lng:127.01535822,
@@ -1316,7 +1310,7 @@ const places = [
     emoji:"🌿"
   },
   {
-    id:66, name:"카페 도안", cat:"카페", area:"수원",
+    id:66, name:"카페 도안", cat:"카페", area:"수원", petConfirmed:false,
     addr:"경기 수원시 팔달구 효원로307번길 61", phone:"070-8884-1204",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.26370877, lng:127.03621059,
@@ -1327,7 +1321,7 @@ const places = [
     emoji:"☕"
   },
   {
-    id:67, name:"카페미밈", cat:"카페", area:"수원",
+    id:67, name:"카페미밈", cat:"카페", area:"수원", petConfirmed:false,
     addr:"경기 수원시 권선구 금호로 140", phone:"0507-1432-2157",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.27304401, lng:126.9652845,
@@ -1338,7 +1332,7 @@ const places = [
     emoji:"🐾"
   },
   {
-    id:68, name:"더수피다", cat:"애견카페", area:"수원",
+    id:68, name:"더수피다", cat:"애견카페", area:"수원", petConfirmed:true,
     addr:"경기 수원시 팔달구 정조로 771-1", phone:"010-8699-8599",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.2769918, lng:127.01650284,
@@ -1353,7 +1347,7 @@ const places = [
      파주
   ══════════════════════════════ */
   {
-    id:44, name:"으르렁애견카페", cat:"애견카페", area:"파주",
+    id:44, name:"으르렁애견카페", cat:"애견카페", area:"파주", petConfirmed:true,
     addr:"경기 파주시 미래로 369-59", phone:"031-947-1981",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.71151422, lng:126.74494727,
@@ -1364,7 +1358,7 @@ const places = [
     emoji:"🐾"
   },
   {
-    id:45, name:"스타독스", cat:"애견카페", area:"파주",
+    id:45, name:"스타독스", cat:"애견카페", area:"파주", petConfirmed:true,
     addr:"경기 파주시 탄현면 국화향길 10-40", phone:"",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.78062632, lng:126.71576126,
@@ -1375,7 +1369,7 @@ const places = [
     emoji:"⭐"
   },
   {
-    id:46, name:"글램독 그라운드 파주점", cat:"애견카페", area:"파주",
+    id:46, name:"글램독 그라운드 파주점", cat:"애견카페", area:"파주", petConfirmed:true,
     addr:"경기 파주시 지목로 50", phone:"0507-1416-2597",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.72594617, lng:126.69671643,
@@ -1386,7 +1380,7 @@ const places = [
     emoji:"✨"
   },
   {
-    id:47, name:"썸바디독스 파주본점", cat:"애견카페", area:"파주",
+    id:47, name:"썸바디독스 파주본점", cat:"애견카페", area:"파주", petConfirmed:true,
     addr:"경기 파주시 운정로 65", phone:"010-5845-2492",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.72329064, lng:126.77354179,
@@ -1397,7 +1391,7 @@ const places = [
     emoji:"🐕"
   },
   {
-    id:48, name:"독스테이션", cat:"애견카페", area:"파주",
+    id:48, name:"독스테이션", cat:"애견카페", area:"파주", petConfirmed:true,
     addr:"경기 파주시 탄현면 새오리로 126", phone:"010-2867-2500",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.79517869, lng:126.68733926,
@@ -1412,7 +1406,7 @@ const places = [
      고양
   ══════════════════════════════ */
   {
-    id:49, name:"멍스퀘어 일산점", cat:"애견운동장", area:"고양",
+    id:49, name:"멍스퀘어 일산점", cat:"애견운동장", area:"고양", petConfirmed:true,
     addr:"경기 고양시 일산동구 고봉로770번길 71-47", phone:"010-3300-9228",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.72263242, lng:126.79648328,
@@ -1427,7 +1421,7 @@ const places = [
      남양주
   ══════════════════════════════ */
   {
-    id:50, name:"개떼놀이터 남양주점", cat:"애견운동장", area:"남양주",
+    id:50, name:"개떼놀이터 남양주점", cat:"애견운동장", area:"남양주", petConfirmed:true,
     addr:"경기 남양주시 진건읍 사릉로280번길 7", phone:"0503-7151-1801",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.65003112, lng:127.19040942,
@@ -1438,7 +1432,7 @@ const places = [
     emoji:"🏟️"
   },
   {
-    id:51, name:"바닐라브릭", cat:"카페", area:"남양주",
+    id:51, name:"바닐라브릭", cat:"카페", area:"남양주", petConfirmed:false,
     addr:"경기 남양주시 와부읍 궁촌로 167-7", phone:"",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.58107895, lng:127.24362103,
@@ -1453,7 +1447,7 @@ const places = [
      하남
   ══════════════════════════════ */
   {
-    id:52, name:"펖파크", cat:"애견파크", area:"하남",
+    id:52, name:"펖파크", cat:"애견파크", area:"하남", petConfirmed:true,
     addr:"경기 하남시 서하남로 23", phone:"02-6012-5454",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.51704484, lng:127.14674675,
@@ -1464,7 +1458,7 @@ const places = [
     emoji:"🐾"
   },
   {
-    id:53, name:"푼타하우스", cat:"카페", area:"하남",
+    id:53, name:"푼타하우스", cat:"카페", area:"하남", petConfirmed:false,
     addr:"경기 하남시 서하남로451번길 13-66", phone:"010-7435-0409",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.52376722, lng:127.18749409,
@@ -1475,7 +1469,7 @@ const places = [
     emoji:"🏡"
   },
   {
-    id:54, name:"춘옥이네", cat:"카페", area:"하남",
+    id:54, name:"춘옥이네", cat:"카페", area:"하남", petConfirmed:false,
     addr:"경기 하남시 미사강변중앙로 161", phone:"",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.56110215, lng:127.19070917,
@@ -1486,7 +1480,7 @@ const places = [
     emoji:"☕"
   },
   {
-    id:55, name:"캔디독", cat:"애견카페", area:"하남",
+    id:55, name:"캔디독", cat:"애견카페", area:"하남", petConfirmed:true,
     addr:"경기 하남시 미사강변중앙로 219", phone:"031-793-2191",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.56606909, lng:127.18861877,
@@ -1497,7 +1491,7 @@ const places = [
     emoji:"🍬"
   },
   {
-    id:56, name:"안녕, 강아지", cat:"애견카페", area:"하남",
+    id:56, name:"안녕, 강아지", cat:"애견카페", area:"하남", petConfirmed:true,
     addr:"경기 하남시 미사강변중앙로 173", phone:"0502-5552-6544",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.56201727, lng:127.19033007,
@@ -1512,7 +1506,7 @@ const places = [
      광주
   ══════════════════════════════ */
   {
-    id:57, name:"땡스폴", cat:"카페", area:"광주",
+    id:57, name:"땡스폴", cat:"카페", area:"광주", petConfirmed:false,
     addr:"경기 광주시 태재로 133", phone:"031-726-2464",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.35796151, lng:127.16399771,
@@ -1523,7 +1517,7 @@ const places = [
     emoji:"☕"
   },
   {
-    id:58, name:"코코밸리", cat:"애견카페", area:"광주",
+    id:58, name:"코코밸리", cat:"애견카페", area:"광주", petConfirmed:true,
     addr:"경기 광주시 남한산성면 남한산성로 259", phone:"031-749-1209",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.45661385, lng:127.22446603,
@@ -1538,7 +1532,7 @@ const places = [
      포천
   ══════════════════════════════ */
   {
-    id:59, name:"몽드드뚜뚜", cat:"애견카페", area:"포천",
+    id:59, name:"몽드드뚜뚜", cat:"애견카페", area:"포천", petConfirmed:true,
     addr:"경기 포천시 가산면 시우동2길 124", phone:"0507-1347-0207",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.83226485, lng:127.18045675,
@@ -1549,7 +1543,7 @@ const places = [
     emoji:"🌸"
   },
   {
-    id:60, name:"너와함개냥", cat:"애견카페", area:"포천",
+    id:60, name:"너와함개냥", cat:"애견카페", area:"포천", petConfirmed:true,
     addr:"경기 포천시 군내면 포천로 1070-2", phone:"070-7743-0233",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.86047169, lng:127.20270763,
@@ -1564,7 +1558,7 @@ const places = [
      화성
   ══════════════════════════════ */
   {
-    id:69, name:"하이디펫", cat:"애견카페", area:"화성",
+    id:69, name:"하이디펫", cat:"애견카페", area:"화성", petConfirmed:true,
     addr:"경기 화성시 동탄구 동탄치동천로3길 17", phone:"",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.20371296, lng:127.12286301,
@@ -1575,7 +1569,7 @@ const places = [
     emoji:"🐾"
   },
   {
-    id:70, name:"아이조아 펫파크 동탄점", cat:"애견운동장", area:"화성",
+    id:70, name:"아이조아 펫파크 동탄점", cat:"애견운동장", area:"화성", petConfirmed:true,
     addr:"경기 화성시 동탄구 중리북길 39", phone:"010-2973-9331",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.21905707, lng:127.11920701,
@@ -1590,7 +1584,7 @@ const places = [
      평택
   ══════════════════════════════ */
   {
-    id:71, name:"레인바우 애견카페 평택", cat:"애견카페", area:"평택",
+    id:71, name:"레인바우 애견카페 평택", cat:"애견카페", area:"평택", petConfirmed:true,
     addr:"경기 평택시 안중읍 학현4길 29", phone:"031-681-8777",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:36.99172157, lng:126.92172438,
@@ -1601,7 +1595,7 @@ const places = [
     emoji:"🐾"
   },
   {
-    id:72, name:"개스타그램", cat:"카페", area:"평택",
+    id:72, name:"개스타그램", cat:"카페", area:"평택", petConfirmed:false,
     addr:"경기 평택시 신장로 3", phone:"031-664-0420",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.0790177, lng:127.05445376,
@@ -1612,7 +1606,7 @@ const places = [
     emoji:"🐾"
   },
   {
-    id:73, name:"T&T 애견카페", cat:"애견카페", area:"평택",
+    id:73, name:"T&T 애견카페", cat:"애견카페", area:"평택", petConfirmed:true,
     addr:"경기 평택시 오성면 신1리길 44-14", phone:"031-683-1988",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.00879944, lng:127.00225839,
@@ -1623,7 +1617,7 @@ const places = [
     emoji:"🐾"
   },
   {
-    id:74, name:"몽글몽글 애견카페", cat:"애견카페", area:"평택",
+    id:74, name:"몽글몽글 애견카페", cat:"애견카페", area:"평택", petConfirmed:true,
     addr:"경기 평택시 영신2길 79", phone:"0503-7152-6486",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.01931955, lng:127.08275952,
@@ -1634,7 +1628,7 @@ const places = [
     emoji:"🐾"
   },
   {
-    id:75, name:"고덕애견놀이터", cat:"애견운동장", area:"평택",
+    id:75, name:"고덕애견놀이터", cat:"애견운동장", area:"평택", petConfirmed:true,
     addr:"경기 평택시 고덕면 궁리 777-13", phone:"010-3289-5545",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.04736613, lng:127.09567869,
@@ -1645,7 +1639,7 @@ const places = [
     emoji:"🏟️"
   },
   {
-    id:76, name:"아띠라미", cat:"카페", area:"평택",
+    id:76, name:"아띠라미", cat:"카페", area:"평택", petConfirmed:false,
     addr:"경기 평택시 용이동 897", phone:"031-682-7701",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.04929085, lng:127.10395384,
@@ -1660,7 +1654,7 @@ const places = [
      안양
   ══════════════════════════════ */
   {
-    id:77, name:"산마을 애견카페", cat:"애견카페", area:"안양",
+    id:77, name:"산마을 애견카페", cat:"애견카페", area:"안양", petConfirmed:true,
     addr:"경기 안양시 만안구 병목안로 146", phone:"031-447-5119",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.39090636, lng:126.93813684,
@@ -1671,7 +1665,7 @@ const places = [
     emoji:"🌲"
   },
   {
-    id:78, name:"스나이퍼벙커", cat:"카페", area:"안양",
+    id:78, name:"스나이퍼벙커", cat:"카페", area:"안양", petConfirmed:false,
     addr:"경기 안양시 동안구 호계동 927-3", phone:"031-388-0810",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.40065637, lng:126.99265399,
@@ -1686,7 +1680,7 @@ const places = [
      부천
   ══════════════════════════════ */
   {
-    id:79, name:"뽀독 부천점", cat:"카페", area:"부천",
+    id:79, name:"뽀독 부천점", cat:"카페", area:"부천", petConfirmed:true,
     addr:"경기 부천시 원미구 소사로 479", phone:"032-347-3553",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.49028928, lng:126.80408568,
@@ -1697,7 +1691,7 @@ const places = [
     emoji:"🐾"
   },
   {
-    id:80, name:"똑독", cat:"카페", area:"부천",
+    id:80, name:"똑독", cat:"카페", area:"부천", petConfirmed:true,
     addr:"경기 부천시 길주로 97", phone:"070-8064-2420",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.50073742, lng:126.79219568,
@@ -1712,7 +1706,7 @@ const places = [
      의정부
   ══════════════════════════════ */
   {
-    id:81, name:"두리멍쉴 애견카페", cat:"애견카페", area:"의정부",
+    id:81, name:"두리멍쉴 애견카페", cat:"애견카페", area:"의정부", petConfirmed:true,
     addr:"경기 의정부시 범골로 23", phone:"031-843-1102",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.76228929, lng:127.08283116,
@@ -1723,7 +1717,7 @@ const places = [
     emoji:"🐾"
   },
   {
-    id:82, name:"테일즈업", cat:"카페", area:"의정부",
+    id:82, name:"테일즈업", cat:"카페", area:"의정부", petConfirmed:true,
     addr:"경기 의정부시 평화로 397", phone:"031-836-8586",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.73796576, lng:127.04523408,
@@ -1734,7 +1728,7 @@ const places = [
     emoji:"🐾"
   },
   {
-    id:83, name:"비어마이독", cat:"카페", area:"의정부",
+    id:83, name:"비어마이독", cat:"카페", area:"의정부", petConfirmed:true,
     addr:"경기 의정부시 오목로 65", phone:"031-838-4884",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.73801348, lng:127.03848979,
@@ -1745,7 +1739,7 @@ const places = [
     emoji:"🐾"
   },
   {
-    id:84, name:"뉴욕도그랜드", cat:"애견카페", area:"의정부",
+    id:84, name:"뉴욕도그랜드", cat:"애견카페", area:"의정부", petConfirmed:true,
     addr:"경기 의정부시 의정로 147", phone:"031-821-9005",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.73498543, lng:127.04551748,
@@ -1756,7 +1750,7 @@ const places = [
     emoji:"🐾"
   },
   {
-    id:85, name:"두멍", cat:"카페", area:"의정부",
+    id:85, name:"두멍", cat:"카페", area:"의정부", petConfirmed:true,
     addr:"경기 의정부시 신흥로 242", phone:"031-872-0402",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.73876065, lng:127.05161939,
@@ -1771,7 +1765,7 @@ const places = [
      구리
   ══════════════════════════════ */
   {
-    id:86, name:"멍스쿨", cat:"카페", area:"구리",
+    id:86, name:"멍스쿨", cat:"카페", area:"구리", petConfirmed:true,
     addr:"경기 구리시 사노동 548-5", phone:"0507-1471-5004",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.59959261, lng:127.17162988,
@@ -1786,7 +1780,7 @@ const places = [
      시흥
   ══════════════════════════════ */
   {
-    id:87, name:"코코애견카페", cat:"애견카페", area:"시흥",
+    id:87, name:"코코애견카페", cat:"애견카페", area:"시흥", petConfirmed:true,
     addr:"경기 시흥시 마유로 297", phone:"031-313-8118",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.37741584, lng:126.81001327,
@@ -1797,7 +1791,7 @@ const places = [
     emoji:"🐾"
   },
   {
-    id:88, name:"영화산장 애견카페", cat:"애견카페", area:"시흥",
+    id:88, name:"영화산장 애견카페", cat:"애견카페", area:"시흥", petConfirmed:true,
     addr:"경기 시흥시 장현동 산75", phone:"031-497-3302",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.42031434, lng:126.81665617,
@@ -1808,7 +1802,7 @@ const places = [
     emoji:"🌲"
   },
   {
-    id:89, name:"댕동산", cat:"카페", area:"시흥",
+    id:89, name:"댕동산", cat:"카페", area:"시흥", petConfirmed:true,
     addr:"경기 시흥시 배곧4로 33", phone:"0507-1401-3938",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.36453451, lng:126.73823453,
@@ -1819,7 +1813,7 @@ const places = [
     emoji:"🌲"
   },
   {
-    id:90, name:"댕카페", cat:"카페", area:"시흥",
+    id:90, name:"댕카페", cat:"카페", area:"시흥", petConfirmed:true,
     addr:"경기 시흥시 수인로 3234", phone:"0507-1491-0220",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.43534726, lng:126.79808956,
@@ -1834,7 +1828,7 @@ const places = [
      안산
   ══════════════════════════════ */
   {
-    id:91, name:"루프앤독", cat:"카페", area:"안산",
+    id:91, name:"루프앤독", cat:"카페", area:"안산", petConfirmed:true,
     addr:"경기 안산시 단원구 예술대학로 152", phone:"0507-1305-3838",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.31762474, lng:126.87036124,
@@ -1845,7 +1839,7 @@ const places = [
     emoji:"🐾"
   },
   {
-    id:92, name:"오르치그로치", cat:"카페", area:"안산",
+    id:92, name:"오르치그로치", cat:"카페", area:"안산", petConfirmed:false,
     addr:"경기 안산시 단원구 고잔로 23", phone:"031-401-8111",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.32344234, lng:126.83141399,
@@ -1856,7 +1850,7 @@ const places = [
     emoji:"🐾"
   },
   {
-    id:93, name:"얼렁오시개", cat:"카페", area:"안산",
+    id:93, name:"얼렁오시개", cat:"카페", area:"안산", petConfirmed:true,
     addr:"경기 안산시 상록구 석호로 26", phone:"031-415-8111",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.32024528, lng:126.84901219,
@@ -1867,7 +1861,7 @@ const places = [
     emoji:"🐾"
   },
   {
-    id:94, name:"댕블리애견카페", cat:"애견카페", area:"안산",
+    id:94, name:"댕블리애견카페", cat:"애견카페", area:"안산", petConfirmed:true,
     addr:"경기 안산시 단원구 화랑로 23", phone:"0507-1354-6668",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.32037753, lng:126.84901219,
@@ -1878,7 +1872,7 @@ const places = [
     emoji:"🐾"
   },
   {
-    id:95, name:"도그카페", cat:"애견카페", area:"안산",
+    id:95, name:"도그카페", cat:"애견카페", area:"안산", petConfirmed:true,
     addr:"경기 안산시 단원구 적금로 143", phone:"031-485-8787",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.28547059, lng:126.85094482,
@@ -1889,7 +1883,7 @@ const places = [
     emoji:"🐾"
   },
   {
-    id:96, name:"개더링", cat:"카페", area:"안산",
+    id:96, name:"개더링", cat:"카페", area:"안산", petConfirmed:false,
     addr:"경기 안산시 상록구 반월로 26", phone:"0507-1417-5800",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.32354583, lng:126.90131741,
@@ -1900,7 +1894,7 @@ const places = [
     emoji:"🐾"
   },
   {
-    id:97, name:"웜웜", cat:"카페", area:"안산",
+    id:97, name:"웜웜", cat:"카페", area:"안산", petConfirmed:false,
     addr:"경기 안산시 단원구 원고잔로 95", phone:"0507-1444-7009",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.31996965, lng:126.83241282,
@@ -1911,7 +1905,7 @@ const places = [
     emoji:"🐾"
   },
   {
-    id:98, name:"멍쓰홀릭", cat:"카페", area:"안산",
+    id:98, name:"멍쓰홀릭", cat:"카페", area:"안산", petConfirmed:true,
     addr:"경기 안산시 단원구 화랑로 171", phone:"0507-1325-3344",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.32748765, lng:126.85372654,
@@ -1926,7 +1920,7 @@ const places = [
      군포
   ══════════════════════════════ */
   {
-    id:99, name:"펫라운지", cat:"애견카페", area:"군포",
+    id:99, name:"펫라운지", cat:"애견카페", area:"군포", petConfirmed:true,
     addr:"경기 군포시 고산로211번길 26", phone:"010-9674-1441",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.34380235, lng:126.95023548,
@@ -1937,7 +1931,7 @@ const places = [
     emoji:"🐾"
   },
   {
-    id:100, name:"퍼피포레스트", cat:"카페", area:"군포",
+    id:100, name:"퍼피포레스트", cat:"카페", area:"군포", petConfirmed:true,
     addr:"경기 군포시 산본로 327", phone:"031-396-2266",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.34984552, lng:126.92458234,
@@ -1952,7 +1946,7 @@ const places = [
      오산
   ══════════════════════════════ */
   {
-    id:101, name:"온독애견카페", cat:"애견카페", area:"오산",
+    id:101, name:"온독애견카페", cat:"애견카페", area:"오산", petConfirmed:true,
     addr:"경기 오산시 청학로 71", phone:"031-374-8181",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.15003892, lng:127.07648234,
@@ -1963,7 +1957,7 @@ const places = [
     emoji:"🐾"
   },
   {
-    id:102, name:"멍크닉", cat:"카페", area:"오산",
+    id:102, name:"멍크닉", cat:"카페", area:"오산", petConfirmed:true,
     addr:"경기 오산시 성산로 22", phone:"0507-1380-9988",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.15456789, lng:127.07234567,
@@ -1978,7 +1972,7 @@ const places = [
      안성
   ══════════════════════════════ */
   {
-    id:103, name:"포시즌애견테마파크", cat:"애견운동장", area:"안성",
+    id:103, name:"포시즌애견테마파크", cat:"애견운동장", area:"안성", petConfirmed:true,
     addr:"경기 안성시 대덕면 건지길 46", phone:"031-676-6767",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.01987654, lng:127.19234567,
@@ -1989,7 +1983,7 @@ const places = [
     emoji:"🏟️"
   },
   {
-    id:104, name:"펠리스뻬로 파크", cat:"애견운동장", area:"안성",
+    id:104, name:"펠리스뻬로 파크", cat:"애견운동장", area:"안성", petConfirmed:true,
     addr:"경기 안성시 삼죽면 마전로 1155", phone:"0507-1438-1278",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.00786543, lng:127.30123456,
@@ -2000,7 +1994,7 @@ const places = [
     emoji:"🏟️"
   },
   {
-    id:105, name:"산책", cat:"카페", area:"안성",
+    id:105, name:"산책", cat:"카페", area:"안성", petConfirmed:false,
     addr:"경기 안성시 공도읍 공도로 151", phone:"031-677-3322",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.00345678, lng:127.20987654,
@@ -2011,7 +2005,7 @@ const places = [
     emoji:"🌲"
   },
   {
-    id:106, name:"풀독", cat:"카페", area:"안성",
+    id:106, name:"풀독", cat:"카페", area:"안성", petConfirmed:true,
     addr:"경기 안성시 공도읍 두릉로 45", phone:"0507-1460-9988",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.0156789, lng:127.21345678,
@@ -2026,7 +2020,7 @@ const places = [
      여주
   ══════════════════════════════ */
   {
-    id:107, name:"무구순구", cat:"카페", area:"여주",
+    id:107, name:"무구순구", cat:"카페", area:"여주", petConfirmed:false,
     addr:"경기 여주시 흥천면 금사로 240", phone:"031-885-7722",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.35987654, lng:127.56789012,
@@ -2041,7 +2035,7 @@ const places = [
      양주
   ══════════════════════════════ */
   {
-    id:108, name:"네이처독", cat:"카페", area:"양주",
+    id:108, name:"네이처독", cat:"카페", area:"양주", petConfirmed:true,
     addr:"경기 양주시 백석읍 권율로 234", phone:"031-866-5544",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.77345678, lng:127.04678901,
@@ -2052,7 +2046,7 @@ const places = [
     emoji:"🐾"
   },
   {
-    id:109, name:"풀멍파크", cat:"애견운동장", area:"양주",
+    id:109, name:"풀멍파크", cat:"애견운동장", area:"양주", petConfirmed:true,
     addr:"경기 양주시 장흥면 부곡로 54", phone:"031-855-7788",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.73123456, lng:126.97345678,
@@ -2063,7 +2057,7 @@ const places = [
     emoji:"🏟️"
   },
   {
-    id:110, name:"두루두루", cat:"카페", area:"양주",
+    id:110, name:"두루두루", cat:"카페", area:"양주", petConfirmed:false,
     addr:"경기 양주시 백석읍 건강로 10", phone:"031-862-4433",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.76456789, lng:127.01456789,
@@ -2074,7 +2068,7 @@ const places = [
     emoji:"🐾"
   },
   {
-    id:111, name:"매일그개와", cat:"카페", area:"양주",
+    id:111, name:"매일그개와", cat:"카페", area:"양주", petConfirmed:true,
     addr:"경기 양주시 광사동 234", phone:"0507-1444-3344",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.77123456, lng:127.00234567,
@@ -2089,7 +2083,7 @@ const places = [
      동두천
   ══════════════════════════════ */
   {
-    id:112, name:"오도독카페", cat:"카페", area:"동두천",
+    id:112, name:"오도독카페", cat:"카페", area:"동두천", petConfirmed:true,
     addr:"경기 동두천시 동두천로 41", phone:"031-861-3388",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.88912345, lng:127.0556789,
@@ -2100,7 +2094,7 @@ const places = [
     emoji:"🐾"
   },
   {
-    id:113, name:"멍멍이네", cat:"카페", area:"동두천",
+    id:113, name:"멍멍이네", cat:"카페", area:"동두천", petConfirmed:true,
     addr:"경기 동두천시 상봉암동 44-2", phone:"031-861-7744",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.89345678, lng:127.05234567,
@@ -2111,7 +2105,7 @@ const places = [
     emoji:"🐾"
   },
   {
-    id:114, name:"우다다", cat:"카페", area:"동두천",
+    id:114, name:"우다다", cat:"카페", area:"동두천", petConfirmed:false,
     addr:"경기 동두천시 생연로 88", phone:"0507-1445-8877",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.90123456, lng:127.06012345,
@@ -2122,7 +2116,7 @@ const places = [
     emoji:"🐾"
   },
   {
-    id:115, name:"개인공간", cat:"카페", area:"동두천",
+    id:115, name:"개인공간", cat:"카페", area:"동두천", petConfirmed:true,
     addr:"경기 동두천시 지행동 202", phone:"031-862-8855",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.89123456, lng:127.05789012,
@@ -2137,7 +2131,7 @@ const places = [
      용인
   ══════════════════════════════ */
   {
-    id:116, name:"정그리다", cat:"카페", area:"용인",
+    id:116, name:"정그리다", cat:"카페", area:"용인", petConfirmed:false,
     addr:"경기 용인시 처인구 백옥대로 1311", phone:"031-323-5534",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.25211191, lng:127.21048394,
@@ -2148,7 +2142,7 @@ const places = [
     emoji:"🐾"
   },
   {
-    id:117, name:"퍼피스카우트", cat:"카페", area:"용인",
+    id:117, name:"퍼피스카우트", cat:"카페", area:"용인", petConfirmed:true,
     addr:"경기 용인시 처인구 모현읍 왕담로 23-2", phone:"031-263-5500",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.32262208, lng:127.25389278,
@@ -2159,7 +2153,7 @@ const places = [
     emoji:"🐾"
   },
   {
-    id:118, name:"안녕마루", cat:"카페", area:"용인",
+    id:118, name:"안녕마루", cat:"카페", area:"용인", petConfirmed:false,
     addr:"경기 용인시 처인구 지삼로 477", phone:"031-336-6677",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.2362146, lng:127.15585628,
@@ -2170,7 +2164,7 @@ const places = [
     emoji:"🐾"
   },
   {
-    id:119, name:"별똥구리", cat:"카페", area:"용인",
+    id:119, name:"별똥구리", cat:"카페", area:"용인", petConfirmed:false,
     addr:"경기 용인시 수지구 동천로 535", phone:"031-266-2410",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.35104516, lng:127.05312367,
@@ -2181,7 +2175,7 @@ const places = [
     emoji:"🐾"
   },
   {
-    id:120, name:"멍하이루", cat:"카페", area:"용인",
+    id:120, name:"멍하이루", cat:"카페", area:"용인", petConfirmed:true,
     addr:"경기 용인시 수지구 푸른솔로 120", phone:"010-2989-4011",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.32893742, lng:127.11708537,
@@ -2192,7 +2186,7 @@ const places = [
     emoji:"🐾"
   },
   {
-    id:121, name:"테일즈파크", cat:"애견운동장", area:"용인",
+    id:121, name:"테일즈파크", cat:"애견운동장", area:"용인", petConfirmed:true,
     addr:"경기 용인시 기흥구 신정로41번길 95-31", phone:"0503-7153-9122",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.27907882, lng:127.09242681,
@@ -2207,7 +2201,7 @@ const places = [
      고양
   ══════════════════════════════ */
   {
-    id:122, name:"피터팻츠", cat:"카페", area:"고양",
+    id:122, name:"피터팻츠", cat:"카페", area:"고양", petConfirmed:false,
     addr:"경기 고양시 덕양구 대주로 358-78", phone:"070-4242-6061",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.6502008, lng:126.8195201,
@@ -2218,7 +2212,7 @@ const places = [
     emoji:"🐾"
   },
   {
-    id:123, name:"우리늘", cat:"카페", area:"고양",
+    id:123, name:"우리늘", cat:"카페", area:"고양", petConfirmed:false,
     addr:"경기 고양시 일산동구 대주로 346-1", phone:"031-971-8855",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.67987654, lng:126.84123456,
@@ -2229,7 +2223,7 @@ const places = [
     emoji:"🐾"
   },
   {
-    id:124, name:"테일더블루", cat:"카페", area:"고양",
+    id:124, name:"테일더블루", cat:"카페", area:"고양", petConfirmed:true,
     addr:"경기 고양시 일산동구 장항동 882", phone:"0507-1441-7788",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.67123456, lng:126.78234567,
@@ -2244,7 +2238,7 @@ const places = [
      파주
   ══════════════════════════════ */
   {
-    id:125, name:"문지리535", cat:"카페", area:"파주",
+    id:125, name:"문지리535", cat:"카페", area:"파주", petConfirmed:false,
     addr:"경기 파주시 문산읍 문지리 535", phone:"031-952-3355",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.83234567, lng:126.79234567,
@@ -2255,7 +2249,7 @@ const places = [
     emoji:"🐾"
   },
   {
-    id:126, name:"뮌스터담", cat:"카페", area:"파주",
+    id:126, name:"뮌스터담", cat:"카페", area:"파주", petConfirmed:false,
     addr:"경기 파주시 탄현면 축현리 174", phone:"031-944-7788",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.79234567, lng:126.71012345,
@@ -2266,7 +2260,7 @@ const places = [
     emoji:"🐾"
   },
   {
-    id:127, name:"밀크북", cat:"카페", area:"파주",
+    id:127, name:"밀크북", cat:"카페", area:"파주", petConfirmed:false,
     addr:"경기 파주시 교하동 939-6", phone:"031-942-2266",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.73456789, lng:126.78345678,
@@ -2281,7 +2275,7 @@ const places = [
      가평
   ══════════════════════════════ */
   {
-    id:128, name:"나무아래오후N", cat:"카페", area:"가평",
+    id:128, name:"나무아래오후N", cat:"카페", area:"가평", petConfirmed:false,
     addr:"경기 가평군 청평면 강변로 88", phone:"031-585-3366",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.68234567, lng:127.36234567,
@@ -2292,7 +2286,7 @@ const places = [
     emoji:"🌲"
   },
   {
-    id:129, name:"리버레인", cat:"카페", area:"가평",
+    id:129, name:"리버레인", cat:"카페", area:"가평", petConfirmed:false,
     addr:"경기 가평군 청평면 경춘로 167", phone:"031-584-5544",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.69234567, lng:127.38234567,
@@ -2303,7 +2297,7 @@ const places = [
     emoji:"🌲"
   },
   {
-    id:130, name:"모모커피 청평점", cat:"카페", area:"가평",
+    id:130, name:"모모커피 청평점", cat:"카페", area:"가평", petConfirmed:false,
     addr:"경기 가평군 청평면 강변로 34", phone:"031-585-7788",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.68012345, lng:127.35234567,
@@ -2318,7 +2312,7 @@ const places = [
      남양주
   ══════════════════════════════ */
   {
-    id:131, name:"멍브라더애견카페", cat:"애견카페", area:"남양주",
+    id:131, name:"멍브라더애견카페", cat:"애견카페", area:"남양주", petConfirmed:true,
     addr:"경기 남양주시 다산중앙로 62", phone:"031-521-7885",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.60453498, lng:127.21024752,
@@ -2329,7 +2323,7 @@ const places = [
     emoji:"🐾"
   },
   {
-    id:132, name:"도그맥스", cat:"애견카페", area:"남양주",
+    id:132, name:"도그맥스", cat:"애견카페", area:"남양주", petConfirmed:true,
     addr:"경기 남양주시 화도읍 경춘로 2312", phone:"031-591-0880",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.65817524, lng:127.33261987,
@@ -2340,7 +2334,7 @@ const places = [
     emoji:"🐾"
   },
   {
-    id:133, name:"온사이드카페", cat:"카페", area:"남양주",
+    id:133, name:"온사이드카페", cat:"카페", area:"남양주", petConfirmed:false,
     addr:"경기 남양주시 별내면 청학로 70", phone:"031-521-2014",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.66225743, lng:127.15523875,
@@ -2351,7 +2345,7 @@ const places = [
     emoji:"🐾"
   },
   {
-    id:134, name:"해피존", cat:"카페", area:"남양주",
+    id:134, name:"해피존", cat:"카페", area:"남양주", petConfirmed:false,
     addr:"경기 남양주시 와부읍 도곡로 37", phone:"031-521-5050",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.58869076, lng:127.19743625,
@@ -2366,7 +2360,7 @@ const places = [
      수원
   ══════════════════════════════ */
   {
-    id:135, name:"맛있개신나개", cat:"카페", area:"수원",
+    id:135, name:"맛있개신나개", cat:"카페", area:"수원", petConfirmed:true,
     addr:"경기 수원시 영통구 법조로 38", phone:"0507-1433-0220",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.29012345, lng:127.04789012,
@@ -2377,7 +2371,7 @@ const places = [
     emoji:"🐾"
   },
   {
-    id:136, name:"뚜뚜랜드", cat:"카페", area:"수원",
+    id:136, name:"뚜뚜랜드", cat:"카페", area:"수원", petConfirmed:false,
     addr:"경기 수원시 영통구 웰빙타운로36번길 46-246", phone:"031-214-0220",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.29345678, lng:127.04234567,
@@ -2388,7 +2382,7 @@ const places = [
     emoji:"🐾"
   },
   {
-    id:137, name:"아쿠아포레스트", cat:"카페", area:"수원",
+    id:137, name:"아쿠아포레스트", cat:"카페", area:"수원", petConfirmed:false,
     addr:"경기 수원시 영통구 법조로149번길 72", phone:"031-214-8181",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.29678901, lng:127.05123456,
@@ -2399,7 +2393,7 @@ const places = [
     emoji:"🐾"
   },
   {
-    id:138, name:"광교호수공원 애견놀이터", cat:"애견운동장", area:"수원",
+    id:138, name:"광교호수공원 애견놀이터", cat:"애견운동장", area:"수원", petConfirmed:true,
     addr:"경기 수원시 영통구 하동 1008", phone:"",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.29012345, lng:127.04012345,
@@ -2410,7 +2404,7 @@ const places = [
     emoji:"🏟️"
   },
   {
-    id:139, name:"양코치애견카페", cat:"애견카페", area:"수원",
+    id:139, name:"양코치애견카페", cat:"애견카페", area:"수원", petConfirmed:true,
     addr:"경기 수원시 영통구 인계로 239", phone:"031-212-7733",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.26456789, lng:127.03789012,
@@ -2421,7 +2415,7 @@ const places = [
     emoji:"🐾"
   },
   {
-    id:140, name:"댕댕플래닛", cat:"카페", area:"수원",
+    id:140, name:"댕댕플래닛", cat:"카페", area:"수원", petConfirmed:true,
     addr:"경기 수원시 팔달구 효원로219번길 48", phone:"0507-1420-4433",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.27123456, lng:127.03456789,
@@ -2432,7 +2426,7 @@ const places = [
     emoji:"🐾"
   },
   {
-    id:141, name:"멍그라운드", cat:"애견운동장", area:"수원",
+    id:141, name:"멍그라운드", cat:"애견운동장", area:"수원", petConfirmed:true,
     addr:"경기 수원시 팔달구 경수대로 424-1", phone:"0507-1321-8899",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.28456789, lng:127.01678901,
@@ -2448,7 +2442,7 @@ const places = [
      분당·판교 (추가 발굴)
   ══════════════════════════════ */
   {
-    id:142, name:"나무사이로 석운", cat:"카페", area:"분당",
+    id:142, name:"나무사이로 석운", cat:"카페", area:"분당", petConfirmed:false,
     addr:"경기 성남시 분당구 석운로 194", phone:"070-4196-0885",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.37974042, lng:127.04603291,
@@ -2459,7 +2453,7 @@ const places = [
     emoji:"🐾"
   },
   {
-    id:143, name:"소담시루", cat:"카페", area:"분당",
+    id:143, name:"소담시루", cat:"카페", area:"분당", petConfirmed:false,
     addr:"경기 성남시 분당구 판교공원로1길 10", phone:"031-707-7373",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.39117972, lng:127.09122835,
@@ -2470,7 +2464,7 @@ const places = [
     emoji:"🐾"
   },
   {
-    id:144, name:"분당중앙공원 반려견놀이터", cat:"애견운동장", area:"분당",
+    id:144, name:"분당중앙공원 반려견놀이터", cat:"애견운동장", area:"분당", petConfirmed:true,
     addr:"경기 성남시 분당구 수내동 65", phone:"",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.37965918, lng:127.12429208,
@@ -2481,7 +2475,7 @@ const places = [
     emoji:"🏟️"
   },
   {
-    id:145, name:"스크루지라이크스콘", cat:"카페", area:"분당",
+    id:145, name:"스크루지라이크스콘", cat:"카페", area:"분당", petConfirmed:false,
     addr:"경기 성남시 분당구 산운로160번길 20-9", phone:"031-728-2026",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.39011469, lng:127.05636547,
@@ -2492,7 +2486,7 @@ const places = [
     emoji:"🐾"
   },
   {
-    id:146, name:"프레이저커피 분당점", cat:"카페", area:"분당",
+    id:146, name:"프레이저커피 분당점", cat:"카페", area:"분당", petConfirmed:false,
     addr:"경기 성남시 분당구 구미로9번길 25", phone:"031-716-6133",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.40224989, lng:127.12621688,
@@ -2503,7 +2497,7 @@ const places = [
     emoji:"🐾"
   },
   {
-    id:147, name:"펄치커피", cat:"카페", area:"분당",
+    id:147, name:"펄치커피", cat:"카페", area:"분당", petConfirmed:false,
     addr:"경기 성남시 분당구 판교역로10번길 3", phone:"031-698-9180",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.39456939, lng:127.1106643,
@@ -2514,7 +2508,7 @@ const places = [
     emoji:"🐾"
   },
   {
-    id:148, name:"카페두레브", cat:"카페", area:"분당",
+    id:148, name:"카페두레브", cat:"카페", area:"분당", petConfirmed:false,
     addr:"경기 성남시 분당구 판교백현로 57", phone:"031-624-2929",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.37455049, lng:127.11295745,
@@ -2525,7 +2519,7 @@ const places = [
     emoji:"🐾"
   },
   {
-    id:149, name:"플링크 판교점", cat:"카페", area:"분당",
+    id:149, name:"플링크 판교점", cat:"카페", area:"분당", petConfirmed:false,
     addr:"경기 성남시 분당구 판교역로 166", phone:"031-601-7222",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.39555521, lng:127.11012386,
@@ -2536,7 +2530,7 @@ const places = [
     emoji:"🐾"
   },
   {
-    id:150, name:"도그365", cat:"카페", area:"분당",
+    id:150, name:"도그365", cat:"카페", area:"분당", petConfirmed:true,
     addr:"경기 성남시 분당구 새마을로51번길 5", phone:"031-628-6533",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.37969738, lng:127.13684754,
@@ -2547,7 +2541,7 @@ const places = [
     emoji:"🐾"
   },
   {
-    id:151, name:"프론트 판교", cat:"카페", area:"분당",
+    id:151, name:"프론트 판교", cat:"카페", area:"분당", petConfirmed:false,
     addr:"경기 성남시 분당구 운중로138번길 24-1", phone:"031-706-7990",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.39302688, lng:127.07018281,
@@ -2558,7 +2552,7 @@ const places = [
     emoji:"🐾"
   },
   {
-    id:152, name:"온푸", cat:"카페", area:"분당",
+    id:152, name:"온푸", cat:"카페", area:"분당", petConfirmed:false,
     addr:"경기 성남시 분당구 판교역로2번길 32", phone:"0507-1403-6855",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.39498218, lng:127.10817626,
@@ -2569,7 +2563,7 @@ const places = [
     emoji:"🐾"
   },
   {
-    id:153, name:"아이스걸크림보이 판교점", cat:"카페", area:"분당",
+    id:153, name:"아이스걸크림보이 판교점", cat:"카페", area:"분당", petConfirmed:false,
     addr:"경기 성남시 분당구 대왕판교로 660", phone:"031-724-2539",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.4007712, lng:127.10758069,
@@ -2580,7 +2574,7 @@ const places = [
     emoji:"🐾"
   },
   {
-    id:154, name:"카페레토", cat:"카페", area:"분당",
+    id:154, name:"카페레토", cat:"카페", area:"분당", petConfirmed:false,
     addr:"경기 성남시 분당구 판교역로14번길 20", phone:"0507-1427-5551",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.39531601, lng:127.10889454,
@@ -2591,7 +2585,7 @@ const places = [
     emoji:"🐾"
   },
   {
-    id:155, name:"디켄트", cat:"카페", area:"분당",
+    id:155, name:"디켄트", cat:"카페", area:"분당", petConfirmed:false,
     addr:"경기 성남시 분당구 판교역로18번길 4", phone:"031-701-4443",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.39502572, lng:127.11111893,
@@ -2602,7 +2596,7 @@ const places = [
     emoji:"🐾"
   },
   {
-    id:156, name:"메이크어케이크 아브뉴프랑판교점", cat:"카페", area:"분당",
+    id:156, name:"메이크어케이크 아브뉴프랑판교점", cat:"카페", area:"분당", petConfirmed:false,
     addr:"경기 성남시 분당구 동판교로177번길 25", phone:"031-708-7040",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.39773533, lng:127.1133604,
@@ -2613,7 +2607,7 @@ const places = [
     emoji:"🐾"
   },
   {
-    id:157, name:"휴독", cat:"카페", area:"분당",
+    id:157, name:"휴독", cat:"카페", area:"분당", petConfirmed:true,
     addr:"경기 성남시 분당구 서현로439번길 19", phone:"031-701-2266",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.37988049, lng:127.12293939,
@@ -2624,7 +2618,7 @@ const places = [
     emoji:"🐾"
   },
   {
-    id:158, name:"라드독", cat:"카페", area:"분당",
+    id:158, name:"라드독", cat:"카페", area:"분당", petConfirmed:true,
     addr:"경기 성남시 중원구 마지로 130-5", phone:"0507-1452-3278",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.45327015, lng:127.14734241,
@@ -2636,7 +2630,7 @@ const places = [
   },
   // ── 분당 추가 ──────────────────────────────────────────────────
   {
-    id:159, name:"체리마당", cat:"카페", area:"분당",
+    id:159, name:"체리마당", cat:"카페", area:"분당", petConfirmed:false,
     addr:"경기 성남시 분당구 석운로120번길 8", phone:"",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.37334138, lng:127.04594433,
@@ -2647,7 +2641,7 @@ const places = [
     emoji:"🐾"
   },
   {
-    id:160, name:"떠기스 개린이놀이터", cat:"애견운동장", area:"분당",
+    id:160, name:"떠기스 개린이놀이터", cat:"애견운동장", area:"분당", petConfirmed:true,
     addr:"경기 성남시 분당구 (탄천 인근)", phone:"",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.3760291, lng:127.1412634,
@@ -2659,7 +2653,7 @@ const places = [
   },
   // ── 수원 추가 ──────────────────────────────────────────────────
   {
-    id:161, name:"YMMD 호수공원 2호점", cat:"카페", area:"수원",
+    id:161, name:"YMMD 호수공원 2호점", cat:"카페", area:"수원", petConfirmed:false,
     addr:"경기 수원시 영통구 법조로 38", phone:"",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.28678232, lng:127.06277328,
@@ -2671,7 +2665,7 @@ const places = [
   },
   // ── 용인 추가 ──────────────────────────────────────────────────
   {
-    id:162, name:"테일45", cat:"카페", area:"용인",
+    id:162, name:"테일45", cat:"카페", area:"용인", petConfirmed:true,
     addr:"경기 용인시 기흥구 고매로43번길 47", phone:"",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.23550173, lng:127.11684943,
@@ -2682,7 +2676,7 @@ const places = [
     emoji:"🐾"
   },
   {
-    id:163, name:"개버랜드", cat:"애견운동장", area:"용인",
+    id:163, name:"개버랜드", cat:"애견운동장", area:"용인", petConfirmed:true,
     addr:"경기 용인시 처인구 중부대로1673번길 18", phone:"",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.23408897, lng:127.23139548,
@@ -2693,7 +2687,7 @@ const places = [
     emoji:"🌿"
   },
   {
-    id:164, name:"큐티멍", cat:"카페", area:"용인",
+    id:164, name:"큐티멍", cat:"카페", area:"용인", petConfirmed:true,
     addr:"경기 용인시 수지구 신봉2로 94-19", phone:"",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.32933548, lng:127.07080516,
@@ -2704,7 +2698,7 @@ const places = [
     emoji:"🐾"
   },
   {
-    id:165, name:"컨츄리독힐링파크", cat:"애견운동장", area:"용인",
+    id:165, name:"컨츄리독힐링파크", cat:"애견운동장", area:"용인", petConfirmed:true,
     addr:"경기 용인시 처인구 모현읍 월촌로 76-1", phone:"",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.33173764, lng:127.23703407,
@@ -2715,7 +2709,7 @@ const places = [
     emoji:"🌿"
   },
   {
-    id:166, name:"멍스퀘어", cat:"애견운동장", area:"용인",
+    id:166, name:"멍스퀘어", cat:"애견운동장", area:"용인", petConfirmed:true,
     addr:"경기 용인시 기흥구 중부대로681번길 70", phone:"",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.26635625, lng:127.14452609,
@@ -2726,7 +2720,7 @@ const places = [
     emoji:"🌿"
   },
   {
-    id:167, name:"패밀리독", cat:"카페", area:"용인",
+    id:167, name:"패밀리독", cat:"카페", area:"용인", petConfirmed:true,
     addr:"경기 용인시 기흥구 지삼로 279", phone:"",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.23470374, lng:127.13904966,
@@ -2737,7 +2731,7 @@ const places = [
     emoji:"🐾"
   },
   {
-    id:168, name:"올치유치원", cat:"카페", area:"용인",
+    id:168, name:"올치유치원", cat:"카페", area:"용인", petConfirmed:false,
     addr:"경기 용인시 수지구 정든로6번길 2", phone:"",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.32718901, lng:127.11287297,
@@ -2748,7 +2742,7 @@ const places = [
     emoji:"🐾"
   },
   {
-    id:169, name:"골드펫N도그베이", cat:"애견운동장", area:"용인",
+    id:169, name:"골드펫N도그베이", cat:"애견운동장", area:"용인", petConfirmed:true,
     addr:"경기 용인시 기흥구 기흥단지로 397", phone:"",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.21943874, lng:127.13547706,
@@ -2759,7 +2753,7 @@ const places = [
     emoji:"🌿"
   },
   {
-    id:170, name:"멍블리스", cat:"카페", area:"용인",
+    id:170, name:"멍블리스", cat:"카페", area:"용인", petConfirmed:true,
     addr:"경기 용인시 수지구 현암로 147", phone:"",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.33195685, lng:127.12579996,
@@ -2770,7 +2764,7 @@ const places = [
     emoji:"🐾"
   },
   {
-    id:171, name:"허브펫하우스", cat:"카페", area:"용인",
+    id:171, name:"허브펫하우스", cat:"카페", area:"용인", petConfirmed:true,
     addr:"경기 용인시 처인구 포곡읍 영문로 82", phone:"",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.27225042, lng:127.20779458,
@@ -2781,7 +2775,7 @@ const places = [
     emoji:"🐾"
   },
   {
-    id:172, name:"댕댕타임", cat:"카페", area:"용인",
+    id:172, name:"댕댕타임", cat:"카페", area:"용인", petConfirmed:true,
     addr:"경기 용인시 기흥구 동백5로 17", phone:"",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.27671804, lng:127.15186367,
@@ -2792,7 +2786,7 @@ const places = [
     emoji:"🐾"
   },
   {
-    id:173, name:"멍집사", cat:"카페", area:"용인",
+    id:173, name:"멍집사", cat:"카페", area:"용인", petConfirmed:true,
     addr:"경기 용인시 수지구 수지로461번길 40", phone:"",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.33778242, lng:127.0932367,
@@ -2803,7 +2797,7 @@ const places = [
     emoji:"🐾"
   },
   {
-    id:174, name:"놀러오개 에버랜드점", cat:"애견운동장", area:"용인",
+    id:174, name:"놀러오개 에버랜드점", cat:"애견운동장", area:"용인", petConfirmed:true,
     addr:"경기 용인시 처인구 포곡읍 영문로 205-7", phone:"",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.28173048, lng:127.2029854,
@@ -2814,7 +2808,7 @@ const places = [
     emoji:"🌿"
   },
   {
-    id:175, name:"펫앤스토리센터", cat:"카페", area:"용인",
+    id:175, name:"펫앤스토리센터", cat:"카페", area:"용인", petConfirmed:true,
     addr:"경기 용인시 처인구 모현읍 곡현로 748-1", phone:"",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.34895607, lng:127.2298379,
@@ -2825,7 +2819,7 @@ const places = [
     emoji:"🐾"
   },
   {
-    id:176, name:"댕스어랏", cat:"카페", area:"용인",
+    id:176, name:"댕스어랏", cat:"카페", area:"용인", petConfirmed:true,
     addr:"경기 용인시 처인구 모현읍 곡현로485번길 50", phone:"",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.327423, lng:127.21760017,
@@ -2836,7 +2830,7 @@ const places = [
     emoji:"🐾"
   },
   {
-    id:177, name:"플레이멍", cat:"카페", area:"용인",
+    id:177, name:"플레이멍", cat:"카페", area:"용인", petConfirmed:true,
     addr:"경기 용인시 처인구 명지로16번길 9-11", phone:"",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.23325085, lng:127.18711485,
@@ -2847,7 +2841,7 @@ const places = [
     emoji:"🐾"
   },
   {
-    id:178, name:"놀러오개 죽전점", cat:"카페", area:"용인",
+    id:178, name:"놀러오개 죽전점", cat:"카페", area:"용인", petConfirmed:true,
     addr:"경기 용인시 수지구 죽전로 146", phone:"",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.32385318, lng:127.12388647,
@@ -2858,7 +2852,7 @@ const places = [
     emoji:"🐾"
   },
   {
-    id:179, name:"상현레스피아 반려견놀이터", cat:"애견운동장", area:"용인",
+    id:179, name:"상현레스피아 반려견놀이터", cat:"애견운동장", area:"용인", petConfirmed:true,
     addr:"경기 용인시 수지구 상현동 1135-3", phone:"",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.29474859, lng:127.07625279,
@@ -2869,7 +2863,7 @@ const places = [
     emoji:"🌿"
   },
   {
-    id:180, name:"와그와그컴퍼니", cat:"카페", area:"용인",
+    id:180, name:"와그와그컴퍼니", cat:"카페", area:"용인", petConfirmed:true,
     addr:"경기 용인시 기흥구 동백죽전대로175번길 17", phone:"",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.25690235, lng:127.16073593,
@@ -2880,7 +2874,7 @@ const places = [
     emoji:"🐾"
   },
   {
-    id:181, name:"견사무소", cat:"카페", area:"용인",
+    id:181, name:"견사무소", cat:"카페", area:"용인", petConfirmed:true,
     addr:"경기 용인시 기흥구 용구대로1855번길 91", phone:"",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.26031386, lng:127.10318426,
@@ -2891,7 +2885,7 @@ const places = [
     emoji:"🐾"
   },
   {
-    id:182, name:"타카독스커피", cat:"카페", area:"용인",
+    id:182, name:"타카독스커피", cat:"카페", area:"용인", petConfirmed:true,
     addr:"경기 용인시 기흥구 죽전로 33", phone:"",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.32074969, lng:127.11250118,
@@ -2902,7 +2896,7 @@ const places = [
     emoji:"🐾"
   },
   {
-    id:183, name:"멍스토리", cat:"카페", area:"용인",
+    id:183, name:"멍스토리", cat:"카페", area:"용인", petConfirmed:true,
     addr:"경기 용인시 기흥구 공세로82번길 32", phone:"",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.23232332, lng:127.11167438,
@@ -2913,7 +2907,7 @@ const places = [
     emoji:"🐾"
   },
   {
-    id:184, name:"양지파인펫파크", cat:"애견운동장", area:"용인",
+    id:184, name:"양지파인펫파크", cat:"애견운동장", area:"용인", petConfirmed:true,
     addr:"경기 용인시 처인구 양지읍 남평로 112", phone:"",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.21069321, lng:127.29363861,
@@ -2924,7 +2918,7 @@ const places = [
     emoji:"🌿"
   },
   {
-    id:185, name:"카페댕하루", cat:"카페", area:"용인",
+    id:185, name:"카페댕하루", cat:"카페", area:"용인", petConfirmed:true,
     addr:"경기 용인시 처인구 명지로60번길 33-24", phone:"",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.22917433, lng:127.18722986,
@@ -2936,7 +2930,7 @@ const places = [
   },
   // ── 분당 추가 (구글맵 누락분) ──────────────────────────────────
   {
-    id:186, name:"도모브", cat:"카페", area:"분당",
+    id:186, name:"도모브", cat:"카페", area:"분당", petConfirmed:true,
     addr:"경기 성남시 분당구 새마을로 39", phone:"031-701-1258",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.38362143, lng:127.13507859,
@@ -2947,7 +2941,7 @@ const places = [
     emoji:"🐾"
   },
   {
-    id:187, name:"딥밀크", cat:"카페", area:"분당",
+    id:187, name:"딥밀크", cat:"카페", area:"분당", petConfirmed:false,
     addr:"경기 성남시 분당구 불정로386번길 10", phone:"070-8782-1003",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.37269837, lng:127.13814676,
@@ -2958,7 +2952,7 @@ const places = [
     emoji:"🐾"
   },
   {
-    id:188, name:"땡큐한", cat:"카페", area:"분당",
+    id:188, name:"땡큐한", cat:"카페", area:"분당", petConfirmed:true,
     addr:"경기 성남시 분당구 황새울로12번길 1-3", phone:"",
     hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
     lat:37.36138924, lng:127.11016309,
@@ -2969,7 +2963,7 @@ const places = [
     emoji:"🐾"
   },
   {
-    id:189, name:"쏘스윗커피&쏘스윗펫", cat:"카페", area:"분당",
+    id:189, name:"쏘스윗커피&쏘스윗펫", cat:"카페", area:"분당", petConfirmed:true,
     addr:"경기 성남시 분당구 판교역로 109 SK허브A B동 209호", phone:"010-3296-4315",
     hours:[{d:"영업시간",t:"11:00 - 방문 전 확인 권장"}],
     lat:37.3910199, lng:127.10868872,
@@ -2980,7 +2974,7 @@ const places = [
     emoji:"🐾"
   },
   {
-    id:190, name:"가비양 카페", cat:"카페", area:"분당",
+    id:190, name:"가비양 카페", cat:"카페", area:"분당", petConfirmed:true,
     addr:"경기 성남시 분당구 안골로 33", phone:"031-707-3351",
     hours:[{d:"영업시간",t:"10:00 ~ 22:00 (방문 전 확인 권장)"}],
     lat:37.38581902, lng:127.13508253,
@@ -2989,40 +2983,58 @@ const places = [
     note:"분당 서현동 애견동반 카페. 방문 전 동반 조건 확인 권장.",
     kakaoUrl:"https://place.map.kakao.com/17186818",
     emoji:"🐾"
+  }  ,
+  {
+    id:191, name:"루카스 애견동반식당", cat:"음식점", area:"용인", petConfirmed:true,
+    addr:"경기 용인시 수지구 성복2로 398", phone:"050-71446-3349",
+    hours:[{d:"영업시간",t:"10:00 - (방문 전 확인 권장)"}],
+    lat:37.3219535, lng:127.0465361,
+    large:true, small:true, indoor:true, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"용인 수지구 성복동 애견동반 식당. 구글맵 애견동반 확인. 반려견과 함께 식사 가능.",
+    kakaoUrl:"",
+    emoji:"🍖"
+  },
+  {
+    id:192, name:"올리브펫", cat:"애견카페", area:"분당", petConfirmed:true,
+    addr:"경기 성남시 분당구 매화로 14 올리브펫 탑마을 주공8단지 근린상가 207호", phone:"",
+    hours:[{d:"영업시간",t:"11:00 - (방문 전 확인 권장)"}],
+    lat:37.4087408, lng:127.1342861,
+    large:false, small:true, indoor:true, outdoor:false, stroller:false, cage:false,
+    entryFee:null,
+    note:"성남 분당구 야탑동 애견카페. 구글맵 확인.",
+    kakaoUrl:"",
+    emoji:"🐾"
+  },
+  {
+    id:193, name:"베비나", cat:"카페", area:"용인", petConfirmed:true,
+    addr:"경기 용인시 기흥구 구성로279번길 15 카페 베비나 1층", phone:"031-547-9400",
+    hours:[{d:"영업시간",t:"10:00 - (방문 전 확인 권장)"}],
+    lat:37.2908691, lng:127.1411868,
+    large:false, small:true, indoor:true, outdoor:false, stroller:false, cage:false,
+    entryFee:null,
+    note:"용인 기흥구 카페. 네이버지도 반려동물 동반 표시 확인. 인스타그램 @vevina.cafe.",
+    kakaoUrl:"",
+    emoji:"🐾"
+  },
+  {
+    id:194, name:"무공간", cat:"카페", area:"광주", petConfirmed:true,
+    addr:"경기 광주시 신현동 1110", phone:"050-71324-1560",
+    hours:[{d:"영업시간",t:"10:30 - (방문 전 확인 권장)"}],
+    lat:37.3446683, lng:127.14129,
+    large:false, small:true, indoor:true, outdoor:false, stroller:false, cage:false,
+    entryFee:null,
+    note:"경기 광주시 신현동 복합문화공간 카페. 네이버지도 반려동물 무료간식 증정 확인.",
+    kakaoUrl:"",
+    emoji:"🐾"
   }
 ];
 
 // ═════════════════════════════════
-// AREA COLORS
+// PET CONFIRMED COLORS
 // ═════════════════════════════════
-const AREA_COLOR = {
-  '분당':   '#FF6B35',
-  '보정동': '#7C4DFF',
-  '가평':   '#2E7D32',
-  '양평':   '#0097A7',
-  '수원':   '#1565C0',
-  '파주':   '#6A1B9A',
-  '고양':   '#6A1B9A',
-  '남양주': '#0097A7',
-  '하남':   '#1565C0',
-  '광주':   '#1565C0',
-  '포천':   '#2E7D32',
-  '화성':   '#D84315',
-  '평택':   '#4E342E',
-  '안양':   '#AD1457',
-  '부천':   '#00695C',
-  '의정부': '#283593',
-  '구리':   '#00838F',
-  '시흥':   '#558B2F',
-  '안산':   '#1976D2',
-  '군포':   '#7B1FA2',
-  '오산':   '#F57F17',
-  '안성':   '#4CAF50',
-  '여주':   '#FF6F00',
-  '양주':   '#5D4037',
-  '동두천': '#37474F',
-  '용인':   '#C62828',
-};
+const COLOR_CONFIRMED = '#FF6B35';   // 주황 = 애견동반 확정
+const COLOR_UNCERTAIN = '#C8C8C8';   // 밝은 회색 = 정보 불확실
 const AREA_BADGE = {
   '분당':   {bg:'#FFF0E8', clr:'#FF6B35'},
   '보정동': {bg:'#EDE7F6', clr:'#7C4DFF'},
@@ -3229,7 +3241,7 @@ function initMap() {
 }
 
 function addMarker(p) {
-  const color = AREA_COLOR[p.area] || '#999';
+  const color = p.petConfirmed ? COLOR_CONFIRMED : COLOR_UNCERTAIN;
   const feeClass = p.entryFee ? 'fee-marker' : '';
   const html = `<div class="m-dot ${feeClass}" style="background:${color}" data-id="${p.id}"></div>`;
   const icon = L.divIcon({ html, className:'', iconSize:[20,20], iconAnchor:[10,10] });
