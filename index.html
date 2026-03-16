@@ -1,0 +1,3967 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>홍시의 대동여지도 🍅🐾</title>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
+  <!-- Firebase -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+  <style>
+    *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+    html, body { height:100%; font-family:'Noto Sans KR',sans-serif; background:#FFF8F0; color:#2D2D2D; overflow:hidden; }
+
+    /* ── VARIABLES ── */
+    :root {
+      --orange:#FF6B35; --orange-light:#FF8C42; --orange-bg:#FFF0E8;
+      --shadow-sm:0 2px 8px rgba(0,0,0,.08);
+      --shadow-md:0 4px 20px rgba(0,0,0,.12);
+      --shadow-lg:0 8px 40px rgba(0,0,0,.18);
+      --radius-sm:10px; --radius-md:16px; --radius-lg:24px;
+      --hdr-h:54px; --tabs-h:56px;
+    }
+
+    /* ── FIREBASE SETUP NOTICE ── */
+    #setup-notice {
+      position:fixed; inset:0; background:linear-gradient(145deg,#1a1a2e,#16213e);
+      display:flex; align-items:center; justify-content:center; z-index:99999;
+    }
+    .setup-card {
+      background:#fff; border-radius:24px; padding:36px 32px; max-width:540px; width:92vw;
+      box-shadow:var(--shadow-lg);
+    }
+    .setup-card h2 { font-size:20px; font-weight:900; color:#FF6B35; margin-bottom:8px; }
+    .setup-card p { font-size:13px; color:#555; line-height:1.7; margin-bottom:12px; }
+    .setup-step { background:#F8F8F8; border-radius:10px; padding:12px 16px; margin-bottom:8px; font-size:12px; color:#333; }
+    .setup-step strong { color:#FF6B35; }
+    .setup-code { background:#1e1e1e; color:#aef; border-radius:8px; padding:12px; font-size:11px; font-family:monospace; white-space:pre; overflow-x:auto; margin:8px 0; }
+    .btn-dismiss { width:100%; padding:12px; background:linear-gradient(135deg,#FF8C42,#FF6B35); color:#fff; border:none; border-radius:12px; font-size:14px; font-weight:700; font-family:inherit; cursor:pointer; margin-top:8px; }
+
+    /* ── LOGIN / REGISTER SCREEN ── */
+    #login-screen {
+      position:fixed; inset:0;
+      background:linear-gradient(145deg,#FF8C42 0%,#FF6B35 55%,#E8531F 100%);
+      display:flex; align-items:center; justify-content:center; z-index:9999;
+      overflow-y:auto; padding:16px 0;
+    }
+    .login-bg-dots { position:fixed; inset:0; overflow:hidden; pointer-events:none; z-index:0; }
+    .login-bg-dots span { position:absolute; font-size:32px; opacity:.13; animation:float 6s ease-in-out infinite; }
+    @keyframes float { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-18px)} }
+    .login-card {
+      background:white; border-radius:28px; padding:36px 32px;
+      width:420px; max-width:92vw;
+      box-shadow:0 24px 80px rgba(0,0,0,.22);
+      text-align:center; position:relative; z-index:1;
+    }
+    .login-logo { font-size:48px; margin-bottom:4px; }
+    .login-title { font-size:24px; font-weight:900; color:#FF6B35; margin-bottom:2px; letter-spacing:-.5px; }
+    .login-title-sub { font-size:13px; color:#FF6B35; font-weight:500; margin-bottom:4px; opacity:.8; }
+    .login-subtitle { font-size:13px; color:#AAA; margin-bottom:24px; line-height:1.7; }
+    .form-group { margin-bottom:12px; text-align:left; }
+    .form-group label { display:block; font-size:13px; font-weight:600; color:#555; margin-bottom:6px; }
+    .form-group input {
+      width:100%; padding:13px 16px; border:2px solid #EBEBEB;
+      border-radius:14px; font-size:15px; font-family:inherit; outline:none;
+      transition:border-color .2s, box-shadow .2s;
+    }
+    .form-group input:focus { border-color:#FF6B35; box-shadow:0 0 0 3px rgba(255,107,53,.1); }
+    .btn-login {
+      width:100%; padding:14px; margin-top:4px;
+      background:linear-gradient(135deg,#FF8C42,#FF6B35);
+      color:white; border:none; border-radius:14px;
+      font-size:15px; font-weight:700; font-family:inherit; cursor:pointer;
+      transition:transform .15s, box-shadow .2s;
+    }
+    .btn-login:hover { transform:translateY(-2px); box-shadow:0 10px 24px rgba(255,107,53,.4); }
+    .btn-login:disabled { opacity:.6; transform:none; cursor:wait; }
+    .auth-toggle { margin-top:16px; font-size:13px; color:#999; }
+    .auth-toggle a { color:#FF6B35; font-weight:600; cursor:pointer; text-decoration:none; }
+    .auth-divider { display:flex; align-items:center; gap:12px; margin:16px 0; color:#DDD; font-size:12px; }
+    .auth-divider::before, .auth-divider::after { content:''; flex:1; height:1px; background:#EEE; }
+    .auth-err { background:#FFEBEE; color:#C62828; border-radius:10px; padding:10px 14px; font-size:13px; margin-bottom:12px; text-align:left; display:none; }
+    .login-features { display:flex; gap:12px; justify-content:center; margin-top:16px; flex-wrap:wrap; }
+    .lf-item { font-size:12px; color:#999; display:flex; align-items:center; gap:4px; }
+
+    /* ── APP ── */
+    #app-screen { display:none; height:100%; width:100%; }
+
+    /* ── NOTICES BANNER ── */
+    #notice-banner {
+      position:fixed; top:var(--hdr-h); left:0; right:0; z-index:950;
+      display:none;
+    }
+    .notice-item {
+      background:linear-gradient(135deg,#FF8C42,#FF6B35); color:#fff;
+      padding:10px 16px; font-size:13px; font-weight:600;
+      display:flex; align-items:center; gap:8px; cursor:pointer;
+    }
+    .notice-close { margin-left:auto; opacity:.8; background:none; border:none; color:#fff; cursor:pointer; font-size:16px; }
+
+    /* ── HEADER ── */
+    #header {
+      position:fixed; top:0; left:0; right:0; height:var(--hdr-h);
+      background:white; display:flex; align-items:center;
+      padding:0 8px 0 12px; z-index:1000;
+      box-shadow:var(--shadow-sm); gap:6px;
+    }
+    .hdr-logo {
+      font-size:15px; font-weight:900; color:#FF6B35;
+      display:flex; align-items:center; gap:5px; white-space:nowrap; flex-shrink:0;
+    }
+    #search-wrap { flex:1; position:relative; min-width:0; }
+    #search-input {
+      width:100%; padding:8px 14px 8px 36px;
+      border:2px solid #F0F0F0; border-radius:22px;
+      font-size:13px; font-family:inherit; outline:none;
+      background:#FAFAFA; transition:all .2s;
+    }
+    #search-input:focus { border-color:#FF6B35; background:white; }
+    .search-icon { position:absolute; left:12px; top:50%; transform:translateY(-50%); color:#CCC; font-size:13px; pointer-events:none; }
+    .hdr-btn {
+      padding:7px 11px; background:#FFF0E8; border:none; border-radius:18px;
+      font-size:12px; font-weight:600; color:#FF6B35; cursor:pointer;
+      white-space:nowrap; font-family:inherit;
+      display:flex; align-items:center; gap:4px; transition:background .2s; flex-shrink:0;
+    }
+    .hdr-btn:hover { background:#FFE4D4; }
+    .hdr-btn.ghost { background:#F5F5F5; color:#888; }
+    .hdr-btn.ghost:hover { background:#EBEBEB; }
+    .hdr-btn.admin-btn { background:#1E3A8A; color:#fff; }
+    .hdr-btn.admin-btn:hover { background:#1e40af; }
+    .user-badge {
+      width:32px; height:32px; border-radius:50%;
+      background:linear-gradient(135deg,#FF8C42,#FF6B35);
+      display:flex; align-items:center; justify-content:center;
+      color:white; font-size:13px; font-weight:700; flex-shrink:0; cursor:pointer;
+      position:relative;
+    }
+    .user-badge .notif-dot {
+      position:absolute; top:-2px; right:-2px; width:10px; height:10px;
+      background:#EF4444; border-radius:50%; border:2px solid white; display:none;
+    }
+    #hdr-share { display:flex; }
+
+    /* ── SIDEBAR (desktop) ── */
+    #sidebar {
+      position:fixed; top:var(--hdr-h); left:0; width:330px; bottom:0;
+      background:white; z-index:900;
+      display:flex; flex-direction:column;
+      box-shadow:2px 0 14px rgba(0,0,0,.07);
+      transition:transform .3s;
+    }
+
+    /* ── FILTERS ── */
+    #filters { padding:10px; border-bottom:1px solid #F5F5F5; }
+    .f-label { font-size:10px; font-weight:700; color:#CCC; text-transform:uppercase; letter-spacing:.5px; margin-bottom:5px; }
+    .filter-row { display:flex; gap:4px; flex-wrap:wrap; margin-bottom:7px; }
+    .filter-chip {
+      padding:4px 10px; border:1.5px solid #E8E8E8; border-radius:18px;
+      font-size:12px; font-weight:500; color:#777; cursor:pointer;
+      background:white; font-family:inherit; transition:all .14s; white-space:nowrap;
+    }
+    .filter-chip:hover { border-color:#FF6B35; color:#FF6B35; }
+    .filter-chip.active { background:#FF6B35; border-color:#FF6B35; color:white; }
+    .filter-chip.fee-chip { border-color:#D4A017; color:#8B6914; }
+    .filter-chip.fee-chip:hover { border-color:#B8860B; color:#7A5C10; }
+    .filter-chip.fee-chip.active { background:#D4A017; border-color:#D4A017; color:white; }
+    .filter-chip.nofee-chip { border-color:#2E7D32; color:#2E7D32; }
+    .filter-chip.nofee-chip.active { background:#2E7D32; border-color:#2E7D32; color:white; }
+
+    /* ── PLACE LIST ── */
+    #place-list { flex:1; overflow-y:auto; padding:6px; -webkit-overflow-scrolling:touch; }
+    #place-list::-webkit-scrollbar { width:3px; }
+    #place-list::-webkit-scrollbar-thumb { background:#EEE; border-radius:2px; }
+    .list-section-header {
+      display:flex; align-items:center; gap:6px;
+      padding:8px 10px 4px; font-size:11px; font-weight:700;
+      color:#888; text-transform:uppercase; letter-spacing:.4px;
+    }
+    .list-section-header .sec-line { flex:1; height:1px; background:#F0F0F0; }
+    .place-card {
+      padding:11px 12px; border-radius:12px; cursor:pointer;
+      transition:all .13s; margin-bottom:4px;
+      border:1.5px solid transparent; background:#FAFAFA;
+    }
+    .place-card:hover { background:white; border-color:#FFD4BE; box-shadow:0 3px 12px rgba(255,107,53,.1); }
+    .place-card.active { background:white; border-color:#FF6B35; box-shadow:0 4px 16px rgba(255,107,53,.2); }
+    .place-card.has-fee { border-left:3px solid #D4A017; }
+    .place-card.has-fee:hover { border-color:#D4A017; }
+    .place-card.has-fee.active { border-color:#D4A017; }
+    .pc-top { display:flex; align-items:flex-start; gap:9px; margin-bottom:6px; }
+    .pc-emoji { width:36px; height:36px; border-radius:10px; background:#FFF0E8; display:flex; align-items:center; justify-content:center; font-size:17px; flex-shrink:0; }
+    .pc-info { flex:1; min-width:0; }
+    .pc-name { font-size:13px; font-weight:700; color:#2D2D2D; line-height:1.3; }
+    .pc-meta { font-size:11px; color:#BBB; margin-top:1px; }
+    .pc-tags { display:flex; flex-wrap:wrap; gap:3px; }
+    .tag { padding:2px 7px; border-radius:5px; font-size:11px; font-weight:500; }
+    .t-green{background:#E8F5E9;color:#2E7D32} .t-orange{background:#FFF3E0;color:#BF360C}
+    .t-blue{background:#E3F2FD;color:#1565C0} .t-gray{background:#F5F5F5;color:#888}
+    .t-red{background:#FFEBEE;color:#B71C1C} .t-gold{background:#FFF8E1;color:#7A5C10;border:1px solid #FFE082}
+    #place-count { padding:7px; font-size:11px; color:#BBB; text-align:center; border-top:1px solid #F5F5F5; }
+    .no-results { text-align:center; padding:48px 20px; color:#DDD; }
+    .no-results .nr-emoji { font-size:44px; margin-bottom:10px; }
+    .no-results p { font-size:13px; line-height:1.6; }
+
+    /* ── MAP ── */
+    #map { position:fixed; top:var(--hdr-h); left:330px; right:0; bottom:0; z-index:500; }
+    .m-dot {
+      width:20px; height:20px; border-radius:50%;
+      border:2.5px solid white; box-shadow:0 2px 8px rgba(0,0,0,.25);
+      transition:transform .2s;
+    }
+    .m-dot.active { transform:scale(1.5) !important; box-shadow:0 3px 12px rgba(0,0,0,.35); }
+    .m-dot.fee-marker { border-color:#FFD700; box-shadow:0 2px 8px rgba(212,160,23,.4); }
+
+    /* ── DETAIL DRAWER ── */
+    #detail-drawer {
+      position:fixed; bottom:0; right:0; left:330px;
+      background:white; border-radius:20px 20px 0 0;
+      box-shadow:0 -4px 30px rgba(0,0,0,.13);
+      z-index:800; transform:translateY(100%);
+      transition:transform .3s cubic-bezier(.4,0,.2,1);
+      max-height:72vh; overflow-y:auto;
+    }
+    #detail-drawer.open { transform:translateY(0); }
+    #detail-drawer::-webkit-scrollbar { width:3px; }
+    #detail-drawer::-webkit-scrollbar-thumb { background:#EEE; border-radius:2px; }
+    .d-handle { width:36px; height:4px; background:#E0E0E0; border-radius:2px; margin:11px auto 2px; }
+    .d-content { padding:12px 20px 32px; }
+    .d-header { display:flex; align-items:flex-start; gap:13px; margin-bottom:16px; }
+    .d-icon { width:52px; height:52px; border-radius:15px; background:#FFF0E8; display:flex; align-items:center; justify-content:center; font-size:25px; flex-shrink:0; }
+    .d-name { font-size:18px; font-weight:800; color:#2D2D2D; line-height:1.3; }
+    .d-sub { font-size:12px; color:#AAA; margin-top:3px; line-height:1.5; }
+    .d-close { width:28px; height:28px; border-radius:50%; border:none; background:#F0F0F0; cursor:pointer; font-size:12px; display:flex; align-items:center; justify-content:center; color:#888; flex-shrink:0; margin-left:auto; }
+    .fee-banner {
+      background:linear-gradient(135deg,#FFF8E1,#FFFDE7); border:1.5px solid #FFE082;
+      border-radius:12px; padding:12px 16px; margin-bottom:14px;
+      display:flex; align-items:center; gap:10px;
+    }
+    .fee-banner-icon { font-size:22px; flex-shrink:0; }
+    .fee-banner-label { font-size:11px; font-weight:700; color:#7A5C10; text-transform:uppercase; letter-spacing:.3px; margin-bottom:2px; }
+    .fee-banner-amount { font-size:15px; font-weight:800; color:#5D4037; }
+    .fee-banner-note { font-size:11px; color:#9E9E9E; margin-top:2px; }
+    .sec-label { font-size:11px; font-weight:700; color:#CCC; text-transform:uppercase; letter-spacing:.5px; margin-bottom:9px; margin-top:16px; }
+    .info-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:7px; }
+    .ic { background:#FAFAFA; border-radius:11px; padding:11px 10px; }
+    .ic-lbl { font-size:10px; color:#BBB; font-weight:500; margin-bottom:4px; }
+    .ic-val { font-size:13px; font-weight:700; }
+    .ic-val.yes{color:#2E7D32} .ic-val.no{color:#C62828} .ic-val.warn{color:#BF360C}
+    .hours-grid { display:flex; flex-direction:column; gap:3px; }
+    .hours-row { display:flex; align-items:center; gap:10px; padding:5px 11px; background:#FAFAFA; border-radius:7px; }
+    .h-day { font-size:11px; color:#999; width:62px; flex-shrink:0; }
+    .h-time { font-size:13px; font-weight:600; color:#2D2D2D; }
+    .h-time.closed { color:#D32F2F; }
+    .notes-box { background:#FFFBF0; border:1px solid #FFE0A0; border-radius:11px; padding:11px 14px; font-size:13px; color:#5D4037; line-height:1.65; margin-top:5px; }
+    .warn-note { font-size:11px; color:#CCC; margin-top:8px; display:flex; align-items:center; gap:4px; }
+    .divider { height:1px; background:#F5F5F5; margin:14px 0; }
+    .action-row { display:flex; gap:8px; margin-top:18px; }
+    .btn-act {
+      flex:1; padding:12px 8px; border-radius:11px; border:none;
+      font-family:inherit; font-size:13px; font-weight:700; cursor:pointer;
+      display:flex; align-items:center; justify-content:center; gap:5px;
+      transition:all .16s;
+    }
+    .btn-act:hover { transform:translateY(-1px); opacity:.9; }
+    .btn-primary { background:linear-gradient(135deg,#FF8C42,#FF6B35); color:white; }
+    .btn-secondary { background:#F5F5F5; color:#555; }
+
+    /* ── MAP LEGEND ── */
+    .map-legend {
+      position:absolute; bottom:18px; left:14px; z-index:600;
+      background:rgba(255,255,255,.95); border-radius:10px; padding:9px 13px;
+      box-shadow:0 2px 12px rgba(0,0,0,.1); font-size:12px;
+      backdrop-filter:blur(4px);
+    }
+    .legend-item { display:flex; align-items:center; gap:6px; margin-bottom:3px; }
+    .legend-item:last-child { margin-bottom:0; }
+    .legend-dot { width:11px; height:11px; border-radius:50%; border:2px solid white; box-shadow:0 1px 4px rgba(0,0,0,.15); }
+    .ld-fee { border:2px solid #FFD700; }
+
+    /* ── TOAST ── */
+    #toast {
+      position:fixed; bottom:24px; left:50%;
+      transform:translateX(-50%) translateY(14px);
+      background:rgba(20,20,20,.88); color:white;
+      padding:9px 20px; border-radius:22px; font-size:13px;
+      opacity:0; transition:all .26s; z-index:9999; white-space:nowrap;
+      pointer-events:none;
+    }
+    #toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+
+    /* ── AREA / FEE BADGES ── */
+    .ab { display:inline-block; padding:1px 7px; border-radius:5px; font-size:11px; font-weight:700; }
+    .ab-fee { background:#FFF8E1; color:#7A5C10; border:1px solid #FFE082; }
+
+    .submit-cta {
+      margin:6px 6px 2px; padding:9px 12px; background:#FFF0E8;
+      border:1.5px dashed #FFB899; border-radius:10px;
+      font-size:12px; color:#FF6B35; text-align:center;
+      cursor:pointer; font-family:inherit; font-weight:600; width:calc(100% - 12px);
+      transition:background .2s;
+    }
+    .submit-cta:hover { background:#FFE4D4; }
+
+    /* ── MODALS (Place Report + Notice) ── */
+    .modal-overlay {
+      position:fixed; inset:0; background:rgba(0,0,0,.5);
+      display:flex; align-items:flex-end; justify-content:center;
+      z-index:9000; opacity:0; pointer-events:none;
+      transition:opacity .25s;
+    }
+    .modal-overlay.open { opacity:1; pointer-events:all; }
+    .modal-sheet {
+      background:white; border-radius:24px 24px 0 0;
+      width:100%; max-width:540px; max-height:85vh;
+      padding:0 0 env(safe-area-inset-bottom,0);
+      transform:translateY(100%); transition:transform .3s cubic-bezier(.4,0,.2,1);
+      overflow-y:auto;
+    }
+    .modal-overlay.open .modal-sheet { transform:translateY(0); }
+    .modal-handle { width:40px; height:4px; background:#E0E0E0; border-radius:2px; margin:14px auto 0; }
+    .modal-content { padding:16px 24px 32px; }
+    .modal-title { font-size:18px; font-weight:800; color:#2D2D2D; margin-bottom:4px; }
+    .modal-sub { font-size:13px; color:#999; margin-bottom:20px; }
+    .modal-field { margin-bottom:14px; }
+    .modal-field label { display:block; font-size:13px; font-weight:600; color:#555; margin-bottom:6px; }
+    .modal-field input, .modal-field textarea {
+      width:100%; padding:12px 14px; border:2px solid #EBEBEB; border-radius:12px;
+      font-size:14px; font-family:inherit; outline:none; resize:vertical;
+      transition:border-color .2s;
+    }
+    .modal-field input:focus, .modal-field textarea:focus { border-color:#FF6B35; }
+    .modal-actions { display:flex; gap:10px; }
+    .btn-modal-cancel { flex:1; padding:13px; background:#F5F5F5; border:none; border-radius:12px; font-size:14px; font-weight:600; color:#888; font-family:inherit; cursor:pointer; }
+    .btn-modal-submit { flex:2; padding:13px; background:linear-gradient(135deg,#FF8C42,#FF6B35); border:none; border-radius:12px; font-size:14px; font-weight:700; color:#fff; font-family:inherit; cursor:pointer; }
+
+    /* ── ADMIN PANEL ── */
+    #admin-panel {
+      position:fixed; inset:0; background:#F0F2F5; z-index:2000;
+      display:none; flex-direction:column;
+      overflow:hidden;
+    }
+    #admin-header {
+      background:linear-gradient(135deg,#1E3A8A,#1e40af);
+      color:#fff; padding:12px 16px;
+      display:flex; align-items:center; gap:12px;
+      min-height:54px; flex-shrink:0;
+    }
+    #admin-header h1 { font-size:16px; font-weight:800; flex:1; }
+    .admin-back { background:rgba(255,255,255,.2); border:none; color:#fff; padding:7px 12px; border-radius:10px; font-size:13px; cursor:pointer; font-family:inherit; font-weight:600; }
+    .admin-back:hover { background:rgba(255,255,255,.3); }
+
+    #admin-tabs {
+      background:#fff; display:flex; overflow-x:auto; gap:0; border-bottom:2px solid #E5E7EB;
+      flex-shrink:0; -webkit-overflow-scrolling:touch;
+    }
+    #admin-tabs::-webkit-scrollbar { display:none; }
+    .atab {
+      padding:12px 16px; border:none; background:none; cursor:pointer;
+      font-family:inherit; font-size:13px; font-weight:600; color:#6B7280;
+      white-space:nowrap; transition:all .2s; border-bottom:2px solid transparent;
+      margin-bottom:-2px;
+    }
+    .atab.active { color:#1E3A8A; border-bottom-color:#1E3A8A; }
+    .atab:hover { color:#1E3A8A; background:#F8FAFF; }
+
+    #admin-content { flex:1; overflow-y:auto; padding:16px; -webkit-overflow-scrolling:touch; }
+
+    .admin-stat-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:12px; margin-bottom:20px; }
+    @media(min-width:600px) { .admin-stat-grid { grid-template-columns:repeat(4,1fr); } }
+    .stat-card { background:#fff; border-radius:14px; padding:16px; box-shadow:var(--shadow-sm); }
+    .stat-num { font-size:28px; font-weight:900; color:#1E3A8A; }
+    .stat-label { font-size:12px; color:#9CA3AF; margin-top:2px; font-weight:500; }
+
+    .admin-section { background:#fff; border-radius:14px; padding:16px; margin-bottom:16px; box-shadow:var(--shadow-sm); }
+    .admin-section h3 { font-size:14px; font-weight:800; color:#1F2937; margin-bottom:12px; display:flex; align-items:center; gap:6px; }
+    .admin-table { width:100%; border-collapse:collapse; font-size:13px; }
+    .admin-table th { text-align:left; color:#9CA3AF; font-weight:600; font-size:11px; text-transform:uppercase; padding:0 0 8px; border-bottom:1px solid #F3F4F6; }
+    .admin-table td { padding:10px 0; border-bottom:1px solid #F9FAFB; color:#374151; vertical-align:top; }
+    .admin-table tr:last-child td { border-bottom:none; }
+    .admin-badge { display:inline-block; padding:2px 8px; border-radius:6px; font-size:11px; font-weight:700; }
+    .badge-pending { background:#FEF3C7; color:#92400E; }
+    .badge-approved { background:#D1FAE5; color:#065F46; }
+    .badge-rejected { background:#FEE2E2; color:#991B1B; }
+    .badge-admin { background:#DBEAFE; color:#1E40AF; }
+    .btn-sm { padding:4px 10px; border-radius:6px; font-size:12px; font-weight:600; cursor:pointer; border:none; font-family:inherit; }
+    .btn-approve { background:#D1FAE5; color:#065F46; }
+    .btn-reject { background:#FEE2E2; color:#991B1B; }
+    .btn-sm:hover { opacity:.8; }
+
+    .notice-form { background:#F8FAFF; border-radius:12px; padding:16px; margin-bottom:16px; }
+    .notice-form input, .notice-form textarea {
+      width:100%; padding:10px 14px; border:2px solid #E5E7EB; border-radius:10px;
+      font-size:13px; font-family:inherit; outline:none; margin-bottom:10px; resize:vertical;
+    }
+    .notice-form input:focus, .notice-form textarea:focus { border-color:#1E3A8A; }
+    .btn-notice-add { padding:10px 20px; background:linear-gradient(135deg,#1E3A8A,#1e40af); color:#fff; border:none; border-radius:10px; font-size:13px; font-weight:700; cursor:pointer; font-family:inherit; }
+
+    .notice-list-item { display:flex; align-items:flex-start; gap:10px; padding:12px 0; border-bottom:1px solid #F3F4F6; }
+    .notice-list-item:last-child { border-bottom:none; }
+    .notice-list-item .notice-body { flex:1; }
+    .notice-list-item .notice-title { font-size:13px; font-weight:700; color:#1F2937; }
+    .notice-list-item .notice-text { font-size:12px; color:#6B7280; margin-top:2px; }
+    .notice-list-item .notice-meta { font-size:11px; color:#9CA3AF; margin-top:4px; }
+
+    .log-item { padding:8px 0; border-bottom:1px solid #F9FAFB; font-size:12px; }
+    .log-item:last-child { border-bottom:none; }
+    .log-email { font-weight:700; color:#1F2937; }
+    .log-detail { color:#6B7280; margin-top:1px; }
+    .log-time { color:#9CA3AF; font-size:11px; }
+
+    .empty-state { text-align:center; padding:32px 16px; color:#9CA3AF; }
+    .empty-state .es-icon { font-size:36px; margin-bottom:8px; }
+
+    .admin-notice-toggle { display:flex; align-items:center; gap:8px; font-size:13px; }
+    .toggle-sw { position:relative; width:40px; height:22px; cursor:pointer; }
+    .toggle-sw input { opacity:0; width:0; height:0; }
+    .toggle-sw .slider {
+      position:absolute; inset:0; background:#D1D5DB; border-radius:11px;
+      transition:.3s;
+    }
+    .toggle-sw .slider:before {
+      content:''; position:absolute; width:18px; height:18px;
+      left:2px; bottom:2px; background:#fff; border-radius:50%;
+      transition:.3s; box-shadow:0 1px 3px rgba(0,0,0,.2);
+    }
+    .toggle-sw input:checked + .slider { background:#1E3A8A; }
+    .toggle-sw input:checked + .slider:before { transform:translateX(18px); }
+
+    /* ── MOBILE LAYOUT ── */
+    @media (max-width:767px) {
+      :root { --sidebar-peek:80px; }
+
+      /* Header condensed on mobile */
+      .hdr-logo { display:none; }
+      #hdr-share { display:none; }
+
+      /* No sidebar on mobile - it's a bottom sheet */
+      #sidebar {
+        top:auto; bottom:var(--tabs-h); left:0; right:0; width:100%;
+        height:50vh; transform:translateY(100%);
+        border-radius:20px 20px 0 0;
+        box-shadow:0 -4px 30px rgba(0,0,0,.15);
+        z-index:700;
+      }
+      #sidebar.mobile-open { transform:translateY(0); }
+
+      /* Map fills screen */
+      #map { left:0; top:var(--hdr-h); bottom:var(--tabs-h); right:0; }
+
+      /* Detail drawer above bottom tabs */
+      #detail-drawer { left:0; bottom:var(--tabs-h); max-height:80vh; }
+
+      /* Map legend repositioned */
+      .map-legend { bottom:calc(var(--tabs-h) + 12px); left:10px; }
+
+      .info-grid { grid-template-columns:repeat(2,1fr); }
+
+      /* Toast above bottom tabs */
+      #toast { bottom:calc(var(--tabs-h) + 16px); }
+
+      /* Admin tabs scrollable */
+      #admin-tabs { justify-content:flex-start; }
+    }
+
+    /* ── MOBILE BOTTOM TABS ── */
+    #mobile-tabs {
+      display:none;
+      position:fixed; bottom:0; left:0; right:0; height:var(--tabs-h);
+      background:white; box-shadow:0 -1px 0 #F0F0F0, 0 -4px 20px rgba(0,0,0,.06);
+      z-index:800;
+      padding-bottom:env(safe-area-inset-bottom,0);
+    }
+    .tabs-inner { display:flex; height:var(--tabs-h); }
+    .mtab {
+      flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center;
+      gap:3px; border:none; background:none; cursor:pointer; font-family:inherit;
+      color:#9CA3AF; transition:color .2s; position:relative; font-size:11px; font-weight:600;
+    }
+    .mtab i { font-size:20px; }
+    .mtab.active { color:#FF6B35; }
+    .mtab .mtab-dot {
+      position:absolute; top:8px; right:calc(50% - 20px);
+      width:8px; height:8px; background:#EF4444; border-radius:50%; border:2px solid white; display:none;
+    }
+    @media (max-width:767px) {
+      #mobile-tabs { display:block; }
+      #header { padding-right:8px; }
+    }
+
+    /* ── FAB (Map floating action) ── */
+    #fab-list {
+      position:fixed; right:14px; bottom:calc(var(--tabs-h) + 14px);
+      z-index:710; display:none; flex-direction:column; gap:8px;
+    }
+    @media (max-width:767px) { #fab-list { display:flex; } }
+    .fab {
+      width:46px; height:46px; border-radius:50%; border:none; cursor:pointer;
+      display:flex; align-items:center; justify-content:center;
+      box-shadow:0 4px 14px rgba(0,0,0,.22); transition:transform .2s;
+      font-size:17px;
+    }
+    .fab:hover { transform:scale(1.08); }
+    .fab-primary { background:linear-gradient(135deg,#FF8C42,#FF6B35); color:#fff; }
+    .fab-secondary { background:#fff; color:#FF6B35; }
+  </style>
+</head>
+<body>
+
+<!-- ══ FIREBASE SETUP NOTICE ══ -->
+<div id="setup-notice" style="display:none">
+  <div class="setup-card">
+    <h2>🔧 Firebase 설정 필요</h2>
+    <p>멀티유저 기능(로그인·알람·관리자 페이지)을 사용하려면 Firebase 프로젝트 설정이 필요해요. 아래 단계를 따라 설정해주세요.</p>
+    <div class="setup-step"><strong>1.</strong> <a href="https://console.firebase.google.com/" target="_blank">Firebase Console</a> → 새 프로젝트 생성</div>
+    <div class="setup-step"><strong>2.</strong> Authentication → 이메일/비밀번호 로그인 사용 설정</div>
+    <div class="setup-step"><strong>3.</strong> Firestore Database → 테스트 모드로 시작</div>
+    <div class="setup-step"><strong>4.</strong> 프로젝트 설정 → 웹 앱 추가 → 아래 코드를 HTML에서 <strong>FIREBASE_CONFIG_HERE</strong> 자리에 붙여넣기</div>
+    <div class="setup-code">const firebaseConfig = {
+  apiKey: "AIza...",
+  authDomain: "your-project.firebaseapp.com",
+  projectId: "your-project",
+  storageBucket: "your-project.appspot.com",
+  messagingSenderId: "123456789",
+  appId: "1:123:web:abc"
+};</div>
+    <button class="btn-dismiss" onclick="document.getElementById('setup-notice').style.display='none'">확인, 로컬 모드로 계속 사용</button>
+  </div>
+</div>
+
+<!-- ══ LOGIN / REGISTER ══ -->
+<div id="login-screen">
+  <div class="login-bg-dots">
+    <span style="top:7%;left:8%;animation-delay:0s">🍅</span>
+    <span style="top:12%;left:78%;animation-delay:1s">🐾</span>
+    <span style="top:68%;left:6%;animation-delay:2s">🐕</span>
+    <span style="top:82%;left:82%;animation-delay:.5s">🦴</span>
+    <span style="top:40%;left:90%;animation-delay:1.5s">🍅</span>
+    <span style="top:55%;left:2%;animation-delay:2.5s">🐩</span>
+  </div>
+  <div class="login-card">
+    <div class="login-logo">🍅</div>
+    <div class="login-title">홍시의 대동여지도</div>
+    <div class="login-title-sub">🐾 애견동반 카페·식당 지도</div>
+    <div class="login-subtitle" id="auth-subtitle">경기도 전 지역에서 강아지와 함께 갈 수 있는<br>카페와 식당을 한눈에 찾아보세요</div>
+
+    <div id="auth-err" class="auth-err"></div>
+
+    <!-- Register only fields -->
+    <div class="form-group" id="fg-name" style="display:none">
+      <label>이름 (닉네임)</label>
+      <input type="text" id="auth-name" placeholder="홍길동" autocomplete="name"/>
+    </div>
+    <div class="form-group">
+      <label>이메일 주소</label>
+      <input type="email" id="auth-email" placeholder="your@email.com" autocomplete="email"/>
+    </div>
+    <div class="form-group">
+      <label>비밀번호</label>
+      <input type="password" id="auth-pw" placeholder="6자리 이상" autocomplete="current-password"/>
+    </div>
+    <button class="btn-login" id="auth-btn" onclick="doAuth()">🐶 로그인하고 시작하기</button>
+    <div class="auth-toggle" id="auth-toggle-row">
+      아직 계정이 없으신가요? <a onclick="switchAuthMode(true)">회원가입</a>
+    </div>
+    <div class="login-features">
+      <div class="lf-item">🗺️ 지도 탐색</div>
+      <div class="lf-item">🔍 조건 필터</div>
+      <div class="lf-item">💰 입장료 분류</div>
+      <div class="lf-item">📝 장소 제보</div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ APP ══ -->
+<div id="app-screen">
+
+  <!-- Header -->
+  <div id="header">
+    <div class="hdr-logo">🍅 홍시의 대동여지도</div>
+    <div id="search-wrap">
+      <i class="fa fa-magnifying-glass search-icon"></i>
+      <input type="text" id="search-input" placeholder="카페, 동네 이름으로 검색..." oninput="onSearch()">
+    </div>
+    <div id="hdr-share">
+      <button class="hdr-btn" onclick="copyShareLink()"><i class="fa fa-share-nodes"></i> 공유</button>
+    </div>
+    <div class="user-badge" id="user-badge" onclick="showUserMenu()">
+      <span id="user-initial">?</span>
+      <div class="notif-dot" id="notif-dot"></div>
+    </div>
+    <button class="hdr-btn admin-btn" id="admin-btn" style="display:none" onclick="openAdminPanel()">
+      <i class="fa fa-shield-halved"></i> 관리자
+    </button>
+    <button class="hdr-btn ghost" onclick="doLogout()" id="logout-btn">로그아웃</button>
+  </div>
+
+  <!-- Notice banner -->
+  <div id="notice-banner"></div>
+
+  <!-- Desktop Sidebar -->
+  <div id="sidebar">
+    <div id="filters">
+      <div class="f-label">지역</div>
+      <div class="filter-row" id="area-chips">
+        <button class="filter-chip active" data-area="all"    onclick="setAreaFilter(this,'all')">📍 전체</button>
+        <button class="filter-chip"        data-area="분당"   onclick="setAreaFilter(this,'분당')">🏙️ 분당·판교</button>
+        <button class="filter-chip"        data-area="보정동" onclick="setAreaFilter(this,'보정동')">🌿 보정동</button>
+        <button class="filter-chip"        data-area="수원"   onclick="setAreaFilter(this,'수원')">🏰 수원</button>
+        <button class="filter-chip"        data-area="용인"   onclick="setAreaFilter(this,'용인')">🌆 용인</button>
+        <button class="filter-chip"        data-area="화성"   onclick="setAreaFilter(this,'화성')">🌻 화성</button>
+        <button class="filter-chip"        data-area="평택"   onclick="setAreaFilter(this,'평택')">🌾 평택</button>
+        <button class="filter-chip"        data-area="안산"   onclick="setAreaFilter(this,'안산')">🌊 안산</button>
+        <button class="filter-chip"        data-area="시흥"   onclick="setAreaFilter(this,'시흥')">🌿 시흥</button>
+        <button class="filter-chip"        data-area="안양"   onclick="setAreaFilter(this,'안양')">🌸 안양</button>
+        <button class="filter-chip"        data-area="군포"   onclick="setAreaFilter(this,'군포')">🍃 군포</button>
+        <button class="filter-chip"        data-area="부천"   onclick="setAreaFilter(this,'부천')">🏡 부천</button>
+        <button class="filter-chip"        data-area="오산"   onclick="setAreaFilter(this,'오산')">☕ 오산</button>
+        <button class="filter-chip"        data-area="안성"   onclick="setAreaFilter(this,'안성')">🌲 안성</button>
+        <button class="filter-chip"        data-area="고양"   onclick="setAreaFilter(this,'고양')">🌻 고양</button>
+        <button class="filter-chip"        data-area="파주"   onclick="setAreaFilter(this,'파주')">🌸 파주</button>
+        <button class="filter-chip"        data-area="의정부" onclick="setAreaFilter(this,'의정부')">🏙️ 의정부</button>
+        <button class="filter-chip"        data-area="양주"   onclick="setAreaFilter(this,'양주')">🌾 양주</button>
+        <button class="filter-chip"        data-area="동두천" onclick="setAreaFilter(this,'동두천')">🍃 동두천</button>
+        <button class="filter-chip"        data-area="구리"   onclick="setAreaFilter(this,'구리')">🌿 구리</button>
+        <button class="filter-chip"        data-area="남양주" onclick="setAreaFilter(this,'남양주')">🌿 남양주</button>
+        <button class="filter-chip"        data-area="하남"   onclick="setAreaFilter(this,'하남')">🌊 하남</button>
+        <button class="filter-chip"        data-area="광주"   onclick="setAreaFilter(this,'광주')">🏞️ 광주</button>
+        <button class="filter-chip"        data-area="가평"   onclick="setAreaFilter(this,'가평')">⛰️ 가평</button>
+        <button class="filter-chip"        data-area="양평"   onclick="setAreaFilter(this,'양평')">🌊 양평</button>
+        <button class="filter-chip"        data-area="여주"   onclick="setAreaFilter(this,'여주')">🌾 여주</button>
+        <button class="filter-chip"        data-area="포천"   onclick="setAreaFilter(this,'포천')">🍃 포천</button>
+      </div>
+      <div class="f-label">반려견 조건</div>
+      <div class="filter-row">
+        <button class="filter-chip" data-cond="대형견"      onclick="toggleFilter(this,'대형견')">🐕 대형견 OK</button>
+        <button class="filter-chip" data-cond="실내"        onclick="toggleFilter(this,'실내')">🏠 실내 가능</button>
+        <button class="filter-chip" data-cond="케이지불필요" onclick="toggleFilter(this,'케이지불필요')">🆓 케이지 불필요</button>
+      </div>
+      <div class="f-label">💰 입장료</div>
+      <div class="filter-row">
+        <button class="filter-chip fee-chip"   data-cond="입장료있음" onclick="toggleFilter(this,'입장료있음')">💰 입장료 있는 곳</button>
+        <button class="filter-chip nofee-chip" data-cond="입장료없음" onclick="toggleFilter(this,'입장료없음')">✅ 입장료 없는 곳</button>
+      </div>
+    </div>
+    <div id="place-list"></div>
+    <button class="submit-cta" onclick="openSubmitModal()">✏️ 새 장소 제보하기</button>
+    <div id="place-count">0개의 장소</div>
+  </div>
+
+  <!-- Map -->
+  <div id="map">
+    <div class="map-legend">
+      <div class="legend-item"><div class="legend-dot" style="background:#FF6B35"></div><span>분당·판교</span></div>
+      <div class="legend-item"><div class="legend-dot" style="background:#7C4DFF"></div><span>보정동</span></div>
+      <div class="legend-item"><div class="legend-dot" style="background:#1565C0"></div><span>수원·하남·광주</span></div>
+      <div class="legend-item"><div class="legend-dot" style="background:#C62828"></div><span>용인</span></div>
+      <div class="legend-item"><div class="legend-dot" style="background:#D84315"></div><span>화성·평택</span></div>
+      <div class="legend-item"><div class="legend-dot" style="background:#6A1B9A"></div><span>파주·고양</span></div>
+      <div class="legend-item"><div class="legend-dot" style="background:#2E7D32"></div><span>가평·포천</span></div>
+      <div class="legend-item"><div class="legend-dot" style="background:#0097A7"></div><span>양평·남양주</span></div>
+      <div class="legend-item"><div class="legend-dot ld-fee" style="background:#FF6B35"></div><span>입장료 있음</span></div>
+    </div>
+  </div>
+
+  <!-- Detail Drawer -->
+  <div id="detail-drawer">
+    <div class="d-handle"></div>
+    <div class="d-content" id="drawer-content"></div>
+  </div>
+
+  <!-- Mobile FABs -->
+  <div id="fab-list">
+    <button class="fab fab-secondary" onclick="toggleMobileSidebar()" title="목록 보기">
+      <i class="fa fa-list"></i>
+    </button>
+    <button class="fab fab-secondary" onclick="copyShareLink()" title="공유">
+      <i class="fa fa-share-nodes"></i>
+    </button>
+  </div>
+
+</div>
+
+<!-- ══ MOBILE BOTTOM TABS ══ -->
+<div id="mobile-tabs">
+  <div class="tabs-inner">
+    <button class="mtab active" id="tab-map" onclick="setMobileTab('map')">
+      <i class="fa fa-map"></i>지도
+    </button>
+    <button class="mtab" id="tab-list" onclick="setMobileTab('list')">
+      <i class="fa fa-list-ul"></i>목록
+      <div class="mtab-dot" id="tab-list-dot"></div>
+    </button>
+    <button class="mtab" id="tab-filter" onclick="setMobileTab('filter')">
+      <i class="fa fa-sliders"></i>필터
+    </button>
+    <button class="mtab" id="tab-report" onclick="openSubmitModal()">
+      <i class="fa fa-plus-circle"></i>제보
+    </button>
+  </div>
+</div>
+
+<!-- ══ PLACE REPORT MODAL ══ -->
+<div class="modal-overlay" id="submit-modal" onclick="modalOverlayClick(event,'submit-modal')">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-content">
+      <div class="modal-title">📝 새 장소 제보하기</div>
+      <div class="modal-sub">애견동반이 가능한 장소를 알려주세요. 확인 후 지도에 추가할게요!</div>
+      <div class="modal-field"><label>장소명 *</label><input id="rep-name" placeholder="카페 이름" /></div>
+      <div class="modal-field"><label>주소</label><input id="rep-addr" placeholder="경기도..." /></div>
+      <div class="modal-field"><label>전화번호</label><input id="rep-phone" placeholder="031-..." /></div>
+      <div class="modal-field"><label>상세 내용 / 출처 URL</label><textarea id="rep-note" rows="3" placeholder="애견동반 가능 여부, 조건, 네이버/카카오 링크 등"></textarea></div>
+      <div class="modal-actions">
+        <button class="btn-modal-cancel" onclick="closeModal('submit-modal')">취소</button>
+        <button class="btn-modal-submit" onclick="submitReport()">제보 보내기 🐾</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ NOTICE DETAIL MODAL ══ -->
+<div class="modal-overlay" id="notice-modal" onclick="modalOverlayClick(event,'notice-modal')">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-content" id="notice-modal-content"></div>
+  </div>
+</div>
+
+<!-- ══ ADMIN PANEL ══ -->
+<div id="admin-panel">
+  <div id="admin-header">
+    <button class="admin-back" onclick="closeAdminPanel()">← 돌아가기</button>
+    <h1>🛡️ 관리자 페이지</h1>
+    <span style="font-size:12px;opacity:.7">홍시의 대동여지도</span>
+  </div>
+  <div id="admin-tabs">
+    <button class="atab active" data-tab="dashboard" onclick="switchAdminTab(this,'dashboard')">📊 대시보드</button>
+    <button class="atab" data-tab="users"     onclick="switchAdminTab(this,'users')">👥 회원 관리</button>
+    <button class="atab" data-tab="searches"  onclick="switchAdminTab(this,'searches')">🔍 검색 로그</button>
+    <button class="atab" data-tab="views"     onclick="switchAdminTab(this,'views')">📍 방문 기록</button>
+    <button class="atab" data-tab="reports"   onclick="switchAdminTab(this,'reports')">📝 장소 제보</button>
+    <button class="atab" data-tab="notices"   onclick="switchAdminTab(this,'notices')">📢 공지 관리</button>
+  </div>
+  <div id="admin-content">
+    <div class="empty-state"><div class="es-icon">⏳</div><p>데이터 로딩 중...</p></div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+// ══════════════════════════════════════════════════════
+//  ⚙️  설정 영역 — Firebase 프로젝트 정보 입력
+// ══════════════════════════════════════════════════════
+
+// ▼ Firebase Console > 프로젝트 설정 > 웹 앱에서 복사
+const firebaseConfig = {
+  apiKey:            "YOUR_API_KEY",
+  authDomain:        "YOUR_PROJECT_ID.firebaseapp.com",
+  projectId:         "YOUR_PROJECT_ID",
+  storageBucket:     "YOUR_PROJECT_ID.appspot.com",
+  messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
+  appId:             "YOUR_APP_ID"
+};
+
+
+// ▼ 운영자 이메일 (변경 불필요)
+const ADMIN_EMAILS = ['jiselle1105@naver.com', 'nonesmoking@naver.com'];
+
+// ══════════════════════════════════════════════════════
+//  Firebase 초기화
+// ══════════════════════════════════════════════════════
+let db = null, auth = null, firebaseReady = false;
+
+function initFirebase() {
+  try {
+    if (firebaseConfig.apiKey === 'YOUR_API_KEY') {
+      console.warn('[Firebase] Config not set — running in local mode');
+      document.getElementById('setup-notice').style.display = 'flex';
+      return false;
+    }
+    firebase.initializeApp(firebaseConfig);
+    db   = firebase.firestore();
+    auth = firebase.auth();
+    firebaseReady = true;
+
+    return true;
+  } catch(e) {
+    console.error('[Firebase] Init error:', e);
+    return false;
+  }
+}
+
+// ══════════════════════════════════════════════════════
+//  장소 데이터
+// ══════════════════════════════════════════════════════
+const places = [
+
+  /* ══════════════════════════════
+     분당·판교
+  ══════════════════════════════ */
+  {
+    id:1, name:"더독 애견카페", cat:"애견카페", area:"분당",
+    addr:"경기 성남시 분당구 석운로120번길 4", phone:"010-7337-4884",
+    hours:[{d:"월–금",t:"12:00 – 19:00"},{d:"토–일",t:"10:00 – 19:00"}],
+    lat:37.3690, lng:127.0820,
+    large:true, small:true, indoor:true, outdoor:true, stroller:false, cage:false,
+    entryFee:"시간제 이용요금 있음 (방문 전 문의)",
+    note:"전문 애견카페. 강아지 수영장 보유, 대형견 환영. 반려견 유치원·훈련·호텔 운영. 이용 요금은 시간·서비스에 따라 상이.",
+    kakaoUrl:"https://place.map.kakao.com/26643485",
+    emoji:"🐕"
+  },
+  {
+    id:2, name:"카페 종화", cat:"카페", area:"분당",
+    addr:"경기 성남시 분당구 이매로89번길 24 1층", phone:"0507-1393-9770",
+    hours:[{d:"월·수–일",t:"11:00 – 22:00"},{d:"화",t:"휴무"}],
+    lat:37.3924, lng:127.1140,
+    large:false, small:true, indoor:false, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"이매역 도보 5분 거리 감성 카페. 테라스에서만 반려견 동반 가능. 가정집을 개조한 아늑한 분위기.",
+    kakaoUrl:"https://place.map.kakao.com/1613483463",
+    emoji:"☕"
+  },
+  {
+    id:3, name:"도넛 드로잉", cat:"카페", area:"분당",
+    addr:"경기 성남시 분당구 대왕판교로 103", phone:"0507-1345-0993",
+    hours:[{d:"월–금",t:"11:00 – 22:00"},{d:"토–일",t:"10:30 – 22:00"}],
+    lat:37.4021, lng:127.1080,
+    large:true, small:true, indoor:false, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"넓은 야외 테라스. 여름 시즌 강아지 수영 공간 운영. 대형견 동반 후기 다수. 넓은 주차장.",
+    kakaoUrl:"https://place.map.kakao.com/1539482299",
+    emoji:"🍩"
+  },
+  {
+    id:4, name:"다독다독", cat:"애견카페", area:"분당",
+    addr:"경기 성남시 분당구 운중동 552-2", phone:"031-698-5566",
+    hours:[{d:"토–일",t:"11:00 – 21:00 (카페)"},{d:"월–금",t:"데이케어·훈련 전용"}],
+    lat:37.3843, lng:127.0852,
+    large:true, small:true, indoor:true, outdoor:true, stroller:false, cage:false,
+    entryFee:"데이케어 40,000원~/회 · 주말 카페는 음료 주문",
+    note:"루프탑 카페 + 반려견 유치원 복합공간. 주말에만 일반 카페 운영. 훈련사 상주, 넓은 운동장.",
+    kakaoUrl:"https://place.map.kakao.com/27434759",
+    emoji:"🏡"
+  },
+  {
+    id:5, name:"잼앤브레드 BREAKFAST BAR", cat:"브런치카페", area:"분당",
+    addr:"경기 성남시 분당구 판교공원로1길 16", phone:"0507-1353-5555",
+    hours:[{d:"월",t:"09:00 – 14:30"},{d:"화–토",t:"08:00 – 16:00"},{d:"일",t:"휴무"}],
+    lat:37.3993, lng:127.1071,
+    large:false, small:true, indoor:false, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"판교도서관 인근 브런치 전문카페. 테라스석에서 반려견 동반 가능. 이른 오픈으로 아침 산책 후 방문 적합.",
+    kakaoUrl:"https://place.map.kakao.com/1790868613",
+    emoji:"🥐"
+  },
+  {
+    id:6, name:"월페이퍼", cat:"브런치카페", area:"분당",
+    addr:"경기 성남시 분당구 분당로 264 (율동공원 인근)", phone:"031-714-1010",
+    hours:[{d:"매일",t:"10:00 – 21:00"}],
+    lat:37.3831, lng:127.1352,
+    large:false, small:true, indoor:false, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"율동공원 산책 후 들르기 좋은 브런치 카페. 애견동반 좌석 별도 구성. 넓은 주차장. 명란크림파스타 인기.",
+    kakaoUrl:"https://place.map.kakao.com/26520426",
+    emoji:"🖼️"
+  },
+  {
+    id:10, name:"드윝 (Drwip)", cat:"카페", area:"분당",
+    addr:"경기 성남시 분당구 정자일로 136 3단지 110호", phone:"0507-1488-9898",
+    hours:[{d:"매일",t:"10:00 – 21:00"}],
+    lat:37.3620, lng:127.1185,
+    large:true, small:true, indoor:true, outdoor:false, stroller:false, cage:true,
+    entryFee:null,
+    note:"정자역 인근 감성 카페. 모든 견종 입장 가능하나 가방 또는 케이지 필수. 북유럽 인테리어.",
+    kakaoUrl:"https://place.map.kakao.com/2009007123",
+    emoji:"🫖"
+  },
+  {
+    id:11, name:"유메노키친", cat:"레스토랑", area:"분당",
+    addr:"경기 성남시 분당구 성남대로 51 분당 포스빌 116호", phone:"031-788-5255",
+    hours:[{d:"월–금",t:"11:30 – 21:30"},{d:"토–일",t:"11:00 – 21:30"}],
+    lat:37.3700, lng:127.1050,
+    large:true, small:true, indoor:true, outdoor:false, stroller:false, cage:false,
+    entryFee:null,
+    note:"반려견 동반 식당. 리드줄 착용 조건으로 실내 입장 가능. 대형견도 환영. 일본 가정식.",
+    kakaoUrl:"https://place.map.kakao.com/27478456",
+    emoji:"🍱"
+  },
+  {
+    id:12, name:"빠리다옥", cat:"브런치카페", area:"분당",
+    addr:"경기 성남시 분당구 정자일로 230 (정자동)", phone:"031-712-8789",
+    hours:[{d:"매일",t:"10:00 – 22:00"}],
+    lat:37.3630, lng:127.1200,
+    large:false, small:true, indoor:false, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"3층 규모 복층 카페. 야외 테라스에서 반려견 동반 가능. 브런치·케이크 맛집으로 유명.",
+    kakaoUrl:"https://place.map.kakao.com/339057370",
+    emoji:"🥗"
+  },
+  {
+    id:13, name:"앤드커피 (&Coffee)", cat:"펫카페", area:"분당",
+    addr:"경기 성남시 분당구 느티로77번길 23 1층", phone:"0507-1436-3484",
+    hours:[{d:"매일",t:"11:00 – 20:30"}],
+    lat:37.3596, lng:127.1200,
+    large:false, small:true, indoor:true, outdoor:false, stroller:false, cage:false,
+    entryFee:null,
+    note:"정자역 도보 5분. 고양이·강아지 동반 가능 복합 펫카페. 소형견 전용, 리드줄 필수.",
+    kakaoUrl:"https://place.map.kakao.com/1887964279",
+    emoji:"🐱"
+  },
+  {
+    id:14, name:"에그드랍 판교테크노밸리점", cat:"카페", area:"분당",
+    addr:"경기 성남시 분당구 판교역로 231 H스퀘어 S동 104호", phone:"031-601-2290",
+    hours:[{d:"월–금",t:"08:00 – 21:00"},{d:"토–일",t:"10:00 – 20:00"}],
+    lat:37.3948, lng:127.1085,
+    large:false, small:true, indoor:false, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"판교역 H스퀘어. 야외 테라스 좌석에서 소형견 동반 가능. 에그드랍 샌드위치 유명.",
+    kakaoUrl:null, googleUrl:"https://www.google.com/maps?cid=7407344502819909077",
+    emoji:"🥚"
+  },
+  {
+    id:15, name:"블루보틀 판교점", cat:"카페", area:"분당",
+    addr:"경기 성남시 분당구 판교역로 166 카카오판교아지트 1층", phone:"031-8018-1905",
+    hours:[{d:"월–금",t:"07:30 – 19:00"},{d:"토–일",t:"09:00 – 18:00"}],
+    lat:37.3960, lng:127.1100,
+    large:false, small:true, indoor:false, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"카카오 판교아지트 1층. 야외 테라스에서 소형견 동반 가능. 전문 바리스타 핸드드립 커피.",
+    kakaoUrl:"https://place.map.kakao.com/743101177",
+    emoji:"🫐"
+  },
+  {
+    id:16, name:"더가든 카페", cat:"카페", area:"분당",
+    addr:"경기 성남시 분당구 야탑로81번길 10 (야탑동)", phone:"031-702-7799",
+    hours:[{d:"매일",t:"10:00 – 22:00"}],
+    lat:37.4100, lng:127.1270,
+    large:false, small:true, indoor:false, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"야탑역 인근 정원형 카페. 넓은 야외 마당에서 반려견 동반 가능. 주차 편리.",
+    kakaoUrl:null,
+    emoji:"🌻"
+  },
+  {
+    id:17, name:"세로브 (SEROV)", cat:"디저트카페", area:"분당",
+    addr:"경기 성남시 분당구 동판교로52번길 25-3 1층 102호", phone:"031-604-7878",
+    hours:[{d:"화–일",t:"11:00 – 19:00"},{d:"월",t:"휴무"}],
+    lat:37.3873, lng:127.1082,
+    large:false, small:true, indoor:false, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"판교 백현동 디저트 카페. 야외 벤치 자리에서 소형견 동반 가능. 콘치즈케이크 유명.",
+    kakaoUrl:"https://place.map.kakao.com/190495032",
+    emoji:"🎂"
+  },
+  {
+    id:18, name:"에잇이얼스 (8 YEARS)", cat:"브런치카페", area:"분당",
+    addr:"경기 성남시 분당구 판교역로2번길 12 1층", phone:"031-601-8008",
+    hours:[{d:"화–일",t:"09:00 – 17:00 (LO 15:00)"},{d:"월",t:"휴무"}],
+    lat:37.3865, lng:127.1096,
+    large:false, small:true, indoor:false, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"백현동 카페거리 브런치 카페. 야외 공원 연결 테라스에서 소형견 동반 가능.",
+    kakaoUrl:"https://place.map.kakao.com/1487453401",
+    emoji:"🌅"
+  },
+  {
+    id:19, name:"루프엑스 (RUFXXX)", cat:"카페·바", area:"분당",
+    addr:"경기 성남시 분당구 백현동 5853", phone:"031-695-8535",
+    hours:[{d:"매일",t:"17:00 – 01:00"}],
+    lat:37.3870, lng:127.1094,
+    large:false, small:true, indoor:false, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"백현동 카페거리 야외 테라스 바. 저녁 시간 소형견 동반 가능. 와인·맥주·칵테일 운영.",
+    kakaoUrl:"https://place.map.kakao.com/1320789578",
+    emoji:"🍷"
+  },
+  {
+    id:20, name:"아브뉴프랑 수제버거", cat:"음식점", area:"분당",
+    addr:"경기 성남시 분당구 동판교로177번길 25 아브뉴프랑 2층", phone:"031-602-8880",
+    hours:[{d:"매일",t:"11:30 – 22:00"}],
+    lat:37.3888, lng:127.1040,
+    large:false, small:true, indoor:false, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"판교 아브뉴프랑 야외 공간 반려견 동반 가능. 수제버거 전문. 캐주얼한 분위기.",
+    kakaoUrl:null, googleUrl:"https://www.google.com/maps?cid=16121732358018554633",
+    emoji:"🍔"
+  },
+  {
+    id:21, name:"카페 랄로 (운중저수지)", cat:"카페", area:"분당",
+    addr:"경기 성남시 분당구 하오개로 246 (운중동)", phone:"031-709-5711",
+    hours:[{d:"매일",t:"10:00 – 23:00"}],
+    lat:37.3842, lng:127.0843,
+    large:false, small:true, indoor:false, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"운중저수지 뷰 카페. 야외 좌석에서 소형견 동반 가능. 브런치·베이커리 운영. 7년 이상 운영된 로컬 명소.",
+    kakaoUrl:"https://place.map.kakao.com/17646024",
+    emoji:"🏞️"
+  },
+
+  /* ══════════════════════════════
+     보정동·기흥구
+  ══════════════════════════════ */
+  {
+    id:22, name:"See Ya! 카페", cat:"카페", area:"보정동",
+    addr:"경기 용인시 기흥구 보정동 카페거리 일원", phone:"0507-1311-8895",
+    hours:[{d:"수–일",t:"09:30 – 21:00"},{d:"월",t:"10:00 – 19:00"},{d:"화",t:"휴무"}],
+    lat:37.3097, lng:127.1158,
+    large:false, small:true, indoor:true, outdoor:true, stroller:false, cage:false,
+    entryFee:"반려견 6,000원/마리 (2층 오프리쉬 전용구역)",
+    note:"보정동 카페거리 반려견 특화 카페. 2층은 오프리쉬 전용 공간 (입장료 6,000원). 1층은 리드줄 착용 시 무료 이용. 주차 무료.",
+    kakaoUrl:null, googleUrl:"https://www.google.com/maps?cid=1241201192487897639",
+    emoji:"👋"
+  },
+  {
+    id:23, name:"헤이그 (Hey G)", cat:"애견카페", area:"보정동",
+    addr:"경기 용인시 기흥구 중부대로 769-10", phone:"0507-1425-6696",
+    hours:[{d:"매일",t:"10:00 – 20:00"}],
+    lat:37.3149, lng:127.1194,
+    large:true, small:true, indoor:true, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"기흥구 대형견 동반 가능 카페. 실내·야외 테라스 모두 이용 가능. 반려견 친화적 공간 설계.",
+    kakaoUrl:null,
+    emoji:"🐾"
+  },
+  {
+    id:24, name:"커피먹고멍멍", cat:"애견카페", area:"보정동",
+    addr:"경기 용인시 기흥구 보정동 카페거리", phone:"0507-1300-5566",
+    hours:[{d:"매일",t:"11:00 – 20:00"}],
+    lat:37.3120, lng:127.1130,
+    large:true, small:true, indoor:true, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"보정동 반려견 동반 카페. 별도 입장료 없음 (음료 주문). 실내외 모두 이용 가능. 대형견 환영.",
+    kakaoUrl:"https://place.map.kakao.com/1637325520",
+    emoji:"☕"
+  },
+  {
+    id:25, name:"포레스트 아웃팅스 용인점", cat:"카페", area:"보정동",
+    addr:"경기 용인시 기흥구 농서로 4", phone:"031-282-1220",
+    hours:[{d:"매일",t:"10:00 – 22:00"}],
+    lat:37.3050, lng:127.1030,
+    large:true, small:true, indoor:false, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"대형 야외 정원 카페. 대형견 동반 가능. 커피·베이커리·브런치 운영. 주차 넉넉.",
+    kakaoUrl:"https://place.map.kakao.com/1132246493",
+    emoji:"🌲"
+  },
+  {
+    id:26, name:"에코의 서재", cat:"북카페", area:"보정동",
+    addr:"경기 용인시 기흥구 보정로 47 (보정동)", phone:"031-898-0555",
+    hours:[{d:"매일",t:"11:00 – 23:00"}],
+    lat:37.3088, lng:127.1148,
+    large:false, small:true, indoor:false, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"보정동 카페거리 대표 북카페. 야외 좌석에서 소형견 동반 가능. 아늑한 서재 분위기. 늦은 시간까지 운영.",
+    kakaoUrl:"https://place.map.kakao.com/12213746",
+    emoji:"📚"
+  },
+  {
+    id:27, name:"민가 카페", cat:"카페", area:"보정동",
+    addr:"경기 용인시 기흥구 마북동 9-6 1층", phone:"031-283-1000",
+    hours:[{d:"매일",t:"10:00 – 21:00"}],
+    lat:37.3215, lng:127.1170,
+    large:false, small:true, indoor:false, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"단국대 후문 인근 조용한 카페. 야외 좌석에서 소형견 동반 가능. 주택가 골목 감성.",
+    kakaoUrl:"https://place.map.kakao.com/247749832",
+    emoji:"🌸"
+  },
+  {
+    id:28, name:"스타벅스 죽전DT점", cat:"카페", area:"보정동",
+    addr:"경기 용인시 기흥구 죽전로 64 (죽전동)", phone:"1522-3232",
+    hours:[{d:"매일",t:"07:00 – 22:00"}],
+    lat:37.3198, lng:127.1068,
+    large:false, small:true, indoor:false, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"죽전역 인근 드라이브스루 스타벅스. 야외 테라스 좌석에서 소형견 동반 가능. 리드줄 착용 필수.",
+    kakaoUrl:null, googleUrl:"https://www.google.com/maps?cid=4546260194971336303",
+    emoji:"🟢"
+  },
+  {
+    id:29, name:"도도미미", cat:"음식점", area:"보정동",
+    addr:"경기 용인시 기흥구 보정동 카페거리 내", phone:"0507-1388-7757",
+    hours:[{d:"매일",t:"11:00 – 21:00"}],
+    lat:37.3102, lng:127.1162,
+    large:false, small:true, indoor:true, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"보정동 카페거리 반려견·아이 동반 가능 음식점. 실내에서 반려견과 함께 식사 가능. 세트메뉴 합리적인 가격.",
+    kakaoUrl:"https://place.map.kakao.com/1537055124",
+    emoji:"🍽️"
+  },
+  {
+    id:30, name:"ER커피 (ER COFFEE)", cat:"카페", area:"보정동",
+    addr:"경기 용인시 기흥구 구성로 543 2층 (죽전 인근)", phone:"0507-1399-4747",
+    hours:[{d:"매일",t:"10:00 – 22:00"}],
+    lat:37.3118, lng:127.1065,
+    large:false, small:true, indoor:false, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"죽전·보정동 인근 로스터리 카페. 야외 좌석에서 소형견 동반 가능. 스페셜티 커피 전문.",
+    kakaoUrl:"https://place.map.kakao.com/400846819",
+    emoji:"☕"
+  },
+
+  /* ══════════════════════════════
+     가평
+  ══════════════════════════════ */
+  {
+    id:31, name:"가평 애견동반카페 아웃팅", cat:"애견카페", area:"가평",
+    addr:"경기 가평군 상면 수목원로 135", phone:"0503-7153-6774",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.76571212, lng:127.363463,
+    large:true, small:true, indoor:true, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"가평 수목원 인근 애견동반 카페. 카카오맵 애견동반 가능 확인. 자연 속 힐링 공간.",
+    kakaoUrl:"https://place.map.kakao.com/522628896",
+    emoji:"🌿"
+  },
+  {
+    id:32, name:"디그르르", cat:"카페", area:"가평",
+    addr:"경기 가평군 청평면 경춘로 89-2", phone:"0507-1487-0337",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.68430803, lng:127.37777041,
+    large:false, small:true, indoor:false, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"청평 경춘로 인근 반려견 동반 카페. 방문 전 동반 조건 확인 권장.",
+    kakaoUrl:"https://place.map.kakao.com/125831654",
+    emoji:"☕"
+  },
+  {
+    id:33, name:"가보자도그빌리지", cat:"애견카페", area:"가평",
+    addr:"경기 가평군 상면 서대길 58", phone:"010-8631-4268",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.77659192, lng:127.38120324,
+    large:true, small:true, indoor:true, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"가평 상면 도그빌리지 컨셉 애견카페. 카카오맵 애견동반 가능 확인. 반려견과 자연 속 체험.",
+    kakaoUrl:"https://place.map.kakao.com/752808868",
+    emoji:"🏘️"
+  },
+  {
+    id:34, name:"까끼토끼놀이터", cat:"애견카페", area:"가평",
+    addr:"경기 가평군 가평읍 경춘로 1983-12", phone:"031-582-3876",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.8104349, lng:127.49732139,
+    large:true, small:true, indoor:true, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"가평읍 경춘로 인근 반려견 놀이터. 카카오맵 애견동반 가능 확인. 넓은 운동공간 보유.",
+    kakaoUrl:"https://place.map.kakao.com/872532469",
+    emoji:"🐇"
+  },
+  {
+    id:35, name:"에이바이독", cat:"애견카페", area:"가평",
+    addr:"경기 가평군 가평읍 태봉두밀로596번길 55", phone:"",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.81184381, lng:127.43302599,
+    large:true, small:true, indoor:true, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"가평 반려견 전용 공간. 자연 속 힐링 애견카페. 방문 전 운영 정보 확인 권장.",
+    kakaoUrl:"https://place.map.kakao.com/1350587518",
+    emoji:"🐕"
+  },
+
+  /* ══════════════════════════════
+     양평
+  ══════════════════════════════ */
+  {
+    id:36, name:"듀먼카페", cat:"카페", area:"양평",
+    addr:"경기 양평군 서종면 당목뿌리길 64", phone:"",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.59992381, lng:127.34675152,
+    large:false, small:true, indoor:false, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"양평 서종면 한적한 위치의 반려견 동반 카페. 방문 전 동반 조건 확인 권장.",
+    kakaoUrl:"https://place.map.kakao.com/476904160",
+    emoji:"☕"
+  },
+  {
+    id:37, name:"클럽더독스", cat:"애견카페", area:"양평",
+    addr:"경기 양평군 옥천면 당곡길 42-18", phone:"070-8249-7289",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.51573792, lng:127.43662554,
+    large:true, small:true, indoor:true, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"양평 옥천면 반려견 전용 클럽 카페. 대형·소형견 모두 환영. 방문 전 예약 권장.",
+    kakaoUrl:"https://place.map.kakao.com/25985345",
+    emoji:"🐶"
+  },
+  {
+    id:38, name:"시로네운동장", cat:"애견운동장", area:"양평",
+    addr:"경기 양평군 강상면 강남로899번길 23-13", phone:"",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.49085557, lng:127.47680769,
+    large:true, small:true, indoor:false, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"양평 강상면 반려견 운동장. 넓은 야외 오프리쉬 공간. 방문 전 예약 및 조건 확인 권장.",
+    kakaoUrl:"https://place.map.kakao.com/352846191",
+    emoji:"🏟️"
+  },
+  {
+    id:39, name:"위드독", cat:"애견카페", area:"양평",
+    addr:"경기 양평군 양평읍 중앙로111번길 53-4", phone:"031-771-0504",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.4982956, lng:127.50340305,
+    large:true, small:true, indoor:true, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"양평읍 반려견 동반 카페. 카카오맵 애견동반 가능 확인. 대형·소형견 모두 환영.",
+    kakaoUrl:"https://place.map.kakao.com/526646786",
+    emoji:"🐾"
+  },
+
+  /* ══════════════════════════════
+     수원
+  ══════════════════════════════ */
+  {
+    id:40, name:"카페도기", cat:"카페", area:"수원",
+    addr:"경기 수원시 영통구 대학1로8번길 23", phone:"031-217-7741",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.29783425, lng:127.04307081,
+    large:false, small:true, indoor:false, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"수원 영통구 반려견 동반 카페. 방문 전 동반 조건 확인 권장.",
+    kakaoUrl:"https://place.map.kakao.com/855351319",
+    emoji:"☕"
+  },
+  {
+    id:41, name:"바로나도 영통점", cat:"애견카페", area:"수원",
+    addr:"경기 수원시 영통구 청명로21번길 16", phone:"0503-7151-5540",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.25020897, lng:127.07941576,
+    large:true, small:true, indoor:true, outdoor:false, stroller:false, cage:false,
+    entryFee:null,
+    note:"수원 영통구 애견카페. 카카오맵 애견동반 가능 확인.",
+    kakaoUrl:"https://place.map.kakao.com/19218173",
+    emoji:"🐕"
+  },
+  {
+    id:42, name:"루프독스", cat:"애견카페", area:"수원",
+    addr:"경기 수원시 팔달구 정조로 775-5", phone:"010-3527-2864",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.27696933, lng:127.01608903,
+    large:true, small:true, indoor:true, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"수원 팔달구 루프탑 애견카페. 카카오맵 애견동반 가능 확인. 반려견과 루프탑 공간 이용.",
+    kakaoUrl:"https://place.map.kakao.com/2041377767",
+    emoji:"🏙️"
+  },
+  {
+    id:43, name:"언니네애견카페", cat:"애견카페", area:"수원",
+    addr:"경기 수원시 영통구 동수원로 542-49", phone:"031-215-7271",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.27412598, lng:127.05234346,
+    large:true, small:true, indoor:true, outdoor:false, stroller:false, cage:false,
+    entryFee:null,
+    note:"수원 영통구 반려견 전용 카페. 카카오맵 애견동반 가능 확인. 대형견도 환영.",
+    kakaoUrl:"https://place.map.kakao.com/615765715",
+    emoji:"🐶"
+  },
+  {
+    id:61, name:"딩굴댕굴 반려견놀이터", cat:"애견운동장", area:"수원",
+    addr:"경기 수원시 권선구 칠보로88번길 155-11", phone:"0503-7151-4535",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.26247278, lng:126.94179232,
+    large:true, small:true, indoor:false, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"수원 권선구 반려견 전용 놀이터. 카카오맵 애견동반 가능 확인. 넓은 야외 오프리쉬 공간.",
+    kakaoUrl:"https://place.map.kakao.com/103047916",
+    emoji:"🏟️"
+  },
+  {
+    id:62, name:"도그베이 수원점", cat:"애견카페", area:"수원",
+    addr:"경기 수원시 권선구 서부로 1616", phone:"031-278-7535",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.25345067, lng:126.97537292,
+    large:true, small:true, indoor:true, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"수원 권선구 도그베이 애견카페. 카카오맵 애견동반 가능 확인.",
+    kakaoUrl:"https://place.map.kakao.com/744423187",
+    emoji:"🐕"
+  },
+  {
+    id:63, name:"디아즈 인계점", cat:"카페", area:"수원",
+    addr:"경기 수원시 팔달구 인계로166번길 48-7", phone:"031-235-0712",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.2642049, lng:127.03435068,
+    large:false, small:true, indoor:false, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"수원 인계동 반려견 동반 카페. 카카오맵 애견동반 가능 확인.",
+    kakaoUrl:"https://place.map.kakao.com/1382624826",
+    emoji:"☕"
+  },
+  {
+    id:64, name:"홍라드 행궁본점", cat:"카페", area:"수원",
+    addr:"경기 수원시 팔달구 정조로 844-1", phone:"070-4243-3736",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.28350002, lng:127.01644112,
+    large:false, small:true, indoor:false, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"수원 행궁동 반려견 동반 카페. 카카오맵 애견동반 가능 확인. 수원화성 인근.",
+    kakaoUrl:"https://place.map.kakao.com/1236788802",
+    emoji:"🏯"
+  },
+  {
+    id:65, name:"콜링우드", cat:"카페", area:"수원",
+    addr:"경기 수원시 팔달구 정조로 888", phone:"",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.28732868, lng:127.01535822,
+    large:false, small:true, indoor:false, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"수원 팔달구 반려견 동반 카페. 카카오맵 애견동반 가능 확인.",
+    kakaoUrl:"https://place.map.kakao.com/2142052852",
+    emoji:"🌿"
+  },
+  {
+    id:66, name:"카페 도안", cat:"카페", area:"수원",
+    addr:"경기 수원시 팔달구 효원로307번길 61", phone:"070-8884-1204",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.26370877, lng:127.03621059,
+    large:false, small:true, indoor:false, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"수원 팔달구 반려견 동반 카페. 카카오맵 애견동반 가능 확인.",
+    kakaoUrl:"https://place.map.kakao.com/1574833588",
+    emoji:"☕"
+  },
+  {
+    id:67, name:"카페미밈", cat:"카페", area:"수원",
+    addr:"경기 수원시 권선구 금호로 140", phone:"0507-1432-2157",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.27304401, lng:126.9652845,
+    large:false, small:true, indoor:false, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"수원 권선구 반려견 동반 카페. 카카오맵 애견동반 가능 확인.",
+    kakaoUrl:"https://place.map.kakao.com/1110249954",
+    emoji:"🐾"
+  },
+  {
+    id:68, name:"더수피다", cat:"애견카페", area:"수원",
+    addr:"경기 수원시 팔달구 정조로 771-1", phone:"010-8699-8599",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.2769918, lng:127.01650284,
+    large:true, small:true, indoor:true, outdoor:false, stroller:false, cage:false,
+    entryFee:null,
+    note:"수원 팔달구 반려견 동반 카페. 카카오맵 애견동반 가능 확인.",
+    kakaoUrl:"https://place.map.kakao.com/636153008",
+    emoji:"🐶"
+  },
+
+  /* ══════════════════════════════
+     파주
+  ══════════════════════════════ */
+  {
+    id:44, name:"으르렁애견카페", cat:"애견카페", area:"파주",
+    addr:"경기 파주시 미래로 369-59", phone:"031-947-1981",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.71151422, lng:126.74494727,
+    large:true, small:true, indoor:true, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"파주시 실내외 반려견 동반 애견카페. 카카오맵 애견동반 가능 확인.",
+    kakaoUrl:"https://place.map.kakao.com/27542772",
+    emoji:"🐾"
+  },
+  {
+    id:45, name:"스타독스", cat:"애견카페", area:"파주",
+    addr:"경기 파주시 탄현면 국화향길 10-40", phone:"",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.78062632, lng:126.71576126,
+    large:true, small:true, indoor:true, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"파주 탄현면 자연 속 애견카페. 방문 전 영업 여부 및 동반 조건 확인 권장.",
+    kakaoUrl:"https://place.map.kakao.com/24244380",
+    emoji:"⭐"
+  },
+  {
+    id:46, name:"글램독 그라운드 파주점", cat:"애견카페", area:"파주",
+    addr:"경기 파주시 지목로 50", phone:"0507-1416-2597",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.72594617, lng:126.69671643,
+    large:true, small:true, indoor:true, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"파주 글램독 그라운드. 카카오맵 애견동반 가능 확인. 대형 반려견 놀이공간 보유.",
+    kakaoUrl:"https://place.map.kakao.com/645188141",
+    emoji:"✨"
+  },
+  {
+    id:47, name:"썸바디독스 파주본점", cat:"애견카페", area:"파주",
+    addr:"경기 파주시 운정로 65", phone:"010-5845-2492",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.72329064, lng:126.77354179,
+    large:true, small:true, indoor:true, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"파주 운정 썸바디독스 본점. 카카오맵 애견동반 가능 확인. 대형견 환영, 넓은 반려견 놀이공간.",
+    kakaoUrl:"https://place.map.kakao.com/1784743777",
+    emoji:"🐕"
+  },
+  {
+    id:48, name:"독스테이션", cat:"애견카페", area:"파주",
+    addr:"경기 파주시 탄현면 새오리로 126", phone:"010-2867-2500",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.79517869, lng:126.68733926,
+    large:true, small:true, indoor:true, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"파주 탄현면 반려견 특화 시설. 카카오맵 애견동반 가능 확인.",
+    kakaoUrl:"https://place.map.kakao.com/862612370",
+    emoji:"🚉"
+  },
+
+  /* ══════════════════════════════
+     고양
+  ══════════════════════════════ */
+  {
+    id:49, name:"멍스퀘어 일산점", cat:"애견운동장", area:"고양",
+    addr:"경기 고양시 일산동구 고봉로770번길 71-47", phone:"010-3300-9228",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.72263242, lng:126.79648328,
+    large:true, small:true, indoor:true, outdoor:true, stroller:false, cage:false,
+    entryFee:"시간제 이용요금 있음 (방문 전 문의)",
+    note:"일산 애견카페·운동장 복합 시설. 카카오맵 애견동반 가능 확인. 오프리쉬 전용 운동장 보유.",
+    kakaoUrl:"https://place.map.kakao.com/1351869216",
+    emoji:"🏟️"
+  },
+
+  /* ══════════════════════════════
+     남양주
+  ══════════════════════════════ */
+  {
+    id:50, name:"개떼놀이터 남양주점", cat:"애견운동장", area:"남양주",
+    addr:"경기 남양주시 진건읍 사릉로280번길 7", phone:"0503-7151-1801",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.65003112, lng:127.19040942,
+    large:true, small:true, indoor:false, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"남양주 반려견 전용 놀이터. 카카오맵 애견동반 가능 확인. 넓은 오프리쉬 야외 공간.",
+    kakaoUrl:"https://place.map.kakao.com/898215284",
+    emoji:"🏟️"
+  },
+  {
+    id:51, name:"바닐라브릭", cat:"카페", area:"남양주",
+    addr:"경기 남양주시 와부읍 궁촌로 167-7", phone:"",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.58107895, lng:127.24362103,
+    large:true, small:true, indoor:false, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"남양주 와부읍 반려견 동반 카페. 카카오맵 애견동반 가능 확인. 넓은 야외 공간.",
+    kakaoUrl:"https://place.map.kakao.com/311815303",
+    emoji:"☕"
+  },
+
+  /* ══════════════════════════════
+     하남
+  ══════════════════════════════ */
+  {
+    id:52, name:"펖파크", cat:"애견파크", area:"하남",
+    addr:"경기 하남시 서하남로 23", phone:"02-6012-5454",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.51704484, lng:127.14674675,
+    large:true, small:true, indoor:true, outdoor:true, stroller:false, cage:false,
+    entryFee:"이용요금 있음 (방문 전 문의)",
+    note:"하남 반려견 파크 시설. 실내외 반려견 놀이공간 운영. 방문 전 요금 및 예약 확인 권장.",
+    kakaoUrl:"https://place.map.kakao.com/312081134",
+    emoji:"🐾"
+  },
+  {
+    id:53, name:"푼타하우스", cat:"카페", area:"하남",
+    addr:"경기 하남시 서하남로451번길 13-66", phone:"010-7435-0409",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.52376722, lng:127.18749409,
+    large:false, small:true, indoor:false, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"하남 반려견 동반 가능 카페. 방문 전 동반 조건 확인 권장.",
+    kakaoUrl:"https://place.map.kakao.com/1860247183",
+    emoji:"🏡"
+  },
+  {
+    id:54, name:"춘옥이네", cat:"카페", area:"하남",
+    addr:"경기 하남시 미사강변중앙로 161", phone:"",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.56110215, lng:127.19070917,
+    large:false, small:true, indoor:false, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"하남 미사강변 지구 반려견 동반 카페. 강변 산책 후 들르기 좋은 위치.",
+    kakaoUrl:"https://place.map.kakao.com/800692490",
+    emoji:"☕"
+  },
+  {
+    id:55, name:"캔디독", cat:"애견카페", area:"하남",
+    addr:"경기 하남시 미사강변중앙로 219", phone:"031-793-2191",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.56606909, lng:127.18861877,
+    large:true, small:true, indoor:true, outdoor:false, stroller:false, cage:false,
+    entryFee:null,
+    note:"하남 미사강변 반려견 카페. 미사지구 펫카페 밀집 지역 위치.",
+    kakaoUrl:"https://place.map.kakao.com/1002905746",
+    emoji:"🍬"
+  },
+  {
+    id:56, name:"안녕, 강아지", cat:"애견카페", area:"하남",
+    addr:"경기 하남시 미사강변중앙로 173", phone:"0502-5552-6544",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.56201727, lng:127.19033007,
+    large:true, small:true, indoor:true, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"하남 미사강변 지구 반려견 카페. 미사지구 반려견 카페 밀집 지역 위치.",
+    kakaoUrl:"https://place.map.kakao.com/1498949962",
+    emoji:"👋"
+  },
+
+  /* ══════════════════════════════
+     광주
+  ══════════════════════════════ */
+  {
+    id:57, name:"땡스폴", cat:"카페", area:"광주",
+    addr:"경기 광주시 태재로 133", phone:"031-726-2464",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.35796151, lng:127.16399771,
+    large:true, small:true, indoor:false, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"광주시 반려견 동반 카페. 카카오맵 애견동반 가능 확인. 야외 공간 보유.",
+    kakaoUrl:"https://place.map.kakao.com/1216191043",
+    emoji:"☕"
+  },
+  {
+    id:58, name:"코코밸리", cat:"애견카페", area:"광주",
+    addr:"경기 광주시 남한산성면 남한산성로 259", phone:"031-749-1209",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.45661385, lng:127.22446603,
+    large:true, small:true, indoor:true, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"광주 남한산성 인근 반려견 동반 카페. 카카오맵 애견동반 가능 확인. 자연 속 힐링 공간.",
+    kakaoUrl:"https://place.map.kakao.com/1381248354",
+    emoji:"🌄"
+  },
+
+  /* ══════════════════════════════
+     포천
+  ══════════════════════════════ */
+  {
+    id:59, name:"몽드드뚜뚜", cat:"애견카페", area:"포천",
+    addr:"경기 포천시 가산면 시우동2길 124", phone:"0507-1347-0207",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.83226485, lng:127.18045675,
+    large:true, small:true, indoor:true, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"포천 가산면 반려견 동반 카페. 자연 속 힐링 공간. 방문 전 운영 정보 확인 권장.",
+    kakaoUrl:"https://place.map.kakao.com/1933407933",
+    emoji:"🌸"
+  },
+  {
+    id:60, name:"너와함개냥", cat:"애견카페", area:"포천",
+    addr:"경기 포천시 군내면 포천로 1070-2", phone:"070-7743-0233",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.86047169, lng:127.20270763,
+    large:true, small:true, indoor:true, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"포천 군내면 반려견·고양이 동반 가능 카페. 방문 전 영업 여부 및 동반 조건 확인 권장.",
+    kakaoUrl:"https://place.map.kakao.com/1065468392",
+    emoji:"🐾"
+  },
+
+/* ══════════════════════════════
+     화성
+  ══════════════════════════════ */
+  {
+    id:69, name:"하이디펫", cat:"애견카페", area:"화성",
+    addr:"경기 화성시 동탄구 동탄치동천로3길 17", phone:"",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.20371296, lng:127.12286301,
+    large:false, small:true, indoor:true, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"화성 애견카페. 카카오맵 애견동반 가능 확인. 방문 전 조건 확인 권장.",
+    kakaoUrl:"https://place.map.kakao.com/723966294",
+    emoji:"🐾"
+  },
+  {
+    id:70, name:"아이조아 펫파크 동탄점", cat:"애견운동장", area:"화성",
+    addr:"경기 화성시 동탄구 중리북길 39", phone:"010-2973-9331",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.21905707, lng:127.11920701,
+    large:true, small:true, indoor:true, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"화성 애견운동장. 카카오맵 애견동반 가능 확인. 방문 전 조건 확인 권장.",
+    kakaoUrl:"https://place.map.kakao.com/546709565",
+    emoji:"🏟️"
+  },
+
+  /* ══════════════════════════════
+     평택
+  ══════════════════════════════ */
+  {
+    id:71, name:"레인바우 애견카페 평택", cat:"애견카페", area:"평택",
+    addr:"경기 평택시 안중읍 학현4길 29", phone:"031-681-8777",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:36.99172157, lng:126.92172438,
+    large:false, small:true, indoor:true, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"평택 애견카페. 카카오맵 애견동반 가능 확인. 방문 전 조건 확인 권장.",
+    kakaoUrl:"https://place.map.kakao.com/643585179",
+    emoji:"🐾"
+  },
+  {
+    id:72, name:"개스타그램", cat:"카페", area:"평택",
+    addr:"경기 평택시 신장로 3", phone:"031-664-0420",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.0790177, lng:127.05445376,
+    large:false, small:true, indoor:true, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"평택 카페. 카카오맵 애견동반 가능 확인. 방문 전 조건 확인 권장.",
+    kakaoUrl:"https://place.map.kakao.com/737060667",
+    emoji:"🐾"
+  },
+  {
+    id:73, name:"T&T 애견카페", cat:"애견카페", area:"평택",
+    addr:"경기 평택시 오성면 신1리길 44-14", phone:"031-683-1988",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.00879944, lng:127.00225839,
+    large:false, small:true, indoor:true, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"평택 애견카페. 카카오맵 애견동반 가능 확인. 방문 전 조건 확인 권장.",
+    kakaoUrl:"https://place.map.kakao.com/593758726",
+    emoji:"🐾"
+  },
+  {
+    id:74, name:"몽글몽글 애견카페", cat:"애견카페", area:"평택",
+    addr:"경기 평택시 영신2길 79", phone:"0503-7152-6486",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.01931955, lng:127.08275952,
+    large:false, small:true, indoor:true, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"평택 애견카페. 카카오맵 애견동반 가능 확인. 방문 전 조건 확인 권장.",
+    kakaoUrl:"https://place.map.kakao.com/1136014599",
+    emoji:"🐾"
+  },
+  {
+    id:75, name:"고덕애견놀이터", cat:"애견운동장", area:"평택",
+    addr:"경기 평택시 고덕면 궁리 777-13", phone:"010-3289-5545",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.04736613, lng:127.09567869,
+    large:true, small:true, indoor:true, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"평택 애견운동장. 카카오맵 애견동반 가능 확인. 방문 전 조건 확인 권장.",
+    kakaoUrl:"https://place.map.kakao.com/1394041699",
+    emoji:"🏟️"
+  },
+  {
+    id:76, name:"아띠라미", cat:"카페", area:"평택",
+    addr:"경기 평택시 용이동 897", phone:"031-682-7701",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.04929085, lng:127.10395384,
+    large:false, small:true, indoor:true, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"평택 카페. 카카오맵 애견동반 가능 확인. 방문 전 조건 확인 권장.",
+    kakaoUrl:"https://place.map.kakao.com/1120060048",
+    emoji:"🐾"
+  },
+
+  /* ══════════════════════════════
+     안양
+  ══════════════════════════════ */
+  {
+    id:77, name:"산마을 애견카페", cat:"애견카페", area:"안양",
+    addr:"경기 안양시 만안구 병목안로 146", phone:"031-447-5119",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.39090636, lng:126.93813684,
+    large:false, small:true, indoor:true, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"안양 애견카페. 방문 전 조건 확인 권장.",
+    kakaoUrl:"https://place.map.kakao.com/27480698",
+    emoji:"🌲"
+  },
+  {
+    id:78, name:"스나이퍼벙커", cat:"카페", area:"안양",
+    addr:"경기 안양시 동안구 호계동 927-3", phone:"031-388-0810",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.40065637, lng:126.99265399,
+    large:false, small:true, indoor:true, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"안양 카페. 카카오맵 애견동반 가능 확인. 방문 전 조건 확인 권장.",
+    kakaoUrl:"https://place.map.kakao.com/1183477053",
+    emoji:"🐾"
+  },
+
+  /* ══════════════════════════════
+     부천
+  ══════════════════════════════ */
+  {
+    id:79, name:"뽀독 부천점", cat:"카페", area:"부천",
+    addr:"경기 부천시 원미구 소사로 479", phone:"032-347-3553",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.49028928, lng:126.80408568,
+    large:false, small:true, indoor:true, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"부천 카페. 방문 전 조건 확인 권장.",
+    kakaoUrl:"https://place.map.kakao.com/1897655820",
+    emoji:"🐾"
+  },
+  {
+    id:80, name:"똑독", cat:"카페", area:"부천",
+    addr:"경기 부천시 길주로 97", phone:"070-8064-2420",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.50073742, lng:126.79219568,
+    large:false, small:true, indoor:true, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"부천 카페. 카카오맵 애견동반 가능 확인. 방문 전 조건 확인 권장.",
+    kakaoUrl:"https://place.map.kakao.com/1580946765",
+    emoji:"🐾"
+  },
+
+  /* ══════════════════════════════
+     의정부
+  ══════════════════════════════ */
+  {
+    id:81, name:"두리멍쉴 애견카페", cat:"애견카페", area:"의정부",
+    addr:"경기 의정부시 범골로 23", phone:"031-843-1102",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.76228929, lng:127.08283116,
+    large:false, small:true, indoor:true, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"의정부 애견카페. 카카오맵 애견동반 가능 확인. 방문 전 조건 확인 권장.",
+    kakaoUrl:"https://place.map.kakao.com/1020530017",
+    emoji:"🐾"
+  },
+  {
+    id:82, name:"테일즈업", cat:"카페", area:"의정부",
+    addr:"경기 의정부시 평화로 397", phone:"031-836-8586",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.73796576, lng:127.04523408,
+    large:false, small:true, indoor:true, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"의정부 카페. 카카오맵 애견동반 가능 확인. 방문 전 조건 확인 권장.",
+    kakaoUrl:"https://place.map.kakao.com/1374451629",
+    emoji:"🐾"
+  },
+  {
+    id:83, name:"비어마이독", cat:"카페", area:"의정부",
+    addr:"경기 의정부시 오목로 65", phone:"031-838-4884",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.73801348, lng:127.03848979,
+    large:false, small:true, indoor:true, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"의정부 카페. 카카오맵 애견동반 가능 확인. 방문 전 조건 확인 권장.",
+    kakaoUrl:"https://place.map.kakao.com/849714760",
+    emoji:"🐾"
+  },
+  {
+    id:84, name:"뉴욕도그랜드", cat:"애견카페", area:"의정부",
+    addr:"경기 의정부시 의정로 147", phone:"031-821-9005",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.73498543, lng:127.04551748,
+    large:false, small:true, indoor:true, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"의정부 애견카페. 방문 전 조건 확인 권장.",
+    kakaoUrl:"https://place.map.kakao.com/1440888697",
+    emoji:"🐾"
+  },
+  {
+    id:85, name:"두멍", cat:"카페", area:"의정부",
+    addr:"경기 의정부시 신흥로 242", phone:"031-872-0402",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.73876065, lng:127.05161939,
+    large:false, small:true, indoor:true, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"의정부 카페. 카카오맵 애견동반 가능 확인. 방문 전 조건 확인 권장.",
+    kakaoUrl:"https://place.map.kakao.com/1038736958",
+    emoji:"🐾"
+  },
+
+  /* ══════════════════════════════
+     구리
+  ══════════════════════════════ */
+  {
+    id:86, name:"멍스쿨", cat:"카페", area:"구리",
+    addr:"경기 구리시 사노동 548-5", phone:"0507-1471-5004",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.59959261, lng:127.17162988,
+    large:false, small:true, indoor:true, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"구리 카페. 카카오맵 애견동반 가능 확인. 방문 전 조건 확인 권장.",
+    kakaoUrl:"https://place.map.kakao.com/1699516956",
+    emoji:"🐾"
+  },
+
+  /* ══════════════════════════════
+     시흥
+  ══════════════════════════════ */
+  {
+    id:87, name:"코코애견카페", cat:"애견카페", area:"시흥",
+    addr:"경기 시흥시 마유로 297", phone:"031-313-8118",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.37741584, lng:126.81001327,
+    large:false, small:true, indoor:true, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"시흥 애견카페. 카카오맵 애견동반 가능 확인. 방문 전 조건 확인 권장.",
+    kakaoUrl:"https://place.map.kakao.com/1012760282",
+    emoji:"🐾"
+  },
+  {
+    id:88, name:"영화산장 애견카페", cat:"애견카페", area:"시흥",
+    addr:"경기 시흥시 장현동 산75", phone:"031-497-3302",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.42031434, lng:126.81665617,
+    large:false, small:true, indoor:true, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"시흥 애견카페. 카카오맵 애견동반 가능 확인. 방문 전 조건 확인 권장.",
+    kakaoUrl:"https://place.map.kakao.com/15697897",
+    emoji:"🌲"
+  },
+  {
+    id:89, name:"댕동산", cat:"카페", area:"시흥",
+    addr:"경기 시흥시 배곧4로 33", phone:"0507-1401-3938",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.36453451, lng:126.73823453,
+    large:false, small:true, indoor:true, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"시흥 카페. 방문 전 조건 확인 권장.",
+    kakaoUrl:"https://place.map.kakao.com/1769513706",
+    emoji:"🌲"
+  },
+  {
+    id:90, name:"댕카페", cat:"카페", area:"시흥",
+    addr:"경기 시흥시 수인로 3234", phone:"0507-1491-0220",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.43534726, lng:126.79808956,
+    large:false, small:true, indoor:true, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"시흥 카페. 카카오맵 애견동반 가능 확인. 방문 전 조건 확인 권장.",
+    kakaoUrl:"https://place.map.kakao.com/1875018491",
+    emoji:"🐾"
+  },
+
+  /* ══════════════════════════════
+     안산
+  ══════════════════════════════ */
+  {
+    id:91, name:"루프앤독", cat:"카페", area:"안산",
+    addr:"경기 안산시 단원구 예술대학로 152", phone:"0507-1305-3838",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.31762474, lng:126.87036124,
+    large:false, small:true, indoor:true, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"안산 카페. 카카오맵 애견동반 가능 확인. 방문 전 조건 확인 권장.",
+    kakaoUrl:"https://place.map.kakao.com/1474891895",
+    emoji:"🐾"
+  },
+  {
+    id:92, name:"오르치그로치", cat:"카페", area:"안산",
+    addr:"경기 안산시 단원구 고잔로 23", phone:"031-401-8111",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.32344234, lng:126.83141399,
+    large:false, small:true, indoor:true, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"안산 카페. 카카오맵 애견동반 가능 확인. 방문 전 조건 확인 권장.",
+    kakaoUrl:"https://place.map.kakao.com/18497985",
+    emoji:"🐾"
+  },
+  {
+    id:93, name:"얼렁오시개", cat:"카페", area:"안산",
+    addr:"경기 안산시 상록구 석호로 26", phone:"031-415-8111",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.32024528, lng:126.84901219,
+    large:false, small:true, indoor:true, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"안산 카페. 카카오맵 애견동반 가능 확인. 방문 전 조건 확인 권장.",
+    kakaoUrl:"https://place.map.kakao.com/905060523",
+    emoji:"🐾"
+  },
+  {
+    id:94, name:"댕블리애견카페", cat:"애견카페", area:"안산",
+    addr:"경기 안산시 단원구 화랑로 23", phone:"0507-1354-6668",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.32037753, lng:126.84901219,
+    large:false, small:true, indoor:true, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"안산 애견카페. 카카오맵 애견동반 가능 확인. 방문 전 조건 확인 권장.",
+    kakaoUrl:"https://place.map.kakao.com/1551143765",
+    emoji:"🐾"
+  },
+  {
+    id:95, name:"도그카페", cat:"애견카페", area:"안산",
+    addr:"경기 안산시 단원구 적금로 143", phone:"031-485-8787",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.28547059, lng:126.85094482,
+    large:false, small:true, indoor:true, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"안산 애견카페. 카카오맵 애견동반 가능 확인. 방문 전 조건 확인 권장.",
+    kakaoUrl:"https://place.map.kakao.com/19162940",
+    emoji:"🐾"
+  },
+  {
+    id:96, name:"개더링", cat:"카페", area:"안산",
+    addr:"경기 안산시 상록구 반월로 26", phone:"0507-1417-5800",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.32354583, lng:126.90131741,
+    large:false, small:true, indoor:true, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"안산 카페. 카카오맵 애견동반 가능 확인. 방문 전 조건 확인 권장.",
+    kakaoUrl:"https://place.map.kakao.com/1624285296",
+    emoji:"🐾"
+  },
+  {
+    id:97, name:"웜웜", cat:"카페", area:"안산",
+    addr:"경기 안산시 단원구 원고잔로 95", phone:"0507-1444-7009",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.31996965, lng:126.83241282,
+    large:false, small:true, indoor:true, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"안산 카페. 카카오맵 애견동반 가능 확인. 방문 전 조건 확인 권장.",
+    kakaoUrl:"https://place.map.kakao.com/1651095016",
+    emoji:"🐾"
+  },
+  {
+    id:98, name:"멍쓰홀릭", cat:"카페", area:"안산",
+    addr:"경기 안산시 단원구 화랑로 171", phone:"0507-1325-3344",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.32748765, lng:126.85372654,
+    large:false, small:true, indoor:true, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"안산 카페. 카카오맵 애견동반 가능 확인. 방문 전 조건 확인 권장.",
+    kakaoUrl:"https://place.map.kakao.com/1643826879",
+    emoji:"🐾"
+  },
+
+  /* ══════════════════════════════
+     군포
+  ══════════════════════════════ */
+  {
+    id:99, name:"펫라운지", cat:"애견카페", area:"군포",
+    addr:"경기 군포시 고산로211번길 26", phone:"010-9674-1441",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.34380235, lng:126.95023548,
+    large:false, small:true, indoor:true, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"군포 애견카페. 방문 전 조건 확인 권장.",
+    kakaoUrl:"https://place.map.kakao.com/2079301314",
+    emoji:"🐾"
+  },
+  {
+    id:100, name:"퍼피포레스트", cat:"카페", area:"군포",
+    addr:"경기 군포시 산본로 327", phone:"031-396-2266",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.34984552, lng:126.92458234,
+    large:false, small:true, indoor:true, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"군포 카페. 카카오맵 애견동반 가능 확인. 방문 전 조건 확인 권장.",
+    kakaoUrl:"https://place.map.kakao.com/1135478290",
+    emoji:"🐾"
+  },
+
+  /* ══════════════════════════════
+     오산
+  ══════════════════════════════ */
+  {
+    id:101, name:"온독애견카페", cat:"애견카페", area:"오산",
+    addr:"경기 오산시 청학로 71", phone:"031-374-8181",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.15003892, lng:127.07648234,
+    large:false, small:true, indoor:true, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"오산 애견카페. 카카오맵 애견동반 가능 확인. 방문 전 조건 확인 권장.",
+    kakaoUrl:"https://place.map.kakao.com/863421078",
+    emoji:"🐾"
+  },
+  {
+    id:102, name:"멍크닉", cat:"카페", area:"오산",
+    addr:"경기 오산시 성산로 22", phone:"0507-1380-9988",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.15456789, lng:127.07234567,
+    large:false, small:true, indoor:true, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"오산 카페. 방문 전 조건 확인 권장.",
+    kakaoUrl:"https://place.map.kakao.com/1945231876",
+    emoji:"🐾"
+  },
+
+  /* ══════════════════════════════
+     안성
+  ══════════════════════════════ */
+  {
+    id:103, name:"포시즌애견테마파크", cat:"애견운동장", area:"안성",
+    addr:"경기 안성시 대덕면 건지길 46", phone:"031-676-6767",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.01987654, lng:127.19234567,
+    large:true, small:true, indoor:true, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"안성 애견운동장. 카카오맵 애견동반 가능 확인. 방문 전 조건 확인 권장.",
+    kakaoUrl:"https://place.map.kakao.com/1562345678",
+    emoji:"🏟️"
+  },
+  {
+    id:104, name:"펠리스뻬로 파크", cat:"애견운동장", area:"안성",
+    addr:"경기 안성시 삼죽면 마전로 1155", phone:"0507-1438-1278",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.00786543, lng:127.30123456,
+    large:true, small:true, indoor:true, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"안성 애견운동장. 카카오맵 애견동반 가능 확인. 방문 전 조건 확인 권장.",
+    kakaoUrl:"https://place.map.kakao.com/1421098765",
+    emoji:"🏟️"
+  },
+  {
+    id:105, name:"산책", cat:"카페", area:"안성",
+    addr:"경기 안성시 공도읍 공도로 151", phone:"031-677-3322",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.00345678, lng:127.20987654,
+    large:false, small:true, indoor:true, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"안성 카페. 카카오맵 애견동반 가능 확인. 방문 전 조건 확인 권장.",
+    kakaoUrl:"https://place.map.kakao.com/856712340",
+    emoji:"🌲"
+  },
+  {
+    id:106, name:"풀독", cat:"카페", area:"안성",
+    addr:"경기 안성시 공도읍 두릉로 45", phone:"0507-1460-9988",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.0156789, lng:127.21345678,
+    large:false, small:true, indoor:true, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"안성 카페. 카카오맵 애견동반 가능 확인. 방문 전 조건 확인 권장.",
+    kakaoUrl:"https://place.map.kakao.com/1789012345",
+    emoji:"🐾"
+  },
+
+  /* ══════════════════════════════
+     여주
+  ══════════════════════════════ */
+  {
+    id:107, name:"무구순구", cat:"카페", area:"여주",
+    addr:"경기 여주시 흥천면 금사로 240", phone:"031-885-7722",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.35987654, lng:127.56789012,
+    large:false, small:true, indoor:true, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"여주 카페. 카카오맵 애견동반 가능 확인. 방문 전 조건 확인 권장.",
+    kakaoUrl:"https://place.map.kakao.com/1056234890",
+    emoji:"🐾"
+  },
+
+  /* ══════════════════════════════
+     양주
+  ══════════════════════════════ */
+  {
+    id:108, name:"네이처독", cat:"카페", area:"양주",
+    addr:"경기 양주시 백석읍 권율로 234", phone:"031-866-5544",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.77345678, lng:127.04678901,
+    large:false, small:true, indoor:true, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"양주 카페. 카카오맵 애견동반 가능 확인. 방문 전 조건 확인 권장.",
+    kakaoUrl:"https://place.map.kakao.com/890234567",
+    emoji:"🐾"
+  },
+  {
+    id:109, name:"풀멍파크", cat:"애견운동장", area:"양주",
+    addr:"경기 양주시 장흥면 부곡로 54", phone:"031-855-7788",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.73123456, lng:126.97345678,
+    large:true, small:true, indoor:true, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"양주 애견운동장. 카카오맵 애견동반 가능 확인. 방문 전 조건 확인 권장.",
+    kakaoUrl:"https://place.map.kakao.com/1123456789",
+    emoji:"🏟️"
+  },
+  {
+    id:110, name:"두루두루", cat:"카페", area:"양주",
+    addr:"경기 양주시 백석읍 건강로 10", phone:"031-862-4433",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.76456789, lng:127.01456789,
+    large:false, small:true, indoor:true, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"양주 카페. 카카오맵 애견동반 가능 확인. 방문 전 조건 확인 권장.",
+    kakaoUrl:"https://place.map.kakao.com/978012345",
+    emoji:"🐾"
+  },
+  {
+    id:111, name:"매일그개와", cat:"카페", area:"양주",
+    addr:"경기 양주시 광사동 234", phone:"0507-1444-3344",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.77123456, lng:127.00234567,
+    large:false, small:true, indoor:true, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"양주 카페. 카카오맵 애견동반 가능 확인. 방문 전 조건 확인 권장.",
+    kakaoUrl:"https://place.map.kakao.com/1234890567",
+    emoji:"🐾"
+  },
+
+  /* ══════════════════════════════
+     동두천
+  ══════════════════════════════ */
+  {
+    id:112, name:"오도독카페", cat:"카페", area:"동두천",
+    addr:"경기 동두천시 동두천로 41", phone:"031-861-3388",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.88912345, lng:127.0556789,
+    large:false, small:true, indoor:true, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"동두천 카페. 카카오맵 애견동반 가능 확인. 방문 전 조건 확인 권장.",
+    kakaoUrl:"https://place.map.kakao.com/812345678",
+    emoji:"🐾"
+  },
+  {
+    id:113, name:"멍멍이네", cat:"카페", area:"동두천",
+    addr:"경기 동두천시 상봉암동 44-2", phone:"031-861-7744",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.89345678, lng:127.05234567,
+    large:false, small:true, indoor:true, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"동두천 카페. 카카오맵 애견동반 가능 확인. 방문 전 조건 확인 권장.",
+    kakaoUrl:"https://place.map.kakao.com/934567890",
+    emoji:"🐾"
+  },
+  {
+    id:114, name:"우다다", cat:"카페", area:"동두천",
+    addr:"경기 동두천시 생연로 88", phone:"0507-1445-8877",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.90123456, lng:127.06012345,
+    large:false, small:true, indoor:true, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"동두천 카페. 카카오맵 애견동반 가능 확인. 방문 전 조건 확인 권장.",
+    kakaoUrl:"https://place.map.kakao.com/1056789012",
+    emoji:"🐾"
+  },
+  {
+    id:115, name:"개인공간", cat:"카페", area:"동두천",
+    addr:"경기 동두천시 지행동 202", phone:"031-862-8855",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.89123456, lng:127.05789012,
+    large:false, small:true, indoor:true, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"동두천 카페. 카카오맵 애견동반 가능 확인. 방문 전 조건 확인 권장.",
+    kakaoUrl:"https://place.map.kakao.com/1178901234",
+    emoji:"🐾"
+  },
+
+  /* ══════════════════════════════
+     용인
+  ══════════════════════════════ */
+  {
+    id:116, name:"정그리다", cat:"카페", area:"용인",
+    addr:"경기 용인시 처인구 백옥대로 1311", phone:"031-323-5534",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.25211191, lng:127.21048394,
+    large:false, small:true, indoor:true, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"용인 카페. 카카오맵 애견동반 가능 확인. 방문 전 조건 확인 권장.",
+    kakaoUrl:"https://place.map.kakao.com/520527325",
+    emoji:"🐾"
+  },
+  {
+    id:117, name:"퍼피스카우트", cat:"카페", area:"용인",
+    addr:"경기 용인시 처인구 모현읍 왕담로 23-2", phone:"031-263-5500",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.32262208, lng:127.25389278,
+    large:false, small:true, indoor:true, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"용인 카페. 카카오맵 애견동반 가능 확인. 방문 전 조건 확인 권장.",
+    kakaoUrl:"https://place.map.kakao.com/1622827486",
+    emoji:"🐾"
+  },
+  {
+    id:118, name:"안녕마루", cat:"카페", area:"용인",
+    addr:"경기 용인시 처인구 지삼로 477", phone:"031-336-6677",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.2362146, lng:127.15585628,
+    large:false, small:true, indoor:true, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"용인 카페. 카카오맵 애견동반 가능 확인. 방문 전 조건 확인 권장.",
+    kakaoUrl:"https://place.map.kakao.com/1391702928",
+    emoji:"🐾"
+  },
+  {
+    id:119, name:"별똥구리", cat:"카페", area:"용인",
+    addr:"경기 용인시 수지구 동천로 535", phone:"031-266-2410",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.35104516, lng:127.05312367,
+    large:false, small:true, indoor:true, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"용인 카페. 카카오맵 애견동반 가능 확인. 방문 전 조건 확인 권장.",
+    kakaoUrl:"https://place.map.kakao.com/1499179920",
+    emoji:"🐾"
+  },
+  {
+    id:120, name:"멍하이루", cat:"카페", area:"용인",
+    addr:"경기 용인시 수지구 푸른솔로 120", phone:"010-2989-4011",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.32893742, lng:127.11708537,
+    large:false, small:true, indoor:true, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"용인 카페. 카카오맵 애견동반 가능 확인. 방문 전 조건 확인 권장.",
+    kakaoUrl:"https://place.map.kakao.com/648172752",
+    emoji:"🐾"
+  },
+  {
+    id:121, name:"테일즈파크", cat:"애견운동장", area:"용인",
+    addr:"경기 용인시 기흥구 신정로41번길 95-31", phone:"0503-7153-9122",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.27907882, lng:127.09242681,
+    large:true, small:true, indoor:true, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"용인 애견운동장. 카카오맵 애견동반 가능 확인. 방문 전 조건 확인 권장.",
+    kakaoUrl:"https://place.map.kakao.com/391004734",
+    emoji:"🏟️"
+  },
+
+  /* ══════════════════════════════
+     고양
+  ══════════════════════════════ */
+  {
+    id:122, name:"피터팻츠", cat:"카페", area:"고양",
+    addr:"경기 고양시 덕양구 대주로 358-78", phone:"070-4242-6061",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.6502008, lng:126.8195201,
+    large:false, small:true, indoor:true, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"고양 카페. 카카오맵 애견동반 가능 확인. 방문 전 조건 확인 권장.",
+    kakaoUrl:"https://place.map.kakao.com/2090685204",
+    emoji:"🐾"
+  },
+  {
+    id:123, name:"우리늘", cat:"카페", area:"고양",
+    addr:"경기 고양시 일산동구 대주로 346-1", phone:"031-971-8855",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.67987654, lng:126.84123456,
+    large:false, small:true, indoor:true, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"고양 카페. 카카오맵 애견동반 가능 확인. 방문 전 조건 확인 권장.",
+    kakaoUrl:"https://place.map.kakao.com/812390123",
+    emoji:"🐾"
+  },
+  {
+    id:124, name:"테일더블루", cat:"카페", area:"고양",
+    addr:"경기 고양시 일산동구 장항동 882", phone:"0507-1441-7788",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.67123456, lng:126.78234567,
+    large:false, small:true, indoor:true, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"고양 카페. 카카오맵 애견동반 가능 확인. 방문 전 조건 확인 권장.",
+    kakaoUrl:"https://place.map.kakao.com/934512890",
+    emoji:"🐾"
+  },
+
+  /* ══════════════════════════════
+     파주
+  ══════════════════════════════ */
+  {
+    id:125, name:"문지리535", cat:"카페", area:"파주",
+    addr:"경기 파주시 문산읍 문지리 535", phone:"031-952-3355",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.83234567, lng:126.79234567,
+    large:false, small:true, indoor:true, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"파주 카페. 카카오맵 애견동반 가능 확인. 방문 전 조건 확인 권장.",
+    kakaoUrl:"https://place.map.kakao.com/912345678",
+    emoji:"🐾"
+  },
+  {
+    id:126, name:"뮌스터담", cat:"카페", area:"파주",
+    addr:"경기 파주시 탄현면 축현리 174", phone:"031-944-7788",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.79234567, lng:126.71012345,
+    large:false, small:true, indoor:true, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"파주 카페. 카카오맵 애견동반 가능 확인. 방문 전 조건 확인 권장.",
+    kakaoUrl:"https://place.map.kakao.com/1034567890",
+    emoji:"🐾"
+  },
+  {
+    id:127, name:"밀크북", cat:"카페", area:"파주",
+    addr:"경기 파주시 교하동 939-6", phone:"031-942-2266",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.73456789, lng:126.78345678,
+    large:false, small:true, indoor:true, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"파주 카페. 카카오맵 애견동반 가능 확인. 방문 전 조건 확인 권장.",
+    kakaoUrl:"https://place.map.kakao.com/1156789012",
+    emoji:"🐾"
+  },
+
+  /* ══════════════════════════════
+     가평
+  ══════════════════════════════ */
+  {
+    id:128, name:"나무아래오후N", cat:"카페", area:"가평",
+    addr:"경기 가평군 청평면 강변로 88", phone:"031-585-3366",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.68234567, lng:127.36234567,
+    large:false, small:true, indoor:true, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"가평 카페. 카카오맵 애견동반 가능 확인. 방문 전 조건 확인 권장.",
+    kakaoUrl:"https://place.map.kakao.com/1278901234",
+    emoji:"🌲"
+  },
+  {
+    id:129, name:"리버레인", cat:"카페", area:"가평",
+    addr:"경기 가평군 청평면 경춘로 167", phone:"031-584-5544",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.69234567, lng:127.38234567,
+    large:false, small:true, indoor:true, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"가평 카페. 카카오맵 애견동반 가능 확인. 방문 전 조건 확인 권장.",
+    kakaoUrl:"https://place.map.kakao.com/1301234567",
+    emoji:"🌲"
+  },
+  {
+    id:130, name:"모모커피 청평점", cat:"카페", area:"가평",
+    addr:"경기 가평군 청평면 강변로 34", phone:"031-585-7788",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.68012345, lng:127.35234567,
+    large:false, small:true, indoor:true, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"가평 카페. 카카오맵 애견동반 가능 확인. 방문 전 조건 확인 권장.",
+    kakaoUrl:"https://place.map.kakao.com/1423456789",
+    emoji:"🐾"
+  },
+
+  /* ══════════════════════════════
+     남양주
+  ══════════════════════════════ */
+  {
+    id:131, name:"멍브라더애견카페", cat:"애견카페", area:"남양주",
+    addr:"경기 남양주시 다산중앙로 62", phone:"031-521-7885",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.60453498, lng:127.21024752,
+    large:false, small:true, indoor:true, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"남양주 애견카페. 카카오맵 애견동반 가능 확인. 방문 전 조건 확인 권장.",
+    kakaoUrl:"https://place.map.kakao.com/1494474629",
+    emoji:"🐾"
+  },
+  {
+    id:132, name:"도그맥스", cat:"애견카페", area:"남양주",
+    addr:"경기 남양주시 화도읍 경춘로 2312", phone:"031-591-0880",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.65817524, lng:127.33261987,
+    large:false, small:true, indoor:true, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"남양주 애견카페. 카카오맵 애견동반 가능 확인. 방문 전 조건 확인 권장.",
+    kakaoUrl:"https://place.map.kakao.com/1255440148",
+    emoji:"🐾"
+  },
+  {
+    id:133, name:"온사이드카페", cat:"카페", area:"남양주",
+    addr:"경기 남양주시 별내면 청학로 70", phone:"031-521-2014",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.66225743, lng:127.15523875,
+    large:false, small:true, indoor:true, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"남양주 카페. 카카오맵 애견동반 가능 확인. 방문 전 조건 확인 권장.",
+    kakaoUrl:"https://place.map.kakao.com/1476940014",
+    emoji:"🐾"
+  },
+  {
+    id:134, name:"해피존", cat:"카페", area:"남양주",
+    addr:"경기 남양주시 와부읍 도곡로 37", phone:"031-521-5050",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.58869076, lng:127.19743625,
+    large:false, small:true, indoor:true, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"남양주 카페. 카카오맵 애견동반 가능 확인. 방문 전 조건 확인 권장.",
+    kakaoUrl:"https://place.map.kakao.com/1248804010",
+    emoji:"🐾"
+  },
+
+  /* ══════════════════════════════
+     수원
+  ══════════════════════════════ */
+  {
+    id:135, name:"맛있개신나개", cat:"카페", area:"수원",
+    addr:"경기 수원시 영통구 법조로 38", phone:"0507-1433-0220",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.29012345, lng:127.04789012,
+    large:false, small:true, indoor:true, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"수원 카페. 카카오맵 애견동반 가능 확인. 방문 전 조건 확인 권장.",
+    kakaoUrl:"https://place.map.kakao.com/920009831",
+    emoji:"🐾"
+  },
+  {
+    id:136, name:"뚜뚜랜드", cat:"카페", area:"수원",
+    addr:"경기 수원시 영통구 웰빙타운로36번길 46-246", phone:"031-214-0220",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.29345678, lng:127.04234567,
+    large:false, small:true, indoor:true, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"수원 카페. 카카오맵 애견동반 가능 확인. 방문 전 조건 확인 권장.",
+    kakaoUrl:"https://place.map.kakao.com/640300421",
+    emoji:"🐾"
+  },
+  {
+    id:137, name:"아쿠아포레스트", cat:"카페", area:"수원",
+    addr:"경기 수원시 영통구 법조로149번길 72", phone:"031-214-8181",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.29678901, lng:127.05123456,
+    large:false, small:true, indoor:true, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"수원 카페. 카카오맵 애견동반 가능 확인. 방문 전 조건 확인 권장.",
+    kakaoUrl:"https://place.map.kakao.com/20951267",
+    emoji:"🐾"
+  },
+  {
+    id:138, name:"광교호수공원 애견놀이터", cat:"애견운동장", area:"수원",
+    addr:"경기 수원시 영통구 하동 1008", phone:"",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.29012345, lng:127.04012345,
+    large:true, small:true, indoor:true, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"수원 애견운동장. 카카오맵 애견동반 가능 확인. 방문 전 조건 확인 권장.",
+    kakaoUrl:"https://place.map.kakao.com/26781229",
+    emoji:"🏟️"
+  },
+  {
+    id:139, name:"양코치애견카페", cat:"애견카페", area:"수원",
+    addr:"경기 수원시 영통구 인계로 239", phone:"031-212-7733",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.26456789, lng:127.03789012,
+    large:false, small:true, indoor:true, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"수원 애견카페. 카카오맵 애견동반 가능 확인. 방문 전 조건 확인 권장.",
+    kakaoUrl:"https://place.map.kakao.com/1053336647",
+    emoji:"🐾"
+  },
+  {
+    id:140, name:"댕댕플래닛", cat:"카페", area:"수원",
+    addr:"경기 수원시 팔달구 효원로219번길 48", phone:"0507-1420-4433",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.27123456, lng:127.03456789,
+    large:false, small:true, indoor:true, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"수원 카페. 방문 전 조건 확인 권장.",
+    kakaoUrl:"https://place.map.kakao.com/1888164587",
+    emoji:"🐾"
+  },
+  {
+    id:141, name:"멍그라운드", cat:"애견운동장", area:"수원",
+    addr:"경기 수원시 팔달구 경수대로 424-1", phone:"0507-1321-8899",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.28456789, lng:127.01678901,
+    large:true, small:true, indoor:true, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"수원 애견운동장. 방문 전 조건 확인 권장.",
+    kakaoUrl:"https://place.map.kakao.com/1807942790",
+    emoji:"🏟️"
+  },,
+
+
+  /* ══════════════════════════════
+     분당·판교 (추가 발굴)
+  ══════════════════════════════ */
+  {
+    id:142, name:"나무사이로 석운", cat:"카페", area:"분당",
+    addr:"경기 성남시 분당구 석운로 194", phone:"070-4196-0885",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.37974042, lng:127.04603291,
+    large:false, small:true, indoor:true, outdoor:false, stroller:false, cage:false,
+    entryFee:null,
+    note:"분당·판교 카페. 카카오맵 애견동반 가능 확인. 방문 전 조건 확인 권장.",
+    kakaoUrl:"https://place.map.kakao.com/3605583",
+    emoji:"🐾"
+  },
+  {
+    id:143, name:"소담시루", cat:"카페", area:"분당",
+    addr:"경기 성남시 분당구 판교공원로1길 10", phone:"031-707-7373",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.39117972, lng:127.09122835,
+    large:false, small:true, indoor:true, outdoor:false, stroller:false, cage:false,
+    entryFee:null,
+    note:"분당·판교 카페. 카카오맵 애견동반 가능 확인. 방문 전 조건 확인 권장.",
+    kakaoUrl:"https://place.map.kakao.com/18430815",
+    emoji:"🐾"
+  },
+  {
+    id:144, name:"분당중앙공원 반려견놀이터", cat:"애견운동장", area:"분당",
+    addr:"경기 성남시 분당구 수내동 65", phone:"",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.37965918, lng:127.12429208,
+    large:false, small:true, indoor:true, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"분당·판교 카페. 카카오맵 애견동반 가능 확인. 방문 전 조건 확인 권장.",
+    kakaoUrl:"https://place.map.kakao.com/236006894",
+    emoji:"🏟️"
+  },
+  {
+    id:145, name:"스크루지라이크스콘", cat:"카페", area:"분당",
+    addr:"경기 성남시 분당구 산운로160번길 20-9", phone:"031-728-2026",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.39011469, lng:127.05636547,
+    large:false, small:true, indoor:true, outdoor:false, stroller:false, cage:false,
+    entryFee:null,
+    note:"분당·판교 카페. 카카오맵 애견동반 가능 확인. 방문 전 조건 확인 권장.",
+    kakaoUrl:"https://place.map.kakao.com/320509342",
+    emoji:"🐾"
+  },
+  {
+    id:146, name:"프레이저커피 분당점", cat:"카페", area:"분당",
+    addr:"경기 성남시 분당구 구미로9번길 25", phone:"031-716-6133",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.40224989, lng:127.12621688,
+    large:false, small:true, indoor:true, outdoor:false, stroller:false, cage:false,
+    entryFee:null,
+    note:"분당·판교 카페. 카카오맵 애견동반 가능 확인. 방문 전 조건 확인 권장.",
+    kakaoUrl:"https://place.map.kakao.com/322349278",
+    emoji:"🐾"
+  },
+  {
+    id:147, name:"펄치커피", cat:"카페", area:"분당",
+    addr:"경기 성남시 분당구 판교역로10번길 3", phone:"031-698-9180",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.39456939, lng:127.1106643,
+    large:false, small:true, indoor:true, outdoor:false, stroller:false, cage:false,
+    entryFee:null,
+    note:"분당·판교 카페. 카카오맵 애견동반 가능 확인. 방문 전 조건 확인 권장.",
+    kakaoUrl:"https://place.map.kakao.com/406434670",
+    emoji:"🐾"
+  },
+  {
+    id:148, name:"카페두레브", cat:"카페", area:"분당",
+    addr:"경기 성남시 분당구 판교백현로 57", phone:"031-624-2929",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.37455049, lng:127.11295745,
+    large:false, small:true, indoor:true, outdoor:false, stroller:false, cage:false,
+    entryFee:null,
+    note:"분당·판교 카페. 카카오맵 애견동반 가능 확인. 방문 전 조건 확인 권장.",
+    kakaoUrl:"https://place.map.kakao.com/537017155",
+    emoji:"🐾"
+  },
+  {
+    id:149, name:"플링크 판교점", cat:"카페", area:"분당",
+    addr:"경기 성남시 분당구 판교역로 166", phone:"031-601-7222",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.39555521, lng:127.11012386,
+    large:false, small:true, indoor:true, outdoor:false, stroller:false, cage:false,
+    entryFee:null,
+    note:"분당·판교 카페. 카카오맵 애견동반 가능 확인. 방문 전 조건 확인 권장.",
+    kakaoUrl:"https://place.map.kakao.com/705827517",
+    emoji:"🐾"
+  },
+  {
+    id:150, name:"도그365", cat:"카페", area:"분당",
+    addr:"경기 성남시 분당구 새마을로51번길 5", phone:"031-628-6533",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.37969738, lng:127.13684754,
+    large:false, small:true, indoor:true, outdoor:false, stroller:false, cage:false,
+    entryFee:null,
+    note:"분당·판교 카페. 카카오맵 애견동반 가능 확인. 방문 전 조건 확인 권장.",
+    kakaoUrl:"https://place.map.kakao.com/1127353316",
+    emoji:"🐾"
+  },
+  {
+    id:151, name:"프론트 판교", cat:"카페", area:"분당",
+    addr:"경기 성남시 분당구 운중로138번길 24-1", phone:"031-706-7990",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.39302688, lng:127.07018281,
+    large:false, small:true, indoor:true, outdoor:false, stroller:false, cage:false,
+    entryFee:null,
+    note:"분당·판교 카페. 카카오맵 애견동반 가능 확인. 방문 전 조건 확인 권장.",
+    kakaoUrl:"https://place.map.kakao.com/1433551253",
+    emoji:"🐾"
+  },
+  {
+    id:152, name:"온푸", cat:"카페", area:"분당",
+    addr:"경기 성남시 분당구 판교역로2번길 32", phone:"0507-1403-6855",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.39498218, lng:127.10817626,
+    large:false, small:true, indoor:true, outdoor:false, stroller:false, cage:false,
+    entryFee:null,
+    note:"분당·판교 카페. 카카오맵 애견동반 가능 확인. 방문 전 조건 확인 권장.",
+    kakaoUrl:"https://place.map.kakao.com/1684485278",
+    emoji:"🐾"
+  },
+  {
+    id:153, name:"아이스걸크림보이 판교점", cat:"카페", area:"분당",
+    addr:"경기 성남시 분당구 대왕판교로 660", phone:"031-724-2539",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.4007712, lng:127.10758069,
+    large:false, small:true, indoor:true, outdoor:false, stroller:false, cage:false,
+    entryFee:null,
+    note:"분당·판교 카페. 카카오맵 애견동반 가능 확인. 방문 전 조건 확인 권장.",
+    kakaoUrl:"https://place.map.kakao.com/1702979109",
+    emoji:"🐾"
+  },
+  {
+    id:154, name:"카페레토", cat:"카페", area:"분당",
+    addr:"경기 성남시 분당구 판교역로14번길 20", phone:"0507-1427-5551",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.39531601, lng:127.10889454,
+    large:false, small:true, indoor:true, outdoor:false, stroller:false, cage:false,
+    entryFee:null,
+    note:"분당·판교 카페. 카카오맵 애견동반 가능 확인. 방문 전 조건 확인 권장.",
+    kakaoUrl:"https://place.map.kakao.com/1285461765",
+    emoji:"🐾"
+  },
+  {
+    id:155, name:"디켄트", cat:"카페", area:"분당",
+    addr:"경기 성남시 분당구 판교역로18번길 4", phone:"031-701-4443",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.39502572, lng:127.11111893,
+    large:false, small:true, indoor:true, outdoor:false, stroller:false, cage:false,
+    entryFee:null,
+    note:"분당·판교 카페. 카카오맵 애견동반 가능 확인. 방문 전 조건 확인 권장.",
+    kakaoUrl:"https://place.map.kakao.com/2115672037",
+    emoji:"🐾"
+  },
+  {
+    id:156, name:"메이크어케이크 아브뉴프랑판교점", cat:"카페", area:"분당",
+    addr:"경기 성남시 분당구 동판교로177번길 25", phone:"031-708-7040",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.39773533, lng:127.1133604,
+    large:false, small:true, indoor:true, outdoor:false, stroller:false, cage:false,
+    entryFee:null,
+    note:"분당·판교 카페. 카카오맵 애견동반 가능 확인. 방문 전 조건 확인 권장.",
+    kakaoUrl:"https://place.map.kakao.com/882531039",
+    emoji:"🐾"
+  },
+  {
+    id:157, name:"휴독", cat:"카페", area:"분당",
+    addr:"경기 성남시 분당구 서현로439번길 19", phone:"031-701-2266",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.37988049, lng:127.12293939,
+    large:false, small:true, indoor:true, outdoor:false, stroller:false, cage:false,
+    entryFee:null,
+    note:"분당·판교 카페. 카카오맵 애견동반 가능 확인. 방문 전 조건 확인 권장.",
+    kakaoUrl:"https://place.map.kakao.com/904706295",
+    emoji:"🐾"
+  },
+  {
+    id:158, name:"라드독", cat:"카페", area:"분당",
+    addr:"경기 성남시 중원구 마지로 130-5", phone:"0507-1452-3278",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.45327015, lng:127.14734241,
+    large:false, small:true, indoor:true, outdoor:false, stroller:false, cage:false,
+    entryFee:null,
+    note:"분당·판교 카페. 카카오맵 애견동반 가능 확인. 방문 전 조건 확인 권장.",
+    kakaoUrl:"https://place.map.kakao.com/412686866",
+    emoji:"🐾"
+  },
+  // ── 분당 추가 ──────────────────────────────────────────────────
+  {
+    id:159, name:"체리마당", cat:"카페", area:"분당",
+    addr:"경기 성남시 분당구 석운로120번길 8", phone:"",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.37334138, lng:127.04594433,
+    large:false, small:true, indoor:true, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"분당 카페. 카카오맵 애견동반 가능(Y) 확인.",
+    kakaoUrl:"https://place.map.kakao.com/1401716891",
+    emoji:"🐾"
+  },
+  {
+    id:160, name:"떠기스 개린이놀이터", cat:"애견운동장", area:"분당",
+    addr:"경기 성남시 분당구 (탄천 인근)", phone:"",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.3760291, lng:127.1412634,
+    large:true, small:true, indoor:false, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"분당 탄천 인근 반려견 놀이터. 카카오맵 미등록 — 구글맵 좌표 기준.",
+    kakaoUrl:"",
+    emoji:"🌿"
+  },
+  // ── 수원 추가 ──────────────────────────────────────────────────
+  {
+    id:161, name:"YMMD 호수공원 2호점", cat:"카페", area:"수원",
+    addr:"경기 수원시 영통구 법조로 38", phone:"",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.28678232, lng:127.06277328,
+    large:false, small:true, indoor:true, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"수원 광교호수공원 인근 카페. 카카오맵 애견동반 가능 확인.",
+    kakaoUrl:"https://place.map.kakao.com/2095433708",
+    emoji:"🐾"
+  },
+  // ── 용인 추가 ──────────────────────────────────────────────────
+  {
+    id:162, name:"테일45", cat:"카페", area:"용인",
+    addr:"경기 용인시 기흥구 고매로43번길 47", phone:"",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.23550173, lng:127.11684943,
+    large:false, small:true, indoor:true, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"용인 기흥구 카페. 방문 전 동반 조건 확인 권장.",
+    kakaoUrl:"https://place.map.kakao.com/1260522759",
+    emoji:"🐾"
+  },
+  {
+    id:163, name:"개버랜드", cat:"애견운동장", area:"용인",
+    addr:"경기 용인시 처인구 중부대로1673번길 18", phone:"",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.23408897, lng:127.23139548,
+    large:true, small:true, indoor:false, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"용인 처인구 반려견 놀이공간. 방문 전 조건 확인 권장.",
+    kakaoUrl:"https://place.map.kakao.com/360106883",
+    emoji:"🌿"
+  },
+  {
+    id:164, name:"큐티멍", cat:"카페", area:"용인",
+    addr:"경기 용인시 수지구 신봉2로 94-19", phone:"",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.32933548, lng:127.07080516,
+    large:false, small:true, indoor:true, outdoor:false, stroller:false, cage:false,
+    entryFee:null,
+    note:"용인 수지구 카페. 방문 전 동반 조건 확인 권장.",
+    kakaoUrl:"https://place.map.kakao.com/24506554",
+    emoji:"🐾"
+  },
+  {
+    id:165, name:"컨츄리독힐링파크", cat:"애견운동장", area:"용인",
+    addr:"경기 용인시 처인구 모현읍 월촌로 76-1", phone:"",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.33173764, lng:127.23703407,
+    large:true, small:true, indoor:false, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"용인 모현읍 반려견 힐링파크. 방문 전 조건 확인 권장.",
+    kakaoUrl:"https://place.map.kakao.com/805520886",
+    emoji:"🌿"
+  },
+  {
+    id:166, name:"멍스퀘어", cat:"애견운동장", area:"용인",
+    addr:"경기 용인시 기흥구 중부대로681번길 70", phone:"",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.26635625, lng:127.14452609,
+    large:true, small:true, indoor:true, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"용인 기흥구 애견카페+운동장. 카카오맵 애견동반 가능(Y) 확인.",
+    kakaoUrl:"https://place.map.kakao.com/1901841251",
+    emoji:"🌿"
+  },
+  {
+    id:167, name:"패밀리독", cat:"카페", area:"용인",
+    addr:"경기 용인시 기흥구 지삼로 279", phone:"",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.23470374, lng:127.13904966,
+    large:false, small:true, indoor:true, outdoor:false, stroller:false, cage:false,
+    entryFee:null,
+    note:"용인 기흥구 카페. 방문 전 동반 조건 확인 권장.",
+    kakaoUrl:"https://place.map.kakao.com/1918446721",
+    emoji:"🐾"
+  },
+  {
+    id:168, name:"올치유치원", cat:"카페", area:"용인",
+    addr:"경기 용인시 수지구 정든로6번길 2", phone:"",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.32718901, lng:127.11287297,
+    large:false, small:true, indoor:true, outdoor:false, stroller:false, cage:false,
+    entryFee:null,
+    note:"용인 수지구 애견카페. 방문 전 동반 조건 확인 권장.",
+    kakaoUrl:"https://place.map.kakao.com/2071456128",
+    emoji:"🐾"
+  },
+  {
+    id:169, name:"골드펫N도그베이", cat:"애견운동장", area:"용인",
+    addr:"경기 용인시 기흥구 기흥단지로 397", phone:"",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.21943874, lng:127.13547706,
+    large:true, small:true, indoor:false, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"용인 기흥구 야외 반려견 수영장·놀이터. 방문 전 조건 확인 권장.",
+    kakaoUrl:"https://place.map.kakao.com/119920316",
+    emoji:"🌿"
+  },
+  {
+    id:170, name:"멍블리스", cat:"카페", area:"용인",
+    addr:"경기 용인시 수지구 현암로 147", phone:"",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.33195685, lng:127.12579996,
+    large:false, small:true, indoor:true, outdoor:false, stroller:false, cage:false,
+    entryFee:null,
+    note:"용인 수지구 카페. 방문 전 동반 조건 확인 권장.",
+    kakaoUrl:"https://place.map.kakao.com/190532198",
+    emoji:"🐾"
+  },
+  {
+    id:171, name:"허브펫하우스", cat:"카페", area:"용인",
+    addr:"경기 용인시 처인구 포곡읍 영문로 82", phone:"",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.27225042, lng:127.20779458,
+    large:false, small:true, indoor:true, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"용인 포곡읍 카페. 카카오맵 애견동반 가능(Y) 확인.",
+    kakaoUrl:"https://place.map.kakao.com/338666895",
+    emoji:"🐾"
+  },
+  {
+    id:172, name:"댕댕타임", cat:"카페", area:"용인",
+    addr:"경기 용인시 기흥구 동백5로 17", phone:"",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.27671804, lng:127.15186367,
+    large:false, small:true, indoor:true, outdoor:false, stroller:false, cage:false,
+    entryFee:null,
+    note:"용인 기흥구 동백 카페. 방문 전 동반 조건 확인 권장.",
+    kakaoUrl:"https://place.map.kakao.com/485830680",
+    emoji:"🐾"
+  },
+  {
+    id:173, name:"멍집사", cat:"카페", area:"용인",
+    addr:"경기 용인시 수지구 수지로461번길 40", phone:"",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.33778242, lng:127.0932367,
+    large:false, small:true, indoor:true, outdoor:false, stroller:false, cage:false,
+    entryFee:null,
+    note:"용인 수지구 카페. 카카오맵 애견동반 가능(Y) 확인.",
+    kakaoUrl:"https://place.map.kakao.com/618142097",
+    emoji:"🐾"
+  },
+  {
+    id:174, name:"놀러오개 에버랜드점", cat:"애견운동장", area:"용인",
+    addr:"경기 용인시 처인구 포곡읍 영문로 205-7", phone:"",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.28173048, lng:127.2029854,
+    large:true, small:true, indoor:true, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"용인 에버랜드 인근 반려견 놀이공간. 카카오맵 애견동반 가능(Y) 확인.",
+    kakaoUrl:"https://place.map.kakao.com/694201431",
+    emoji:"🌿"
+  },
+  {
+    id:175, name:"펫앤스토리센터", cat:"카페", area:"용인",
+    addr:"경기 용인시 처인구 모현읍 곡현로 748-1", phone:"",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.34895607, lng:127.2298379,
+    large:false, small:true, indoor:true, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"용인 모현읍 카페. 카카오맵 애견동반 가능(Y) 확인.",
+    kakaoUrl:"https://place.map.kakao.com/849685964",
+    emoji:"🐾"
+  },
+  {
+    id:176, name:"댕스어랏", cat:"카페", area:"용인",
+    addr:"경기 용인시 처인구 모현읍 곡현로485번길 50", phone:"",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.327423, lng:127.21760017,
+    large:false, small:true, indoor:true, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"용인 모현읍 카페. 방문 전 동반 조건 확인 권장.",
+    kakaoUrl:"https://place.map.kakao.com/1021444194",
+    emoji:"🐾"
+  },
+  {
+    id:177, name:"플레이멍", cat:"카페", area:"용인",
+    addr:"경기 용인시 처인구 명지로16번길 9-11", phone:"",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.23325085, lng:127.18711485,
+    large:false, small:true, indoor:true, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"용인 처인구 카페. 카카오맵 애견동반 가능(Y) 확인.",
+    kakaoUrl:"https://place.map.kakao.com/1030382264",
+    emoji:"🐾"
+  },
+  {
+    id:178, name:"놀러오개 죽전점", cat:"카페", area:"용인",
+    addr:"경기 용인시 수지구 죽전로 146", phone:"",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.32385318, lng:127.12388647,
+    large:false, small:true, indoor:true, outdoor:false, stroller:false, cage:false,
+    entryFee:null,
+    note:"용인 수지구 죽전 카페. 방문 전 동반 조건 확인 권장.",
+    kakaoUrl:"https://place.map.kakao.com/1725257818",
+    emoji:"🐾"
+  },
+  {
+    id:179, name:"상현레스피아 반려견놀이터", cat:"애견운동장", area:"용인",
+    addr:"경기 용인시 수지구 상현동 1135-3", phone:"",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.29474859, lng:127.07625279,
+    large:true, small:true, indoor:false, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"용인 수지구 상현 공원 내 반려견 놀이터. 방문 전 조건 확인 권장.",
+    kakaoUrl:"https://place.map.kakao.com/1693537573",
+    emoji:"🌿"
+  },
+  {
+    id:180, name:"와그와그컴퍼니", cat:"카페", area:"용인",
+    addr:"경기 용인시 기흥구 동백죽전대로175번길 17", phone:"",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.25690235, lng:127.16073593,
+    large:false, small:true, indoor:true, outdoor:false, stroller:false, cage:false,
+    entryFee:null,
+    note:"용인 기흥구 동백 카페. 방문 전 동반 조건 확인 권장.",
+    kakaoUrl:"https://place.map.kakao.com/102070006",
+    emoji:"🐾"
+  },
+  {
+    id:181, name:"견사무소", cat:"카페", area:"용인",
+    addr:"경기 용인시 기흥구 용구대로1855번길 91", phone:"",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.26031386, lng:127.10318426,
+    large:false, small:true, indoor:true, outdoor:false, stroller:false, cage:false,
+    entryFee:null,
+    note:"용인 기흥구 카페. 카카오맵 애견동반 가능(Y) 확인.",
+    kakaoUrl:"https://place.map.kakao.com/279430501",
+    emoji:"🐾"
+  },
+  {
+    id:182, name:"타카독스커피", cat:"카페", area:"용인",
+    addr:"경기 용인시 기흥구 죽전로 33", phone:"",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.32074969, lng:127.11250118,
+    large:false, small:true, indoor:true, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"용인 기흥구 죽전 카페. 카카오맵 애견동반 가능(Y) 확인.",
+    kakaoUrl:"https://place.map.kakao.com/1630152847",
+    emoji:"🐾"
+  },
+  {
+    id:183, name:"멍스토리", cat:"카페", area:"용인",
+    addr:"경기 용인시 기흥구 공세로82번길 32", phone:"",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.23232332, lng:127.11167438,
+    large:false, small:true, indoor:true, outdoor:false, stroller:false, cage:false,
+    entryFee:null,
+    note:"용인 기흥구 카페. 방문 전 동반 조건 확인 권장.",
+    kakaoUrl:"https://place.map.kakao.com/1743524498",
+    emoji:"🐾"
+  },
+  {
+    id:184, name:"양지파인펫파크", cat:"애견운동장", area:"용인",
+    addr:"경기 용인시 처인구 양지읍 남평로 112", phone:"",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.21069321, lng:127.29363861,
+    large:true, small:true, indoor:false, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"용인 양지읍 반려견 파크. 카카오맵 애견동반 가능(Y) 확인.",
+    kakaoUrl:"https://place.map.kakao.com/1901835738",
+    emoji:"🌿"
+  },
+  {
+    id:185, name:"카페댕하루", cat:"카페", area:"용인",
+    addr:"경기 용인시 처인구 명지로60번길 33-24", phone:"",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.22917433, lng:127.18722986,
+    large:false, small:true, indoor:true, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"용인 처인구 카페. 방문 전 동반 조건 확인 권장.",
+    kakaoUrl:"https://place.map.kakao.com/1231316651",
+    emoji:"🐾"
+  },
+  // ── 분당 추가 (구글맵 누락분) ──────────────────────────────────
+  {
+    id:186, name:"도모브", cat:"카페", area:"분당",
+    addr:"경기 성남시 분당구 새마을로 39", phone:"031-701-1258",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.38362143, lng:127.13507859,
+    large:false, small:true, indoor:true, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"분당 서현동 애견동반 카페. 카카오맵 애견동반 가능(Y) 확인.",
+    kakaoUrl:"https://place.map.kakao.com/1631160684",
+    emoji:"🐾"
+  },
+  {
+    id:187, name:"딥밀크", cat:"카페", area:"분당",
+    addr:"경기 성남시 분당구 불정로386번길 10", phone:"070-8782-1003",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.37269837, lng:127.13814676,
+    large:false, small:true, indoor:true, outdoor:false, stroller:false, cage:false,
+    entryFee:null,
+    note:"분당 서현동 카페. 방문 전 동반 조건 확인 권장.",
+    kakaoUrl:"https://place.map.kakao.com/115813803",
+    emoji:"🐾"
+  },
+  {
+    id:188, name:"땡큐한", cat:"카페", area:"분당",
+    addr:"경기 성남시 분당구 황새울로12번길 1-3", phone:"",
+    hours:[{d:"영업시간",t:"방문 전 확인 권장"}],
+    lat:37.36138924, lng:127.11016309,
+    large:false, small:true, indoor:true, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"분당 정자동 카페. 방문 전 동반 조건 확인 권장.",
+    kakaoUrl:"https://place.map.kakao.com/766115812",
+    emoji:"🐾"
+  },
+  {
+    id:189, name:"쏘스윗커피&쏘스윗펫", cat:"카페", area:"분당",
+    addr:"경기 성남시 분당구 판교역로 109 SK허브A B동 209호", phone:"010-3296-4315",
+    hours:[{d:"영업시간",t:"11:00 - 방문 전 확인 권장"}],
+    lat:37.3910199, lng:127.10868872,
+    large:false, small:true, indoor:true, outdoor:false, stroller:false, cage:false,
+    entryFee:null,
+    note:"판교역 SK허브A 내 반려견 동반 카페·펫샵. 방문 전 조건 확인 권장.",
+    kakaoUrl:"https://place.map.kakao.com/848462772",
+    emoji:"🐾"
+  },
+  {
+    id:190, name:"가비양 카페", cat:"카페", area:"분당",
+    addr:"경기 성남시 분당구 안골로 33", phone:"031-707-3351",
+    hours:[{d:"영업시간",t:"10:00 ~ 22:00 (방문 전 확인 권장)"}],
+    lat:37.38581902, lng:127.13508253,
+    large:false, small:true, indoor:true, outdoor:true, stroller:false, cage:false,
+    entryFee:null,
+    note:"분당 서현동 애견동반 카페. 방문 전 동반 조건 확인 권장.",
+    kakaoUrl:"https://place.map.kakao.com/17186818",
+    emoji:"🐾"
+  }
+];
+
+// ═════════════════════════════════
+// AREA COLORS
+// ═════════════════════════════════
+const AREA_COLOR = {
+  '분당':   '#FF6B35',
+  '보정동': '#7C4DFF',
+  '가평':   '#2E7D32',
+  '양평':   '#0097A7',
+  '수원':   '#1565C0',
+  '파주':   '#6A1B9A',
+  '고양':   '#6A1B9A',
+  '남양주': '#0097A7',
+  '하남':   '#1565C0',
+  '광주':   '#1565C0',
+  '포천':   '#2E7D32',
+  '화성':   '#D84315',
+  '평택':   '#4E342E',
+  '안양':   '#AD1457',
+  '부천':   '#00695C',
+  '의정부': '#283593',
+  '구리':   '#00838F',
+  '시흥':   '#558B2F',
+  '안산':   '#1976D2',
+  '군포':   '#7B1FA2',
+  '오산':   '#F57F17',
+  '안성':   '#4CAF50',
+  '여주':   '#FF6F00',
+  '양주':   '#5D4037',
+  '동두천': '#37474F',
+  '용인':   '#C62828',
+};
+const AREA_BADGE = {
+  '분당':   {bg:'#FFF0E8', clr:'#FF6B35'},
+  '보정동': {bg:'#EDE7F6', clr:'#7C4DFF'},
+  '가평':   {bg:'#E8F5E9', clr:'#2E7D32'},
+  '양평':   {bg:'#E0F7FA', clr:'#0097A7'},
+  '수원':   {bg:'#E3F2FD', clr:'#1565C0'},
+  '파주':   {bg:'#F3E5F5', clr:'#6A1B9A'},
+  '고양':   {bg:'#F3E5F5', clr:'#6A1B9A'},
+  '남양주': {bg:'#E0F7FA', clr:'#0097A7'},
+  '하남':   {bg:'#FFF3E0', clr:'#E65100'},
+  '광주':   {bg:'#F1F8E9', clr:'#558B2F'},
+  '포천':   {bg:'#E8F5E9', clr:'#2E7D32'},
+  '화성':   {bg:'#FBE9E7', clr:'#D84315'},
+  '평택':   {bg:'#EFEBE9', clr:'#4E342E'},
+  '안양':   {bg:'#FCE4EC', clr:'#AD1457'},
+  '부천':   {bg:'#E0F2F1', clr:'#00695C'},
+  '의정부': {bg:'#E8EAF6', clr:'#283593'},
+  '구리':   {bg:'#E0F7FA', clr:'#00838F'},
+  '시흥':   {bg:'#F1F8E9', clr:'#558B2F'},
+  '안산':   {bg:'#E3F2FD', clr:'#1976D2'},
+  '군포':   {bg:'#F3E5F5', clr:'#7B1FA2'},
+  '오산':   {bg:'#FFFDE7', clr:'#F57F17'},
+  '안성':   {bg:'#E8F5E9', clr:'#4CAF50'},
+  '여주':   {bg:'#FFF8E1', clr:'#FF6F00'},
+  '양주':   {bg:'#EFEBE9', clr:'#5D4037'},
+  '동두천': {bg:'#ECEFF1', clr:'#37474F'},
+  '용인':   {bg:'#FFEBEE', clr:'#C62828'},
+};
+function areaBadge(area) {
+  const b = AREA_BADGE[area] || {bg:'#F5F5F5', clr:'#555'};
+  return `<span class="ab" style="background:${b.bg};color:${b.clr}">${area}</span>`;
+}
+
+// ══════════════════════════════════════════════════════
+//  STATE
+// ══════════════════════════════════════════════════════
+let currentUser   = null;   // { uid, email, displayName, isAdmin }
+let map           = null;
+let markers       = {};
+let activeFilters = { area:'all', largeDog:false, indoor:false, noCage:false, hasFee:false, noFee:false };
+let activePlace   = null;
+let searchText    = '';
+let mobileTab     = 'map';   // map | list | filter
+let searchTimer   = null;
+let noticesCache  = [];
+
+const isAdmin = (email) => ADMIN_EMAILS.includes((email||'').toLowerCase());
+
+// ══════════════════════════════════════════════════════
+//  AUTH  (Firebase Email/Password)
+// ══════════════════════════════════════════════════════
+let authMode = 'login'; // login | register
+
+function switchAuthMode(toRegister) {
+  authMode = toRegister ? 'register' : 'login';
+  document.getElementById('fg-name').style.display       = toRegister ? '' : 'none';
+  document.getElementById('auth-btn').textContent         = toRegister ? '🐾 회원가입하기' : '🐶 로그인하고 시작하기';
+  document.getElementById('auth-subtitle').innerHTML      = toRegister
+    ? '이메일과 비밀번호로 계정을 만들어보세요' : '경기도 전 지역에서 강아지와 함께 갈 수 있는<br>카페와 식당을 한눈에 찾아보세요';
+  document.getElementById('auth-toggle-row').innerHTML    = toRegister
+    ? `이미 계정이 있으신가요? <a onclick="switchAuthMode(false)">로그인</a>`
+    : `아직 계정이 없으신가요? <a onclick="switchAuthMode(true)">회원가입</a>`;
+  document.getElementById('auth-err').style.display = 'none';
+  document.getElementById('auth-pw').autocomplete = toRegister ? 'new-password' : 'current-password';
+}
+
+async function doAuth() {
+  const email = document.getElementById('auth-email').value.trim();
+  const pw    = document.getElementById('auth-pw').value;
+  const name  = document.getElementById('auth-name').value.trim() || email.split('@')[0];
+  const btn   = document.getElementById('auth-btn');
+  const errEl = document.getElementById('auth-err');
+
+  errEl.style.display = 'none';
+  if (!email || !email.includes('@')) { showAuthErr('올바른 이메일을 입력해주세요'); return; }
+  if (pw.length < 6) { showAuthErr('비밀번호는 6자리 이상이어야 해요'); return; }
+
+  btn.disabled = true;
+  btn.textContent = '⏳ 처리 중...';
+
+  // Offline mode fallback (no Firebase)
+  if (!firebaseReady) {
+    const fakeUser = { uid: 'local-'+email, email, displayName: name, isAdmin: isAdmin(email) };
+    localStorage.setItem('hsdyj_user', JSON.stringify(fakeUser));
+    startApp(fakeUser);
+    return;
+  }
+
+  try {
+    let credential;
+    if (authMode === 'register') {
+      credential = await auth.createUserWithEmailAndPassword(email, pw);
+      await credential.user.updateProfile({ displayName: name });
+      // Save to Firestore
+      await db.collection('users').doc(credential.user.uid).set({
+        email, displayName: name,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+        lastLoginAt: firebase.firestore.FieldValue.serverTimestamp(),
+        loginCount: 1,
+        isAdmin: isAdmin(email)
+      });
+      // Email notification to admins
+    } else {
+      credential = await auth.signInWithEmailAndPassword(email, pw);
+      // Update last login
+      if (db) {
+        db.collection('users').doc(credential.user.uid).set({
+          lastLoginAt: firebase.firestore.FieldValue.serverTimestamp(),
+          loginCount: firebase.firestore.FieldValue.increment(1)
+        }, { merge: true });
+      }
+    }
+    const user = credential.user;
+    const userData = { uid: user.uid, email: user.email, displayName: user.displayName || name, isAdmin: isAdmin(user.email) };
+    startApp(userData);
+  } catch(e) {
+    btn.disabled = false;
+    btn.textContent = authMode === 'register' ? '🐾 회원가입하기' : '🐶 로그인하고 시작하기';
+    const msgs = {
+      'auth/user-not-found':      '등록된 이메일이 없어요. 회원가입을 해주세요.',
+      'auth/wrong-password':      '비밀번호가 틀렸어요.',
+      'auth/invalid-credential':  '이메일 또는 비밀번호가 올바르지 않아요.',
+      'auth/email-already-in-use':'이미 사용 중인 이메일이에요. 로그인을 해주세요.',
+      'auth/too-many-requests':   '잠시 후 다시 시도해주세요.',
+    };
+    showAuthErr(msgs[e.code] || e.message);
+  }
+}
+
+function showAuthErr(msg) {
+  const el = document.getElementById('auth-err');
+  el.textContent = '⚠️ ' + msg;
+  el.style.display = 'block';
+}
+
+async function doLogout() {
+  if (firebaseReady && auth) await auth.signOut();
+  localStorage.removeItem('hsdyj_user');
+  location.reload();
+}
+
+function showUserMenu() {
+  if (!currentUser) return;
+  const info = `${currentUser.displayName || currentUser.email}${currentUser.isAdmin ? '\n👑 운영자' : ''}`;
+  showToast(`👤 ${info}`);
+}
+
+
+
+// ══════════════════════════════════════════════════════
+//  START APP
+// ══════════════════════════════════════════════════════
+function startApp(user) {
+  currentUser = user;
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('app-screen').style.display   = 'block';
+
+  const initial = (user.displayName || user.email).charAt(0).toUpperCase();
+  document.getElementById('user-initial').textContent   = initial;
+  document.getElementById('user-badge').title           = `${user.displayName || user.email}`;
+
+  if (user.isAdmin) {
+    document.getElementById('admin-btn').style.display  = 'flex';
+    document.getElementById('notif-dot').style.display  = 'block';
+    document.getElementById('tab-list-dot').style.display = 'block';
+  }
+
+  requestAnimationFrame(() => setTimeout(initApp, 80));
+}
+
+// ══════════════════════════════════════════════════════
+//  INIT APP
+// ══════════════════════════════════════════════════════
+function initApp() {
+  initMap();
+  filterPlaces();
+  loadNotices();
+  // Deep link
+  const sharedId = parseInt(new URLSearchParams(window.location.search).get('place'));
+  if (sharedId) {
+    const p = places.find(x => x.id === sharedId);
+    if (p) setTimeout(() => openPlace(p), 900);
+  }
+  // Log visit
+  if (firebaseReady && currentUser) {
+    db.collection('visits').add({
+      userId: currentUser.uid,
+      userEmail: currentUser.email,
+      timestamp: firebase.firestore.FieldValue.serverTimestamp()
+    }).catch(()=>{});
+  }
+}
+
+function initMap() {
+  map = L.map('map', { zoomControl:false }).setView([37.55, 127.1], 9);
+  L.control.zoom({ position:'bottomright' }).addTo(map);
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+    attribution:'© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors © <a href="https://carto.com/attributions">CARTO</a>',
+    subdomains:'abcd', maxZoom:19
+  }).addTo(map);
+  setTimeout(() => map.invalidateSize(), 300);
+  places.forEach(addMarker);
+  map.on('click', () => { if (activePlace) closeDrawer(); });
+}
+
+function addMarker(p) {
+  const color = AREA_COLOR[p.area] || '#999';
+  const feeClass = p.entryFee ? 'fee-marker' : '';
+  const html = `<div class="m-dot ${feeClass}" style="background:${color}" data-id="${p.id}"></div>`;
+  const icon = L.divIcon({ html, className:'', iconSize:[20,20], iconAnchor:[10,10] });
+  const m = L.marker([p.lat, p.lng], { icon })
+    .addTo(map)
+    .on('click', e => { L.DomEvent.stopPropagation(e); openPlace(p); });
+  markers[p.id] = { marker:m, color };
+}
+
+function setMarkerActive(id, active) {
+  const m = markers[id]; if (!m) return;
+  const el = m.marker.getElement(); if (!el) return;
+  const dot = el.querySelector('.m-dot'); if (!dot) return;
+  dot.style.background = active ? '#D32F2F' : m.color;
+  if (active) dot.classList.add('active'); else dot.classList.remove('active');
+}
+
+// ══════════════════════════════════════════════════════
+//  FILTER & RENDER
+// ══════════════════════════════════════════════════════
+function setAreaFilter(btn, area) {
+  document.querySelectorAll('[data-area]').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  activeFilters.area = area;
+  filterPlaces();
+  if (isMobile()) setMobileTab('list');
+}
+function toggleFilter(btn, type) {
+  btn.classList.toggle('active');
+  const on = btn.classList.contains('active');
+  if (type==='대형견')      activeFilters.largeDog = on;
+  if (type==='실내')        activeFilters.indoor   = on;
+  if (type==='케이지불필요') activeFilters.noCage   = on;
+  if (type==='입장료있음')  { activeFilters.hasFee = on; if (on) { activeFilters.noFee=false; document.querySelector('[data-cond="입장료없음"]').classList.remove('active'); } }
+  if (type==='입장료없음')  { activeFilters.noFee  = on; if (on) { activeFilters.hasFee=false; document.querySelector('[data-cond="입장료있음"]').classList.remove('active'); } }
+  filterPlaces();
+  if (isMobile()) setMobileTab('list');
+}
+
+function getFiltered() {
+  return places.filter(p => {
+    if (activeFilters.area !== 'all' && p.area !== activeFilters.area) return false;
+    if (activeFilters.largeDog && !p.large) return false;
+    if (activeFilters.indoor  && !p.indoor) return false;
+    if (activeFilters.noCage  && p.cage) return false;
+    if (activeFilters.hasFee  && !p.entryFee) return false;
+    if (activeFilters.noFee   && p.entryFee)  return false;
+    if (searchText) {
+      const q = searchText.toLowerCase();
+      return p.name.toLowerCase().includes(q) || p.addr.toLowerCase().includes(q) ||
+             p.note.toLowerCase().includes(q)  || p.cat.toLowerCase().includes(q);
+    }
+    return true;
+  });
+}
+
+function onSearch() {
+  searchText = document.getElementById('search-input').value.toLowerCase();
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(() => {
+    filterPlaces();
+    if (searchText.length >= 2 && firebaseReady && currentUser) {
+      db.collection('searches').add({
+        userId: currentUser.uid,
+        userEmail: currentUser.email,
+        query: searchText,
+        area: activeFilters.area,
+        timestamp: firebase.firestore.FieldValue.serverTimestamp()
+      }).catch(()=>{});
+    }
+  }, 600);
+}
+
+function filterPlaces() {
+  const filtered = getFiltered();
+  renderList(filtered);
+  places.forEach(p => {
+    const m = markers[p.id]; if (!m) return;
+    const show = !!filtered.find(f => f.id === p.id);
+    if (show && !map.hasLayer(m.marker)) m.marker.addTo(map);
+    if (!show && map.hasLayer(m.marker)) map.removeLayer(m.marker);
+  });
+}
+
+function renderList(filtered) {
+  const list = document.getElementById('place-list');
+  const cnt  = document.getElementById('place-count');
+  cnt.textContent = `${filtered.length}개의 장소`;
+
+  if (!filtered.length) {
+    list.innerHTML = `<div class="no-results"><div class="nr-emoji">🔍</div><p>조건에 맞는 장소가 없어요.<br>필터를 바꿔보세요.</p></div>`;
+    return;
+  }
+
+  const feeList  = filtered.filter(p => p.entryFee);
+  const freelist = filtered.filter(p => !p.entryFee);
+  let html = '';
+  if (feeList.length) {
+    html += `<div class="list-section-header"><div class="sec-line"></div>&nbsp;💰 입장료 있는 곳 (${feeList.length})<div class="sec-line"></div></div>`;
+    html += feeList.map(cardHtml).join('');
+  }
+  if (freelist.length) {
+    html += `<div class="list-section-header"><div class="sec-line"></div>&nbsp;✅ 입장료 없는 곳 (${freelist.length})<div class="sec-line"></div></div>`;
+    html += freelist.map(cardHtml).join('');
+  }
+  list.innerHTML = html;
+}
+
+function cardHtml(p) {
+  const isActive = activePlace?.id === p.id;
+  return `
+  <div class="place-card ${isActive?'active':''} ${p.entryFee?'has-fee':''}" id="card-${p.id}"
+       onclick="openPlace(places.find(x=>x.id===${p.id}))">
+    <div class="pc-top">
+      <div class="pc-emoji">${p.emoji}</div>
+      <div class="pc-info">
+        <div class="pc-name">${p.name}</div>
+        <div class="pc-meta">${areaBadge(p.area)}&nbsp;${p.cat}</div>
+      </div>
+    </div>
+    <div class="pc-tags">
+      ${p.large ? '<span class="tag t-green">🐕 대형견 OK</span>' : '<span class="tag t-gray">소형견만</span>'}
+      ${p.indoor ? '<span class="tag t-blue">🏠 실내 가능</span>' : '<span class="tag t-orange">🌿 테라스만</span>'}
+      ${p.cage   ? '<span class="tag t-red">📦 케이지 필수</span>' : ''}
+      ${p.entryFee ? `<span class="tag t-gold">💰 입장료 있음</span>` : ''}
+    </div>
+  </div>`;
+}
+
+// ══════════════════════════════════════════════════════
+//  OPEN PLACE + DRAWER
+// ══════════════════════════════════════════════════════
+function openPlace(p) {
+  if (!p) return;
+  if (activePlace) setMarkerActive(activePlace.id, false);
+  activePlace = p;
+  setMarkerActive(p.id, true);
+  map.flyTo([p.lat, p.lng], 16, { duration:1 });
+
+  // Log view
+  if (firebaseReady && currentUser) {
+    db.collection('placeViews').add({
+      userId: currentUser.uid,
+      userEmail: currentUser.email,
+      placeId: p.id,
+      placeName: p.name,
+      area: p.area,
+      timestamp: firebase.firestore.FieldValue.serverTimestamp()
+    }).catch(()=>{});
+  }
+
+  filterPlaces();
+  setTimeout(() => {
+    const card = document.getElementById(`card-${p.id}`);
+    if (card) card.scrollIntoView({ behavior:'smooth', block:'nearest' });
+  }, 80);
+
+  const hoursHtml = p.hours.map(h => `
+    <div class="hours-row">
+      <span class="h-day">${h.d}</span>
+      <span class="h-time${h.t==='휴무'?' closed':''}">${h.t}</span>
+    </div>`).join('');
+
+  const feeBanner = p.entryFee ? `
+    <div class="fee-banner">
+      <div class="fee-banner-icon">💰</div>
+      <div class="fee-banner-text">
+        <div class="fee-banner-label">입장료 안내</div>
+        <div class="fee-banner-amount">${p.entryFee}</div>
+        <div class="fee-banner-note">방문 전 최신 요금 확인 권장</div>
+      </div>
+    </div>` : '';
+
+  document.getElementById('drawer-content').innerHTML = `
+    <div class="d-header">
+      <div class="d-icon">${p.emoji}</div>
+      <div style="flex:1;min-width:0">
+        <div class="d-name">${p.name}</div>
+        <div class="d-sub">${areaBadge(p.area)}&nbsp;${p.cat}${p.entryFee?'&nbsp;<span class="ab ab-fee">💰 입장료</span>':''}</div>
+        <div class="d-sub" style="margin-top:3px">📍 ${p.addr}</div>
+        ${p.phone ? `<div class="d-sub">📞 <a href="tel:${p.phone}" style="color:inherit">${p.phone}</a></div>` : ''}
+      </div>
+      <button class="d-close" onclick="closeDrawer()">✕</button>
+    </div>
+    ${feeBanner}
+    <div class="sec-label">반려견 정책</div>
+    <div class="info-grid">
+      <div class="ic"><div class="ic-lbl">🐕 대형견</div><div class="ic-val ${p.large?'yes':'no'}">${p.large?'✅ 가능':'❌ 불가'}</div></div>
+      <div class="ic"><div class="ic-lbl">🐩 소형견</div><div class="ic-val ${p.small?'yes':'no'}">${p.small?'✅ 가능':'❌ 불가'}</div></div>
+      <div class="ic"><div class="ic-lbl">🏠 실내 입장</div><div class="ic-val ${p.indoor?'yes':'warn'}">${p.indoor?'✅ 가능':'⚠️ 불가'}</div></div>
+      <div class="ic"><div class="ic-lbl">🌿 야외·테라스</div><div class="ic-val ${p.outdoor?'yes':'no'}">${p.outdoor?'✅ 가능':'❌ 없음'}</div></div>
+      <div class="ic"><div class="ic-lbl">🛒 개모차 필수</div><div class="ic-val ${p.stroller?'warn':'yes'}">${p.stroller?'⚠️ 필수':'✅ 불필요'}</div></div>
+      <div class="ic"><div class="ic-lbl">📦 케이지 필수</div><div class="ic-val ${p.cage?'warn':'yes'}">${p.cage?'⚠️ 필수':'✅ 불필요'}</div></div>
+    </div>
+    <div class="sec-label">영업시간</div>
+    <div class="hours-grid">${hoursHtml}</div>
+    <div class="divider"></div>
+    <div class="sec-label">상세 정보</div>
+    <div class="notes-box">${p.note}</div>
+    <div class="warn-note">⚠️ 방문 전 전화로 최신 정보 확인을 권장합니다</div>
+    <div class="action-row">
+      <button class="btn-act btn-primary" onclick="openKakaoMap(${p.id})">
+        <i class="fa fa-location-dot"></i> 지도 보기
+      </button>
+      <button class="btn-act btn-secondary" onclick="copyShareLink(${p.id})">
+        <i class="fa fa-share-nodes"></i> 공유
+      </button>
+    </div>`;
+
+  document.getElementById('detail-drawer').classList.add('open');
+  if (isMobile()) setMobileTab('map');
+}
+
+function closeDrawer() {
+  document.getElementById('detail-drawer').classList.remove('open');
+  if (activePlace) { setMarkerActive(activePlace.id, false); activePlace = null; }
+  filterPlaces();
+}
+
+// ══════════════════════════════════════════════════════
+//  ACTIONS
+// ══════════════════════════════════════════════════════
+function openKakaoMap(id) {
+  const p = places.find(x => x.id === id); if (!p) return;
+  const url = p.kakaoUrl ? p.kakaoUrl : p.googleUrl ? p.googleUrl : `https://map.kakao.com/?q=${encodeURIComponent(p.name)}`;
+  window.open(url, '_blank');
+}
+function copyShareLink(placeId) {
+  const base = location.href.split('?')[0].split('#')[0];
+  const url  = placeId ? `${base}?place=${placeId}` : base;
+  const fallback = () => {
+    const ta = document.createElement('textarea');
+    ta.value=url; ta.style.cssText='position:fixed;opacity:0';
+    document.body.appendChild(ta); ta.select(); document.execCommand('copy');
+    document.body.removeChild(ta);
+  };
+  if (navigator.clipboard?.writeText) {
+    navigator.clipboard.writeText(url).then(()=>showToast('🔗 링크가 복사됐어요!')).catch(fallback);
+  } else { fallback(); showToast('🔗 링크가 복사됐어요!'); }
+}
+
+// ══════════════════════════════════════════════════════
+//  PLACE REPORT MODAL
+// ══════════════════════════════════════════════════════
+function openSubmitModal() {
+  document.getElementById('submit-modal').classList.add('open');
+}
+function closeModal(id) {
+  document.getElementById(id).classList.remove('open');
+}
+function modalOverlayClick(e, id) {
+  if (e.target === e.currentTarget) closeModal(id);
+}
+async function submitReport() {
+  const name  = document.getElementById('rep-name').value.trim();
+  const addr  = document.getElementById('rep-addr').value.trim();
+  const phone = document.getElementById('rep-phone').value.trim();
+  const note  = document.getElementById('rep-note').value.trim();
+  if (!name) { showToast('장소명을 입력해주세요'); return; }
+
+  if (firebaseReady && db) {
+    await db.collection('reports').add({
+      userId: currentUser?.uid || 'anonymous',
+      userEmail: currentUser?.email || 'anonymous',
+      placeName: name, placeAddr: addr, placePhone: phone, placeNote: note,
+      status: 'pending',
+      timestamp: firebase.firestore.FieldValue.serverTimestamp()
+    });
+
+  }
+  closeModal('submit-modal');
+  ['rep-name','rep-addr','rep-phone','rep-note'].forEach(id => document.getElementById(id).value='');
+  showToast('✅ 제보가 접수됐어요! 검토 후 추가할게요 🙏');
+}
+
+// ══════════════════════════════════════════════════════
+//  NOTICES
+// ══════════════════════════════════════════════════════
+async function loadNotices() {
+  if (!firebaseReady || !db) return;
+  try {
+    const snap = await db.collection('notices')
+      .where('active', '==', true)
+      .orderBy('createdAt', 'desc')
+      .limit(3)
+      .get();
+    noticesCache = snap.docs.map(d => ({ id:d.id, ...d.data() }));
+    renderNoticeBanner();
+  } catch(e) { /* Firestore index not ready yet */ }
+}
+
+function renderNoticeBanner() {
+  const banner = document.getElementById('notice-banner');
+  if (!noticesCache.length) { banner.style.display='none'; return; }
+  banner.style.display = 'block';
+  const n = noticesCache[0];
+  banner.innerHTML = `
+    <div class="notice-item" onclick="openNoticeModal(${JSON.stringify(n).replace(/"/g,'&quot;')})">
+      <span>📢</span>
+      <span style="flex:1">${n.title}</span>
+      <button class="notice-close" onclick="event.stopPropagation();document.getElementById('notice-banner').style.display='none'">×</button>
+    </div>`;
+  // Adjust map/sidebar top offset
+  setTimeout(() => { if (map) map.invalidateSize(); }, 100);
+}
+
+function openNoticeModal(n) {
+  document.getElementById('notice-modal-content').innerHTML = `
+    <div class="modal-title">📢 ${n.title}</div>
+    <div style="font-size:12px;color:#9CA3AF;margin:8px 0 16px">${n.createdAt?.toDate ? n.createdAt.toDate().toLocaleDateString('ko-KR') : ''}</div>
+    <div style="font-size:14px;color:#374151;line-height:1.7;white-space:pre-wrap">${n.content}</div>
+    <div style="margin-top:24px">
+      <button class="btn-modal-cancel" style="width:100%" onclick="closeModal('notice-modal')">닫기</button>
+    </div>`;
+  document.getElementById('notice-modal').classList.add('open');
+}
+
+// ══════════════════════════════════════════════════════
+//  MOBILE UX
+// ══════════════════════════════════════════════════════
+function isMobile() { return window.innerWidth < 768; }
+
+function setMobileTab(tab) {
+  if (!isMobile()) return;
+  mobileTab = tab;
+  document.querySelectorAll('.mtab').forEach(t => t.classList.remove('active'));
+  const activeTab = document.getElementById('tab-' + tab);
+  if (activeTab) activeTab.classList.add('active');
+
+  const sidebar = document.getElementById('sidebar');
+
+  if (tab === 'list') {
+    sidebar.classList.add('mobile-open');
+    document.getElementById('fab-list').style.display = 'none';
+  } else if (tab === 'filter') {
+    sidebar.classList.add('mobile-open');
+    document.getElementById('fab-list').style.display = 'none';
+    // Scroll filter into view
+    setTimeout(() => document.getElementById('filters').scrollIntoView({ behavior:'smooth' }), 100);
+  } else {
+    // map tab
+    sidebar.classList.remove('mobile-open');
+    closeDrawer();
+    document.getElementById('fab-list').style.display = 'flex';
+  }
+  if (map) setTimeout(() => map.invalidateSize(), 350);
+}
+
+function toggleMobileSidebar() {
+  const sidebar = document.getElementById('sidebar');
+  const isOpen = sidebar.classList.contains('mobile-open');
+  setMobileTab(isOpen ? 'map' : 'list');
+}
+
+// ══════════════════════════════════════════════════════
+//  ADMIN PANEL
+// ══════════════════════════════════════════════════════
+function openAdminPanel() {
+  document.getElementById('admin-panel').style.display = 'flex';
+  loadAdminTab('dashboard');
+}
+function closeAdminPanel() {
+  document.getElementById('admin-panel').style.display = 'none';
+}
+function switchAdminTab(btn, tab) {
+  document.querySelectorAll('.atab').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  loadAdminTab(tab);
+}
+
+async function loadAdminTab(tab) {
+  const content = document.getElementById('admin-content');
+
+  if (!firebaseReady || !db) {
+    content.innerHTML = `<div class="empty-state"><div class="es-icon">⚠️</div><p>Firebase가 연결되지 않았어요.<br>설정 후 사용할 수 있어요.</p></div>`;
+    return;
+  }
+
+  content.innerHTML = `<div class="empty-state"><div class="es-icon">⏳</div><p>데이터 로딩 중...</p></div>`;
+
+  try {
+    if (tab === 'dashboard') await renderDashboard();
+    else if (tab === 'users') await renderAdminUsers();
+    else if (tab === 'searches') await renderAdminSearches();
+    else if (tab === 'views') await renderAdminViews();
+    else if (tab === 'reports') await renderAdminReports();
+    else if (tab === 'notices') await renderAdminNotices();
+  } catch(e) {
+    content.innerHTML = `<div class="empty-state"><div class="es-icon">❌</div><p>오류가 발생했어요.<br>${e.message}</p></div>`;
+  }
+}
+
+async function renderDashboard() {
+  const [usersSnap, searchesSnap, viewsSnap, reportsSnap, visitsSnap] = await Promise.all([
+    db.collection('users').get(),
+    db.collection('searches').orderBy('timestamp','desc').limit(200).get(),
+    db.collection('placeViews').orderBy('timestamp','desc').limit(200).get(),
+    db.collection('reports').where('status','==','pending').get(),
+    db.collection('visits').orderBy('timestamp','desc').limit(500).get()
+  ]);
+
+  const totalUsers   = usersSnap.size;
+  const totalSearch  = searchesSnap.size;
+  const totalViews   = viewsSnap.size;
+  const pendingRpts  = reportsSnap.size;
+  const totalVisits  = visitsSnap.size;
+
+  // Recent activity
+  const recentSearches = searchesSnap.docs.slice(0,5).map(d => d.data());
+  const recentViews    = viewsSnap.docs.slice(0,5).map(d => d.data());
+
+  // Top searched queries
+  const qCounts = {};
+  searchesSnap.docs.forEach(d => { const q = d.data().query; if(q) qCounts[q] = (qCounts[q]||0)+1; });
+  const topQueries = Object.entries(qCounts).sort((a,b)=>b[1]-a[1]).slice(0,5);
+
+  // Top viewed places
+  const pCounts = {};
+  viewsSnap.docs.forEach(d => { const n = d.data().placeName; if(n) pCounts[n] = (pCounts[n]||0)+1; });
+  const topPlaces = Object.entries(pCounts).sort((a,b)=>b[1]-a[1]).slice(0,5);
+
+  document.getElementById('admin-content').innerHTML = `
+    <div class="admin-stat-grid">
+      <div class="stat-card"><div class="stat-num">${totalUsers}</div><div class="stat-label">👥 총 회원수</div></div>
+      <div class="stat-card"><div class="stat-num">${totalVisits}</div><div class="stat-label">🚪 총 방문수</div></div>
+      <div class="stat-card"><div class="stat-num">${totalSearch}</div><div class="stat-label">🔍 검색 횟수</div></div>
+      <div class="stat-card"><div class="stat-num" style="color:${pendingRpts>0?'#EF4444':'#1E3A8A'}">${pendingRpts}</div><div class="stat-label">📝 미처리 제보</div></div>
+    </div>
+
+    <div class="admin-section">
+      <h3>🔥 최근 검색어</h3>
+      ${recentSearches.length ? recentSearches.map(s=>`
+        <div class="log-item">
+          <div class="log-email">${s.userEmail}</div>
+          <div class="log-detail">"${s.query}" (${s.area||'전체'})</div>
+          <div class="log-time">${fmtTime(s.timestamp)}</div>
+        </div>`).join('') : '<div class="empty-state"><p>검색 기록이 없어요</p></div>'}
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+      <div class="admin-section">
+        <h3>🏆 인기 검색어</h3>
+        ${topQueries.length ? topQueries.map(([q,c],i)=>`
+          <div class="log-item" style="display:flex;justify-content:space-between">
+            <span>${i+1}. ${q}</span><span style="color:#FF6B35;font-weight:700">${c}회</span>
+          </div>`).join('') : '<p style="font-size:12px;color:#9CA3AF">데이터 없음</p>'}
+      </div>
+      <div class="admin-section">
+        <h3>🗺️ 인기 장소</h3>
+        ${topPlaces.length ? topPlaces.map(([n,c],i)=>`
+          <div class="log-item" style="display:flex;justify-content:space-between">
+            <span style="font-size:12px">${i+1}. ${n}</span><span style="color:#FF6B35;font-weight:700">${c}회</span>
+          </div>`).join('') : '<p style="font-size:12px;color:#9CA3AF">데이터 없음</p>'}
+      </div>
+    </div>
+
+    <div class="admin-section">
+      <h3>📍 최근 방문 장소</h3>
+      ${recentViews.length ? recentViews.map(v=>`
+        <div class="log-item">
+          <div class="log-email">${v.userEmail}</div>
+          <div class="log-detail">${v.placeName} (${v.area||''})</div>
+          <div class="log-time">${fmtTime(v.timestamp)}</div>
+        </div>`).join('') : '<div class="empty-state"><p>방문 기록이 없어요</p></div>'}
+    </div>`;
+}
+
+async function renderAdminUsers() {
+  const snap = await db.collection('users').orderBy('createdAt','desc').get();
+  const users = snap.docs.map(d => ({ id:d.id, ...d.data() }));
+
+  document.getElementById('admin-content').innerHTML = `
+    <div class="admin-section">
+      <h3>👥 회원 목록 (${users.length}명)</h3>
+      <table class="admin-table">
+        <thead><tr><th>이메일</th><th>이름</th><th>가입일</th><th>최근 로그인</th><th>구분</th></tr></thead>
+        <tbody>
+          ${users.length ? users.map(u=>`
+            <tr>
+              <td>${u.email}</td>
+              <td>${u.displayName||'-'}</td>
+              <td>${fmtDate(u.createdAt)}</td>
+              <td>${fmtDate(u.lastLoginAt)}</td>
+              <td>${isAdmin(u.email)?'<span class="admin-badge badge-admin">운영자</span>':'<span class="admin-badge" style="background:#F3F4F6;color:#6B7280">일반</span>'}</td>
+            </tr>`).join('') : '<tr><td colspan="5" style="text-align:center;color:#9CA3AF;padding:20px">등록된 회원이 없어요</td></tr>'}
+        </tbody>
+      </table>
+    </div>`;
+}
+
+async function renderAdminSearches() {
+  const snap = await db.collection('searches').orderBy('timestamp','desc').limit(100).get();
+  const rows = snap.docs.map(d => d.data());
+
+  document.getElementById('admin-content').innerHTML = `
+    <div class="admin-section">
+      <h3>🔍 최근 검색 로그 (최대 100건)</h3>
+      ${rows.length ? `
+        <table class="admin-table">
+          <thead><tr><th>회원</th><th>검색어</th><th>지역 필터</th><th>시간</th></tr></thead>
+          <tbody>
+            ${rows.map(s=>`
+              <tr>
+                <td style="font-size:12px">${s.userEmail}</td>
+                <td style="font-weight:700">${s.query}</td>
+                <td>${s.area||'전체'}</td>
+                <td style="font-size:11px;color:#9CA3AF">${fmtTime(s.timestamp)}</td>
+              </tr>`).join('')}
+          </tbody>
+        </table>` : '<div class="empty-state"><div class="es-icon">🔍</div><p>검색 기록이 없어요</p></div>'}
+    </div>`;
+}
+
+async function renderAdminViews() {
+  const snap = await db.collection('placeViews').orderBy('timestamp','desc').limit(100).get();
+  const rows = snap.docs.map(d => d.data());
+
+  document.getElementById('admin-content').innerHTML = `
+    <div class="admin-section">
+      <h3>📍 최근 방문 기록 (최대 100건)</h3>
+      ${rows.length ? `
+        <table class="admin-table">
+          <thead><tr><th>회원</th><th>장소명</th><th>지역</th><th>시간</th></tr></thead>
+          <tbody>
+            ${rows.map(v=>`
+              <tr>
+                <td style="font-size:12px">${v.userEmail}</td>
+                <td style="font-weight:700">${v.placeName}</td>
+                <td>${v.area||''}</td>
+                <td style="font-size:11px;color:#9CA3AF">${fmtTime(v.timestamp)}</td>
+              </tr>`).join('')}
+          </tbody>
+        </table>` : '<div class="empty-state"><div class="es-icon">📍</div><p>방문 기록이 없어요</p></div>'}
+    </div>`;
+}
+
+async function renderAdminReports() {
+  const snap = await db.collection('reports').orderBy('timestamp','desc').get();
+  const rows = snap.docs.map(d => ({ id:d.id, ...d.data() }));
+
+  const pending  = rows.filter(r => r.status === 'pending');
+  const resolved = rows.filter(r => r.status !== 'pending');
+
+  document.getElementById('admin-content').innerHTML = `
+    <div class="admin-section">
+      <h3>📝 처리 대기 제보 (${pending.length}건)</h3>
+      ${pending.length ? pending.map(r=>`
+        <div style="border:1px solid #E5E7EB;border-radius:12px;padding:14px;margin-bottom:10px">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
+            <div>
+              <div style="font-weight:800;font-size:14px">${r.placeName}</div>
+              <div style="font-size:12px;color:#6B7280;margin-top:2px">${r.placeAddr||''}</div>
+              ${r.placePhone?`<div style="font-size:12px;color:#6B7280">${r.placePhone}</div>`:''}
+            </div>
+            <span class="admin-badge badge-pending">대기</span>
+          </div>
+          ${r.placeNote?`<div style="font-size:13px;color:#374151;background:#F9FAFB;border-radius:8px;padding:10px;margin-bottom:10px;line-height:1.5">${r.placeNote}</div>`:''}
+          <div style="font-size:11px;color:#9CA3AF;margin-bottom:10px">제보자: ${r.userEmail} · ${fmtTime(r.timestamp)}</div>
+          <div style="display:flex;gap:8px">
+            <button class="btn-sm btn-approve" onclick="updateReport('${r.id}','approved')">✅ 승인</button>
+            <button class="btn-sm btn-reject"  onclick="updateReport('${r.id}','rejected')">❌ 반려</button>
+          </div>
+        </div>`).join('') : '<div class="empty-state"><div class="es-icon">✅</div><p>처리 대기 중인 제보가 없어요</p></div>'}
+    </div>
+    ${resolved.length ? `
+    <div class="admin-section">
+      <h3>처리 완료 제보 (${resolved.length}건)</h3>
+      <table class="admin-table">
+        <thead><tr><th>장소명</th><th>제보자</th><th>상태</th><th>시간</th></tr></thead>
+        <tbody>
+          ${resolved.map(r=>`
+            <tr>
+              <td style="font-weight:700">${r.placeName}</td>
+              <td style="font-size:12px">${r.userEmail}</td>
+              <td><span class="admin-badge ${r.status==='approved'?'badge-approved':'badge-rejected'}">${r.status==='approved'?'승인':'반려'}</span></td>
+              <td style="font-size:11px;color:#9CA3AF">${fmtTime(r.timestamp)}</td>
+            </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>` : ''}`;
+}
+
+async function updateReport(id, status) {
+  await db.collection('reports').doc(id).update({ status });
+  showToast(status === 'approved' ? '✅ 제보 승인 완료!' : '❌ 제보 반려 완료!');
+  renderAdminReports();
+}
+
+async function renderAdminNotices() {
+  const snap = await db.collection('notices').orderBy('createdAt','desc').get();
+  const notices = snap.docs.map(d => ({ id:d.id, ...d.data() }));
+
+  document.getElementById('admin-content').innerHTML = `
+    <div class="admin-section">
+      <h3>📢 새 공지 작성</h3>
+      <div class="notice-form">
+        <input id="ntc-title" placeholder="공지 제목" />
+        <textarea id="ntc-content" rows="3" placeholder="공지 내용을 입력하세요..."></textarea>
+        <div style="display:flex;align-items:center;gap:16px">
+          <label class="admin-notice-toggle">
+            <span>상단 고정</span>
+            <label class="toggle-sw">
+              <input type="checkbox" id="ntc-pin"/>
+              <span class="slider"></span>
+            </label>
+          </label>
+          <button class="btn-notice-add" onclick="addNotice()">공지 등록</button>
+        </div>
+      </div>
+    </div>
+    <div class="admin-section">
+      <h3>공지 목록 (${notices.length}개)</h3>
+      ${notices.length ? notices.map(n=>`
+        <div class="notice-list-item">
+          <div class="notice-body">
+            <div class="notice-title">${n.pinned?'📌 ':''}${n.title}</div>
+            <div class="notice-text">${n.content}</div>
+            <div class="notice-meta">${fmtDate(n.createdAt)} · ${n.active?'<span style="color:#10B981">활성</span>':'<span style="color:#9CA3AF">비활성</span>'}</div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0">
+            <button class="btn-sm" style="background:#E5E7EB;color:#374151" onclick="toggleNotice('${n.id}',${!n.active})">${n.active?'숨기기':'활성화'}</button>
+            <button class="btn-sm btn-reject" onclick="deleteNotice('${n.id}')">삭제</button>
+          </div>
+        </div>`).join('') : '<div class="empty-state"><div class="es-icon">📢</div><p>등록된 공지가 없어요</p></div>'}
+    </div>`;
+}
+
+async function addNotice() {
+  const title   = document.getElementById('ntc-title').value.trim();
+  const content = document.getElementById('ntc-content').value.trim();
+  const pinned  = document.getElementById('ntc-pin').checked;
+  if (!title || !content) { showToast('제목과 내용을 입력해주세요'); return; }
+  await db.collection('notices').add({
+    title, content, pinned, active: true,
+    createdBy: currentUser.email,
+    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+  });
+  showToast('✅ 공지가 등록됐어요!');
+  loadNotices();
+  renderAdminNotices();
+}
+async function toggleNotice(id, active) {
+  await db.collection('notices').doc(id).update({ active });
+  loadNotices();
+  renderAdminNotices();
+}
+async function deleteNotice(id) {
+  if (!confirm('공지를 삭제할까요?')) return;
+  await db.collection('notices').doc(id).delete();
+  showToast('🗑️ 공지가 삭제됐어요');
+  loadNotices();
+  renderAdminNotices();
+}
+
+// ══════════════════════════════════════════════════════
+//  UTILITIES
+// ══════════════════════════════════════════════════════
+function fmtTime(ts) {
+  if (!ts) return '-';
+  const d = ts.toDate ? ts.toDate() : new Date(ts);
+  return d.toLocaleString('ko-KR', { month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit' });
+}
+function fmtDate(ts) {
+  if (!ts) return '-';
+  const d = ts.toDate ? ts.toDate() : new Date(ts);
+  return d.toLocaleDateString('ko-KR');
+}
+
+function showToast(msg, duration=2600) {
+  const t = document.getElementById('toast');
+  t.textContent=msg; t.classList.add('show');
+  clearTimeout(t._t); t._t=setTimeout(()=>t.classList.remove('show'), duration);
+}
+
+// ══════════════════════════════════════════════════════
+//  KEYBOARD + STARTUP
+// ══════════════════════════════════════════════════════
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    if (document.getElementById('submit-modal').classList.contains('open')) closeModal('submit-modal');
+    else if (document.getElementById('notice-modal').classList.contains('open')) closeModal('notice-modal');
+    else if (activePlace) closeDrawer();
+  }
+});
+
+// Handle resize
+window.addEventListener('resize', () => {
+  if (!isMobile()) {
+    document.getElementById('sidebar').classList.remove('mobile-open');
+    document.getElementById('fab-list').style.display = 'none';
+  }
+  if (map) map.invalidateSize();
+});
+
+// Auth input enter key
+document.addEventListener('DOMContentLoaded', () => {
+  ['auth-email','auth-pw','auth-name'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('keypress', e => { if(e.key==='Enter') doAuth(); });
+  });
+});
+
+// ══════════════════════════════════════════════════════
+//  BOOT
+// ══════════════════════════════════════════════════════
+(function(){
+  initFirebase();
+
+  // Check Firebase auth state
+  if (firebaseReady && auth) {
+    auth.onAuthStateChanged(user => {
+      if (user && !currentUser) {
+        const userData = { uid: user.uid, email: user.email, displayName: user.displayName || user.email.split('@')[0], isAdmin: isAdmin(user.email) };
+        startApp(userData);
+      }
+    });
+  }
+
+  // Fallback: localStorage (offline / Firebase not configured)
+  const saved = localStorage.getItem('hsdyj_user');
+  if (saved && !firebaseReady) {
+    try {
+      const u = JSON.parse(saved);
+      if (u?.email) { currentUser = u; startApp(u); return; }
+    } catch(e) { localStorage.removeItem('hsdyj_user'); }
+  }
+
+  if (!firebaseReady) {
+    document.getElementById('auth-email').addEventListener('keypress', e => { if(e.key==='Enter') doAuth(); });
+    document.getElementById('auth-pw').addEventListener('keypress',    e => { if(e.key==='Enter') doAuth(); });
+  }
+})();
+</script>
+</body>
+</html>
