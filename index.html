@@ -749,7 +749,135 @@
     .fab:hover { transform:scale(1.08); }
     .fab-primary { background:#E04E14; color:#fff; }
     .fab-secondary { background:#fff; color:#E04E14; }
+
+    /* ── 홍시야 도와줘! 피드백 버튼 ── */
+    #feedback-fab {
+      position:fixed; right:14px;
+      bottom:calc(var(--tabs-h) + env(safe-area-inset-bottom,0px) + 72px);
+      z-index:720;
+      display:flex; flex-direction:column; align-items:center; gap:3px;
+      cursor:pointer; user-select:none;
+    }
+    #feedback-fab-img {
+      width:52px; height:52px; border-radius:50%;
+      object-fit:cover;
+      box-shadow:0 4px 14px rgba(0,0,0,.28);
+      border:2.5px solid #F07030;
+      transition:transform .2s;
+    }
+    #feedback-fab:hover #feedback-fab-img,
+    #feedback-fab:active #feedback-fab-img { transform:scale(1.1); }
+    #feedback-fab-label {
+      font-size:10px; font-weight:700; color:#F07030;
+      background:#fff; border-radius:20px;
+      padding:2px 7px; box-shadow:0 2px 6px rgba(0,0,0,.15);
+      white-space:nowrap;
+    }
+
+    /* ── 피드백 모달 ── */
+    #feedback-modal {
+      display:none; position:fixed; inset:0; z-index:9800;
+      background:rgba(0,0,0,.5); align-items:flex-end; justify-content:center;
+    }
+    #feedback-modal.open { display:flex; }
+    #feedback-box {
+      background:#fff; border-radius:20px 20px 0 0;
+      padding:24px 20px calc(24px + env(safe-area-inset-bottom,0px));
+      width:100%; max-width:520px;
+      box-shadow:0 -4px 24px rgba(0,0,0,.18);
+      animation:slideUp .25s ease;
+    }
+    #feedback-box h3 {
+      font-size:16px; font-weight:800; color:#2D2D2D;
+      margin-bottom:4px; display:flex; align-items:center; gap:6px;
+    }
+    #feedback-box .fb-sub {
+      font-size:12px; color:#999; margin-bottom:16px;
+    }
+    .fb-type-row {
+      display:flex; gap:8px; margin-bottom:14px;
+    }
+    .fb-type-btn {
+      flex:1; padding:10px; border:2px solid #E5E7EB; border-radius:12px;
+      background:#fff; font-size:13px; font-weight:600; color:#6B7280;
+      cursor:pointer; transition:all .15s; text-align:center;
+    }
+    .fb-type-btn.active {
+      border-color:#F07030; background:#FFF4EF; color:#F07030;
+    }
+    #feedback-comment {
+      width:100%; border:1.5px solid #E5E7EB; border-radius:12px;
+      padding:12px 14px; font-size:14px; font-family:'Noto Sans KR',sans-serif;
+      resize:none; outline:none; color:#2D2D2D;
+      transition:border-color .15s;
+    }
+    #feedback-comment:focus { border-color:#F07030; }
+    .fb-context-note {
+      font-size:11px; color:#bbb; margin-top:6px; margin-bottom:14px;
+    }
+    #feedback-submit {
+      width:100%; padding:14px; background:#F07030; color:#fff;
+      border:none; border-radius:14px; font-size:15px; font-weight:700;
+      cursor:pointer; transition:background .15s;
+    }
+    #feedback-submit:hover { background:#D45E20; }
+    #feedback-submit:disabled { background:#E5E7EB; color:#9CA3AF; cursor:not-allowed; }
+    #feedback-cancel {
+      width:100%; padding:10px; background:none; border:none;
+      font-size:13px; color:#9CA3AF; cursor:pointer; margin-top:6px;
+    }
+
+    /* ── 관리자 피드백 리포트 카드 ── */
+    .fb-report-card {
+      background:#fff; border-radius:14px; padding:16px;
+      margin-bottom:12px; box-shadow:0 1px 6px rgba(0,0,0,.08);
+      border-left:4px solid #E5E7EB;
+    }
+    .fb-report-card.bug { border-left-color:#EF4444; }
+    .fb-report-card.suggestion { border-left-color:#3B82F6; }
+    .fb-report-card.reviewed { opacity:.7; }
+    .fb-card-header {
+      display:flex; align-items:center; gap:8px; margin-bottom:8px;
+    }
+    .fb-badge {
+      font-size:11px; font-weight:700; padding:2px 8px; border-radius:20px;
+    }
+    .fb-badge.bug { background:#FEE2E2; color:#EF4444; }
+    .fb-badge.suggestion { background:#DBEAFE; color:#3B82F6; }
+    .fb-card-meta { font-size:11px; color:#9CA3AF; }
+    .fb-card-comment {
+      font-size:13px; color:#374151; line-height:1.6;
+      margin-bottom:10px; white-space:pre-wrap; word-break:break-word;
+    }
+    .fb-card-context {
+      font-size:11px; color:#9CA3AF; background:#F9FAFB;
+      border-radius:8px; padding:8px 10px; margin-bottom:10px;
+      font-family:monospace; white-space:pre-wrap; word-break:break-all;
+      max-height:80px; overflow:hidden; cursor:pointer;
+      transition:max-height .3s;
+    }
+    .fb-card-context.expanded { max-height:500px; }
+    .fb-card-actions { display:flex; gap:8px; flex-wrap:wrap; }
+    .fb-action-btn {
+      font-size:12px; padding:5px 12px; border-radius:20px;
+      border:1.5px solid #E5E7EB; background:#fff;
+      color:#6B7280; cursor:pointer; font-weight:600;
+      transition:all .15s;
+    }
+    .fb-action-btn:hover { background:#F3F4F6; }
+    .fb-action-btn.copy { border-color:#F07030; color:#F07030; }
+    .fb-action-btn.done { border-color:#10B981; color:#10B981; }
+    .fb-filter-row {
+      display:flex; gap:8px; margin-bottom:16px; flex-wrap:wrap;
+    }
+    .fb-filter-btn {
+      font-size:12px; padding:5px 14px; border-radius:20px;
+      border:1.5px solid #E5E7EB; background:#fff;
+      color:#6B7280; cursor:pointer; font-weight:600;
+    }
+    .fb-filter-btn.active { background:#F07030; border-color:#F07030; color:#fff; }
   </style>
+</head>
 </head>
 <body>
 
@@ -924,6 +1052,28 @@
     <button onclick="exitMapPickMode()">취소</button>
   </div>
 
+  <!-- ══ 홍시야 도와줘! 피드백 FAB ══ -->
+  <div id="feedback-fab" onclick="openFeedbackModal()" title="홍시야 도와줘!">
+    <img id="feedback-fab-img" src="icon-192.png" alt="홍시">
+    <div id="feedback-fab-label">홍시야 도와줘!</div>
+  </div>
+
+  <!-- ══ 피드백 모달 ══ -->
+  <div id="feedback-modal" onclick="if(event.target===this) closeFeedbackModal()">
+    <div id="feedback-box">
+      <h3>🍊 홍시야 도와줘!</h3>
+      <div class="fb-sub">불편한 점이나 개선 아이디어를 알려주세요. 꼭 반영할게요 🐾</div>
+      <div class="fb-type-row">
+        <button class="fb-type-btn active" id="fbt-bug" onclick="setFbType('bug')">🐛 버그 신고</button>
+        <button class="fb-type-btn" id="fbt-suggestion" onclick="setFbType('suggestion')">💡 개선 제안</button>
+      </div>
+      <textarea id="feedback-comment" rows="4" placeholder="어떤 문제가 있었나요? 또는 어떤 점이 있으면 좋을 것 같나요?"></textarea>
+      <div class="fb-context-note">📋 현재 화면 상태가 자동으로 함께 기록돼요</div>
+      <button id="feedback-submit" onclick="submitFeedback()">제출하기</button>
+      <button id="feedback-cancel" onclick="closeFeedbackModal()">닫기</button>
+    </div>
+  </div>
+
   <div id="map">
     <div class="map-legend">
       <div style="font-size:10px;font-weight:800;color:#E04E14;letter-spacing:.4px;margin-bottom:6px">우리 추억</div>
@@ -1081,6 +1231,7 @@
     <button class="atab" data-tab="notices"   onclick="switchAdminTab(this,'notices')">📢 공지 관리</button>
     <button class="atab" data-tab="importer"  onclick="switchAdminTab(this,'importer')">🔍 장소 수집</button>
     <button class="atab" data-tab="verify"    onclick="switchAdminTab(this,'verify')">✅ 검증 관리</button>
+    <button class="atab" data-tab="feedback"  onclick="switchAdminTab(this,'feedback')">🐛 피드백</button>
   </div>
   <div id="admin-content">
     <div class="empty-state"><div class="es-icon">⏳</div><p>데이터 로딩 중...</p></div>
@@ -3671,6 +3822,239 @@ function showUserMenu() {
 
 
 // ══════════════════════════════════════════════════════
+//  피드백 (홍시야 도와줘!)
+// ══════════════════════════════════════════════════════
+let _fbType = 'bug';
+
+function openFeedbackModal() {
+  document.getElementById('feedback-modal').classList.add('open');
+  document.getElementById('feedback-comment').value = '';
+  setFbType('bug');
+  document.getElementById('feedback-submit').disabled = false;
+  document.getElementById('feedback-submit').textContent = '제출하기';
+  setTimeout(() => document.getElementById('feedback-comment').focus(), 100);
+}
+
+function closeFeedbackModal() {
+  document.getElementById('feedback-modal').classList.remove('open');
+}
+
+function setFbType(type) {
+  _fbType = type;
+  document.getElementById('fbt-bug').classList.toggle('active', type === 'bug');
+  document.getElementById('fbt-suggestion').classList.toggle('active', type === 'suggestion');
+}
+
+function captureFbContext() {
+  const ctx = {
+    url: location.href,
+    timestamp: new Date().toISOString(),
+    userAgent: navigator.userAgent,
+    screen: window.innerWidth + 'x' + window.innerHeight,
+  };
+  try {
+    // 현재 열려있는 패널/뷰 파악
+    const panels = [];
+    if (document.getElementById('detail-drawer')?.classList.contains('open')) panels.push('장소상세');
+    if (document.getElementById('admin-panel')?.style.display !== 'none') panels.push('관리자');
+    if (document.getElementById('list-panel')?.style.display !== 'none') panels.push('목록');
+    ctx.view = panels.length ? panels.join(',') : '지도';
+
+    // 지도 상태
+    if (typeof map !== 'undefined' && map) {
+      const c = map.getCenter();
+      ctx.mapZoom = map.getZoom();
+      ctx.mapCenter = Math.round(c.lat*10000)/10000 + ',' + Math.round(c.lng*10000)/10000;
+    }
+    // 필터 상태
+    if (typeof currentFilter !== 'undefined') ctx.filter = currentFilter;
+    // 검색어
+    const sq = document.getElementById('search-input')?.value;
+    if (sq) ctx.searchQuery = sq;
+  } catch(e) {}
+  return ctx;
+}
+
+async function submitFeedback() {
+  const comment = document.getElementById('feedback-comment').value.trim();
+  if (!comment) {
+    document.getElementById('feedback-comment').focus();
+    document.getElementById('feedback-comment').style.borderColor = '#EF4444';
+    setTimeout(() => document.getElementById('feedback-comment').style.borderColor = '', 1500);
+    return;
+  }
+
+  const btn = document.getElementById('feedback-submit');
+  btn.disabled = true;
+  btn.textContent = '⏳ 전송 중...';
+
+  const ctx = captureFbContext();
+  const uid = currentUser?.uid || 'anonymous';
+  const userEmail = currentUser?.email || '';
+  const userName = currentUser?.displayName || '';
+
+  const payload = {
+    type: _fbType,
+    comment,
+    userId: uid,
+    userEmail,
+    userName,
+    context: ctx,
+    status: 'new',
+    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+  };
+
+  try {
+    if (firebaseReady && db) {
+      await db.collection('feedback').add(payload);
+    } else {
+      // Firebase 없을 때 로컬 저장
+      const local = JSON.parse(localStorage.getItem('hsdyj_feedback') || '[]');
+      local.push({ ...payload, createdAt: new Date().toISOString() });
+      localStorage.setItem('hsdyj_feedback', JSON.stringify(local));
+    }
+    btn.textContent = '✅ 감사해요!';
+    setTimeout(() => closeFeedbackModal(), 1200);
+    showToast('피드백을 전달했어요 🐾 홍시가 열심히 개선할게요!');
+  } catch(e) {
+    btn.disabled = false;
+    btn.textContent = '제출하기';
+    showToast('전송 중 오류가 발생했어요. 다시 시도해주세요.');
+  }
+}
+
+// 관리자 피드백 리포트
+let fbFilter = 'all';
+
+async function renderAdminFeedback() {
+  const content = document.getElementById('admin-content');
+  let items = [];
+
+  if (firebaseReady && db) {
+    const snap = await db.collection('feedback')
+      .orderBy('createdAt', 'desc')
+      .limit(200)
+      .get();
+    items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  } else {
+    items = JSON.parse(localStorage.getItem('hsdyj_feedback') || '[]').reverse();
+  }
+
+  if (!items.length) {
+    content.innerHTML = `<div class="empty-state"><div class="es-icon">🐾</div><p>아직 피드백이 없어요</p></div>`;
+    return;
+  }
+
+  const counts = { all: items.length, bug: 0, suggestion: 0, new: 0 };
+  items.forEach(i => {
+    if (i.type === 'bug') counts.bug++;
+    if (i.type === 'suggestion') counts.suggestion++;
+    if (i.status === 'new') counts.new++;
+  });
+
+  const filtered = fbFilter === 'all' ? items : items.filter(i =>
+    fbFilter === 'new' ? i.status === 'new' : i.type === fbFilter
+  );
+
+  let html = `
+    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
+      <div style="font-size:14px; font-weight:800; color:#1F2937;">피드백 리포트 <span style="color:#9CA3AF;font-weight:400">(${items.length}건)</span></div>
+      <button onclick="copyAllFeedback()" style="font-size:12px;padding:6px 12px;background:#F07030;color:#fff;border:none;border-radius:20px;cursor:pointer;font-weight:700;">📋 전체 복사</button>
+    </div>
+    <div class="fb-filter-row">
+      <button class="fb-filter-btn ${fbFilter==='all'?'active':''}" onclick="setFbFilter('all')">전체 ${counts.all}</button>
+      <button class="fb-filter-btn ${fbFilter==='new'?'active':''}" onclick="setFbFilter('new')">🆕 신규 ${counts.new}</button>
+      <button class="fb-filter-btn ${fbFilter==='bug'?'active':''}" onclick="setFbFilter('bug')">🐛 버그 ${counts.bug}</button>
+      <button class="fb-filter-btn ${fbFilter==='suggestion'?'active':''}" onclick="setFbFilter('suggestion')">💡 제안 ${counts.suggestion}</button>
+    </div>
+  `;
+
+  filtered.forEach(item => {
+    const ts = item.createdAt?.toDate ? item.createdAt.toDate().toLocaleString('ko-KR') : (item.createdAt || '');
+    const ctx = item.context ? JSON.stringify(item.context, null, 2) : '';
+    const isDone = item.status === 'done' || item.status === 'reviewed';
+    html += `
+      <div class="fb-report-card ${item.type} ${isDone ? 'reviewed' : ''}" id="fbcard-${item.id}">
+        <div class="fb-card-header">
+          <span class="fb-badge ${item.type}">${item.type === 'bug' ? '🐛 버그' : '💡 제안'}</span>
+          <span class="fb-card-meta">${ts} · ${item.userName || item.userEmail || '익명'}</span>
+          ${isDone ? '<span style="font-size:11px;color:#10B981;font-weight:700;margin-left:auto">✅ 처리됨</span>' : ''}
+        </div>
+        <div class="fb-card-comment">${escHtml(item.comment)}</div>
+        ${ctx ? `<div class="fb-card-context" onclick="this.classList.toggle('expanded')" title="클릭해서 펼치기">${escHtml(ctx)}</div>` : ''}
+        <div class="fb-card-actions">
+          <button class="fb-action-btn copy" onclick="copyFeedbackItem('${item.id}')">📋 복사</button>
+          ${!isDone ? `<button class="fb-action-btn done" onclick="markFbDone('${item.id}')">✅ 처리 완료</button>` : ''}
+        </div>
+      </div>
+    `;
+  });
+
+  content.innerHTML = html;
+}
+
+function setFbFilter(f) {
+  fbFilter = f;
+  renderAdminFeedback();
+}
+
+function escHtml(str) {
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// 단일 항목 복사
+function copyFeedbackItem(id) {
+  const card = document.getElementById('fbcard-' + id);
+  if (!card) return;
+  const badge = card.querySelector('.fb-badge')?.textContent || '';
+  const meta  = card.querySelector('.fb-card-meta')?.textContent || '';
+  const comment = card.querySelector('.fb-card-comment')?.textContent || '';
+  const ctx   = card.querySelector('.fb-card-context')?.textContent || '';
+  const text = [
+    '=== 홍시의 대동여지도 피드백 ===',
+    badge + ' | ' + meta,
+    '',
+    '[내용]',
+    comment,
+    ctx ? '\n[컨텍스트]\n' + ctx : '',
+    '================================'
+  ].filter(Boolean).join('\n');
+  navigator.clipboard.writeText(text).then(() => showToast('클립보드에 복사했어요!'));
+}
+
+// 전체 복사 (Claude에게 전달용)
+async function copyAllFeedback() {
+  let items = [];
+  if (firebaseReady && db) {
+    const snap = await db.collection('feedback').orderBy('createdAt','desc').limit(200).get();
+    items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  }
+  if (!items.length) { showToast('복사할 피드백이 없어요'); return; }
+
+  const lines = ['# 홍시의 대동여지도 - 피드백 리포트', `생성: ${new Date().toLocaleString('ko-KR')}`, `총 ${items.length}건`, ''];
+  items.forEach((item, i) => {
+    const ts = item.createdAt?.toDate ? item.createdAt.toDate().toLocaleString('ko-KR') : '';
+    lines.push(`## [${i+1}] ${item.type === 'bug' ? '🐛 버그' : '💡 제안'} (${item.status || 'new'})`);
+    lines.push(`- 일시: ${ts}`);
+    lines.push(`- 사용자: ${item.userEmail || '익명'}`);
+    lines.push(`- 내용: ${item.comment}`);
+    if (item.context) {
+      const c = item.context;
+      lines.push(`- 화면: ${c.view || ''} | 줌: ${c.mapZoom || ''} | 위치: ${c.mapCenter || ''}`);
+      lines.push(`- URL: ${c.url || ''}`);
+    }
+    lines.push('');
+  });
+  navigator.clipboard.writeText(lines.join('\n')).then(() => showToast(`${items.length}건 피드백을 클립보드에 복사했어요!`));
+}
+
+async function markFbDone(id) {
+  if (firebaseReady && db) {
+    await db.collection('feedback').doc(id).update({ status: 'done' });
+  }
+  renderAdminFeedback();
+}
+
 //  PWA 홈화면 추가
 // ══════════════════════════════════════════════════════
 function tryAddToHomescreen() {
@@ -3700,7 +4084,7 @@ function showIOSInstallGuide() {
     position:fixed; inset:0; background:rgba(0,0,0,0.55); z-index:99999;
     display:flex; align-items:flex-end; justify-content:center;
   `;
-  overlay.innerHTML = \`
+  overlay.innerHTML = `
     <div style="
       background:#fff; border-radius:20px 20px 0 0; padding:28px 24px 40px;
       width:100%; max-width:480px; box-shadow:0 -4px 24px rgba(0,0,0,0.18);
@@ -3732,7 +4116,7 @@ function showIOSInstallGuide() {
       <div style="margin-top:12px; font-size:12px; color:#bbb; cursor:pointer;"
         onclick="document.getElementById('ios-install-overlay').remove()">나중에 할게요</div>
     </div>
-  \`;
+  `;
   overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
   document.body.appendChild(overlay);
 }
@@ -5066,6 +5450,7 @@ async function loadAdminTab(tab) {
     else if (tab === 'notices') await renderAdminNotices();
     else if (tab === 'importer') renderAdminImporter();
     else if (tab === 'verify') renderVerifyTab();
+    else if (tab === 'feedback') await renderAdminFeedback();
   } catch(e) {
     content.innerHTML = `<div class="empty-state"><div class="es-icon">❌</div><p>오류가 발생했어요.<br>${e.message}</p></div>`;
   }
