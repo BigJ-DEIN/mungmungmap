@@ -7440,11 +7440,8 @@ function renderVerifyTab() {
       <span style="font-size:12px;color:#888">${ps.length}개 대기</span>
     </div>`).join('');
 
-  // 자동검증 진행 상태 패널
-  const autoPanel = autoV.running || autoV.done > 0 ? buildAutoVerifyPanel() : '';
-
   content.innerHTML = `
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:16px">
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px">
       <div style="background:#FDEEE8;border-radius:10px;padding:12px;text-align:center">
         <div id="stat-verified" style="font-size:22px;font-weight:900;color:#F07030">${counts.verified}</div>
         <div style="font-size:11px;color:#888;margin-top:2px"><span style="color:#F07030">●</span> 검증 완료</div>
@@ -7462,35 +7459,19 @@ function renderVerifyTab() {
         <div style="font-size:11px;color:#888;margin-top:2px">● 검색 결과</div>
       </div>
     </div>
-    <div id="stat-total-text" style="font-size:12px;color:#888;margin-bottom:4px">총 ${total}개 장소 · 검증 완료율 ${Math.round((counts.verified+counts.confirmed)/total*100)}%</div>
-    <div style="font-size:11px;color:#AAA;margin-bottom:12px">
-      카카오 URL 있음: ${places.filter(p=>p&&p.id!=null&&p.kakaoUrl).length}개 · 없음: ${places.filter(p=>p&&p.id!=null&&!p.kakaoUrl).length}개
-    </div>
-
-    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
-      <button id="btn-stage1-auto" onclick="stage1BatchAutoVerify()" style="padding:9px 16px;background:#A8D86E;color:white;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">
-        🔍 1단계 자동검증
-      </button>
-      <button id="btn-stage2-auto" onclick="runAutoStage2Verify()" ${autoV.running?'disabled':''} style="padding:9px 16px;background:#F07030;color:white;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;${autoV.running?'opacity:.6':''}">
-        🤖 2단계 자동검증 (카카오맵)
-      </button>
-      <button onclick="stage1FirestoreSync()" style="padding:9px 16px;background:#F5F5F5;color:#555;border:none;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:6px">
+      <div>
+        <div id="stat-total-text" style="font-size:12px;color:#888">총 ${total}개 장소 · 검증 완료율 ${total>0?Math.round((counts.verified+counts.confirmed)/total*100):0}%</div>
+        <div style="font-size:11px;color:#AAA;margin-top:2px">카카오 URL 있음: ${places.filter(p=>p&&p.id!=null&&p.kakaoUrl).length}개 · 없음: ${places.filter(p=>p&&p.id!=null&&!p.kakaoUrl).length}개</div>
+      </div>
+      <button onclick="stage1FirestoreSync()" style="padding:6px 12px;background:#F5F5F5;color:#777;border:1px solid #E0E0E0;border-radius:8px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;flex-shrink:0">
         ☁️ Firestore 동기화
       </button>
     </div>
 
-    ${autoPanel ? `<div id="auto-verify-panel">${autoPanel}</div>` : '<div id="auto-verify-panel"></div>'}
-
-    <!-- 전국 자동 파이프라인 섹션 -->
-    <div style="margin-bottom:16px">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;cursor:pointer"
-        onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none'">
-        <div style="font-size:13px;font-weight:800;color:#1F2937">🌍 전국 자동 파이프라인</div>
-        <div style="font-size:11px;color:#9CA3AF">클릭해서 펼치기/접기</div>
-      </div>
-      <div id="nw-pipeline-panel" style="background:#F9FAFB;border-radius:12px;padding:14px;border:1px solid #E5E7EB">
-        <div style="text-align:center;padding:20px;color:#9CA3AF;font-size:13px">로딩 중...</div>
-      </div>
+    <!-- 전국 파이프라인 (메인 컨트롤) -->
+    <div id="nw-pipeline-panel" style="background:#F9FAFB;border-radius:12px;padding:14px;border:1px solid #E5E7EB;margin-bottom:16px">
+      <div style="text-align:center;padding:20px;color:#9CA3AF;font-size:13px">로딩 중...</div>
     </div>
 
     <div style="font-size:13px;font-weight:700;margin-bottom:8px;color:#333">지역별 현황</div>
@@ -8152,10 +8133,10 @@ function resetNationwidePipeline() {
   renderNationwidePipelineUI();
 }
 
-/* 파이프라인 초기화 + Firestore 자동수집 장소 전체 삭제 */
+/* 파이프라인 초기화 + Firestore 장소 전체 삭제 (기존 장소 포함) */
 async function resetAndClearPipeline() {
   if (nwPipeline.running) { showToast('먼저 파이프라인을 중단해주세요'); return; }
-  if (!confirm('전국 파이프라인을 초기화하고 자동 수집된 모든 장소를 Firestore에서 삭제할까요?\n수동으로 등록한 장소는 유지됩니다.\n\n이 작업은 되돌릴 수 없어요.')) return;
+  if (!confirm('⚠️ 전체 초기화\n\n등록된 모든 장소(기존 + 파이프라인 수집)를 Firestore에서 삭제하고 파이프라인을 초기화합니다.\n\n전국 파이프라인을 다시 실행하면 전체 장소가 새로 수집됩니다.\n\n이 작업은 되돌릴 수 없어요. 계속할까요?')) return;
 
   const btn = document.getElementById('btn-clear-pipeline');
   if (btn) { btn.disabled = true; btn.textContent = '⏳ 삭제 중...'; }
@@ -8163,24 +8144,24 @@ async function resetAndClearPipeline() {
   try {
     let deleted = 0;
     if (firebaseReady && db) {
-      // source='auto_pipeline' 인 장소만 삭제
-      const snap = await db.collection('places').where('source','==','auto_pipeline').get();
+      // 모든 장소 삭제 (source 구분 없이 전체)
       const CHUNK = 400;
-      for (let i = 0; i < snap.docs.length; i += CHUNK) {
+      let snap = await db.collection('places').limit(CHUNK).get();
+      while (!snap.empty) {
         const batch = db.batch();
-        snap.docs.slice(i, i + CHUNK).forEach(d => batch.delete(d.ref));
+        snap.docs.forEach(d => batch.delete(d.ref));
         await batch.commit();
-        deleted += Math.min(CHUNK, snap.docs.length - i);
-        if (btn) btn.textContent = `⏳ ${deleted}/${snap.docs.length} 삭제 중...`;
+        deleted += snap.docs.length;
+        if (btn) btn.textContent = `⏳ ${deleted}개 삭제 중...`;
+        if (snap.docs.length < CHUNK) break;
+        snap = await db.collection('places').limit(CHUNK).get();
       }
     }
 
-    // 메모리 places 배열에서도 제거
-    const before = places.length;
-    places.splice(0, places.length, ...places.filter(p => p.source !== 'auto_pipeline'));
-    // 마커 재렌더
+    // 메모리 places 배열 전체 비우기
+    places.splice(0, places.length);
+    // 마커 전체 제거
     if (window.markerLayer) markerLayer.clearLayers();
-    places.forEach(p => addMarker && addMarker(p));
 
     // 파이프라인 상태 초기화
     nwPipeline.regionIdx = 0;
@@ -8192,11 +8173,12 @@ async function resetAndClearPipeline() {
     await nwSaveState();
     invalidatePlacesCache();
 
-    showToast(`✅ 자동수집 장소 ${deleted}개 삭제 완료. 파이프라인 초기화됐어요.`, 4000);
+    showToast(`✅ 장소 ${deleted}개 전체 삭제 완료. 전국 파이프라인을 다시 실행해주세요.`, 5000);
     renderNationwidePipelineUI();
+    if (btn) { btn.disabled = false; btn.textContent = '🗑️ 전체 초기화 (모든 장소 삭제)'; }
   } catch(e) {
     showToast('❌ 오류: ' + e.message);
-    if (btn) { btn.disabled = false; btn.textContent = '🗑️ 초기화 + Firestore 정리'; }
+    if (btn) { btn.disabled = false; btn.textContent = '🗑️ 전체 초기화 (모든 장소 삭제)'; }
   }
 }
 
@@ -8261,13 +8243,17 @@ function renderNationwidePipelineUI() {
   }).join('');
 
   el.innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+      <div style="font-size:13px;font-weight:800;color:#1F2937">🌍 전국 자동 파이프라인</div>
+      <div style="font-size:11px;color:#9CA3AF">${total}개 지역 · 수집 → 1단계 → 2단계 검증</div>
+    </div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
       ${!nwPipeline.running
         ? `<button onclick="runNationwidePipeline()" style="padding:9px 18px;background:#F07030;color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">
             ${done > 0 && done < total ? '▶ 이어서 실행' : '▶ 전국 파이프라인 시작'}
            </button>
            ${done > 0 ? `<button onclick="resetNationwidePipeline()" style="padding:9px 14px;background:#F5F5F5;color:#555;border:none;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">🔄 처음부터</button>` : ''}
-           <button id="btn-clear-pipeline" onclick="resetAndClearPipeline()" style="padding:9px 14px;background:#FFF5F5;color:#C62828;border:1.5px solid #FFCDD2;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">🗑️ 초기화 + Firestore 정리</button>`
+           <button id="btn-clear-pipeline" onclick="resetAndClearPipeline()" style="padding:9px 14px;background:#FFF5F5;color:#C62828;border:1.5px solid #FFCDD2;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">🗑️ 전체 초기화 (모든 장소 삭제)</button>`
         : `<button onclick="stopNationwidePipeline()" style="padding:9px 18px;background:#EF4444;color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">⏸ 중단</button>`
       }
     </div>
