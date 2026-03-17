@@ -7722,7 +7722,7 @@ async function stage1FirestoreSync() {
    두 파이프라인(전국 + 2단계 자동검증)이 동시에 실행될 때
    프록시 요청을 최대 2개로 제한해 서로 자동 조율합니다. */
 const _proxyQueue = {
-  maxConcurrent: 5, running: 0, queue: [],
+  maxConcurrent: 8, running: 0, queue: [],
   async acquire() {
     if (this.running < this.maxConcurrent) { this.running++; return; }
     return new Promise(r => this.queue.push(r));
@@ -7736,10 +7736,9 @@ const _proxyQueue = {
 /* CORS 프록시를 통해 카카오맵 페이지 HTML 가져오기 */
 async function fetchKakaoPagePetSignal(url) {
   const PROXIES = [
-    u => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
     u => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`,
     u => `https://thingproxy.freeboard.io/fetch/${encodeURIComponent(u)}`
-  ];
+  ]; // allorigins.win 제거 (상시 429)
   const cutoff3mo = Date.now() - 90 * 24 * 60 * 60 * 1000;
 
   // ★ Unicode 이스케이프 디코딩 (\uXXXX → 실제 한국어)
@@ -7858,10 +7857,9 @@ async function fetchKakaoCategorySignal(placeName, lat, lng) {
 /* ── 채널 3: 네이버 블로그 검색 (CORS 프록시 경유) ── */
 async function fetchNaverBlogSignal(placeName) {
   const PROXIES = [
-    u => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
     u => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`,
     u => `https://thingproxy.freeboard.io/fetch/${encodeURIComponent(u)}`
-  ];
+  ]; // allorigins.win 제거 (상시 429)
   // 6개월 이내 최신 블로그 글 검색
   const query = encodeURIComponent(`${placeName} 반려견`);
   const url = `https://search.naver.com/search.naver?where=blog&query=${query}&sort=1&nso=so%3Add%2Cp%3A6m`;
@@ -8262,34 +8260,41 @@ async function nwVerifyStage2Region(regionName) {
     }
 
     // ── 채널2~5: 네트워크 병렬 실행 ──
-    // 스코프를 함수 레벨로 선언 — rejected 판단에서도 참조 가능
+    // auto_pipeline_cat (CE7/FD6 카테고리 수집) 장소는 Kakao 페이지 태그만 확인
+    // → "반려동물 동반" 시설 태그 존재 여부만 보면 됨. Naver/SDK 불필요 (5배 단축)
     let memRes = false, sdkRes = null, naverRes = null, kakaoPageRes = null;
     if (newStatus !== 'verified') {
-      [memRes, sdkRes, naverRes, kakaoPageRes] = await Promise.all([
-        checkRecentMemoryForPlace(p.id),
-        fetchKakaoCategorySignal(p.name, p.lat, p.lng),
-        fetchNaverBlogSignal(p.name),
-        p.kakaoUrl ? fetchKakaoPagePetSignal(p.kakaoUrl) : Promise.resolve({ found: false })
-      ]);
-      if (memRes)              newStatus = pickBetter(newStatus, 'verified');
-      if (sdkRes?.found)       newStatus = pickBetter(newStatus, 'confirmed');
-      if (naverRes?.found)     newStatus = pickBetter(newStatus, naverRes.strong ? 'verified' : 'confirmed');
-      if (kakaoPageRes?.found) newStatus = pickBetter(newStatus, kakaoPageRes.strong ? 'verified' : 'confirmed');
+      if (p.source === 'auto_pipeline_cat') {
+        // 카테고리 수집 장소: Kakao 페이지 단일 채널
+        kakaoPageRes = p.kakaoUrl
+          ? await fetchKakaoPagePetSignal(p.kakaoUrl)
+          : { found: false };
+        if (kakaoPageRes?.found) newStatus = pickBetter(newStatus, kakaoPageRes.strong ? 'verified' : 'confirmed');
+      } else {
+        // 키워드 수집 장소: 기존 4채널 병렬
+        [memRes, sdkRes, naverRes, kakaoPageRes] = await Promise.all([
+          checkRecentMemoryForPlace(p.id),
+          fetchKakaoCategorySignal(p.name, p.lat, p.lng),
+          fetchNaverBlogSignal(p.name),
+          p.kakaoUrl ? fetchKakaoPagePetSignal(p.kakaoUrl) : Promise.resolve({ found: false })
+        ]);
+        if (memRes)              newStatus = pickBetter(newStatus, 'verified');
+        if (sdkRes?.found)       newStatus = pickBetter(newStatus, 'confirmed');
+        if (naverRes?.found)     newStatus = pickBetter(newStatus, naverRes.strong ? 'verified' : 'confirmed');
+        if (kakaoPageRes?.found) newStatus = pickBetter(newStatus, kakaoPageRes.strong ? 'verified' : 'confirmed');
+      }
     }
 
     const nowStr = new Date().toISOString();
-    p.lastV2At = nowStr; // 결과 무관하게 항상 업데이트 (다음 30일 스킵 기준)
+    p.lastV2At = nowStr;
 
-    // ── 카테고리 수집 장소 (auto_pipeline_cat): 모든 채널 실패 시 rejected 처리 ──
-    // 단, 프록시 오류로 Kakao 페이지를 못 가져온 경우는 rejected 하지 않음
+    // ── 카테고리 수집 장소: Kakao 페이지 성공했는데 펫 신호 없음 → rejected ──
     if (!newStatus && p.source === 'auto_pipeline_cat') {
-      const kakaoPageChecked = kakaoPageRes && !kakaoPageRes.error; // 프록시 성공 여부
-      const naverChecked = naverRes && !naverRes.error;
-      if (kakaoPageChecked || naverChecked) {
-        // 최소 1개 채널은 정상 응답했는데 펫 신호 없음 → rejected
+      const kakaoPageChecked = kakaoPageRes && !kakaoPageRes.error;
+      if (kakaoPageChecked) {
         newStatus = 'rejected';
       }
-      // 모든 채널이 프록시 오류 → 재시도를 위해 unverified 유지
+      // kakaoPage 프록시 오류 → unverified 유지 (30일 후 재시도)
     }
 
     if (newStatus && newStatus !== currentStatus) {
@@ -8307,15 +8312,15 @@ async function nwVerifyStage2Region(regionName) {
     if (pendingBatch.length >= 50) await flush();
   }
 
-  /* 5-worker 병렬 처리 */
+  /* 8-worker 병렬 처리 */
   const _workQueue = [...allTargets];
-  const CONCURRENT = 5;
+  const CONCURRENT = 8;
   async function _worker() {
     while (!nwPipeline.stop) {
       const p = _workQueue.shift();
       if (!p) break;
       await processOne(p);
-      await new Promise(r => setTimeout(r, 200)); // rate limiting (3→5 워커 증가로 200ms로 단축)
+      await new Promise(r => setTimeout(r, 100)); // 100ms (cat 장소는 단일 채널이라 빠름)
     }
   }
   await Promise.all(Array.from({ length: CONCURRENT }, _worker));
