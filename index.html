@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>홍시의 대동여지도 🐾</title>
   <!-- PWA / 홈화면 아이콘 -->
   <meta name="mobile-web-app-capable" content="yes">
@@ -643,6 +643,11 @@
     @media (max-width:767px) {
       #mobile-tabs { display:block; }
       #header { padding-right:8px; }
+      /* iOS/Android: input font-size < 16px이면 자동 줌인 → 16px로 강제 */
+      input, textarea, select { font-size:16px !important; }
+      /* Android: 더블탭 줌 방지 (touch-action:manipulation) */
+      button, a, input, select, textarea, label,
+      .filter-chip, .tab-btn, .place-card, .list-item { touch-action: manipulation; }
     }
 
     /* ── QUICK FILTERS (목록 상단 고정 필터) ── */
@@ -855,6 +860,8 @@
     /* 데스크탑: 탭바 없으므로 위치 조정 */
     @media (min-width:768px) {
       #btn-locate { bottom:24px; right:20px; }
+      /* 데스크탑: btn-locate(44px) + gap(10px) 위 */
+      #feedback-fab { bottom:calc(24px + 44px + 10px); right:20px; }
     }
 
     /* ── 내 위치 파란 점 (Google Maps 스타일) ── */
@@ -884,7 +891,8 @@
     /* ── 홍시야 도와줘! 피드백 버튼 ── */
     #feedback-fab {
       position:fixed; right:14px;
-      bottom:calc(var(--tabs-h) + env(safe-area-inset-bottom,0px) + 72px);
+      /* btn-locate(44px) + gap(10px) = +54px above btn-locate's bottom(68px) → 122px */
+      bottom:calc(var(--tabs-h) + env(safe-area-inset-bottom,0px) + 122px);
       z-index:720;
       display:flex; flex-direction:column; align-items:center; gap:3px;
       cursor:pointer; user-select:none;
@@ -4057,46 +4065,93 @@ async function doLogout() {
 function showUserMenu() {
   if (!currentUser) return;
   const dog = currentDog;
-  const photoHTML = dog?.photoURL
-    ? `<img src="${dog.photoURL}" style="width:80px;height:80px;border-radius:50%;object-fit:cover;border:3px solid #FDEEE8">`
-    : `<div style="width:80px;height:80px;border-radius:50%;background:#FDEEE8;display:flex;align-items:center;justify-content:center;font-size:34px">🐶</div>`;
+  const dogPhotoHTML = dog?.photoURL
+    ? `<img src="${dog.photoURL}" id="profile-dog-photo-preview" style="width:72px;height:72px;border-radius:50%;object-fit:cover;border:2.5px dashed #E8C8BC">`
+    : `<div id="profile-dog-photo-preview" style="width:72px;height:72px;border-radius:50%;background:#FFF8F5;border:2.5px dashed #E8C8BC;display:flex;align-items:center;justify-content:center;font-size:26px">📷</div>`;
+
+  const inpStyle = 'width:100%;box-sizing:border-box;padding:10px 12px;border:1.5px solid #EEE;border-radius:10px;font-size:15px;font-family:inherit;outline:none;color:#2D2D2D;background:#FAFAFA';
 
   document.getElementById('profile-modal-body').innerHTML = `
-    <div style="display:flex;align-items:center;gap:16px;margin-bottom:20px;padding-bottom:16px;border-bottom:1px solid #F5F5F5">
-      <div style="flex-shrink:0">${photoHTML}</div>
-      <div>
-        <div style="font-size:16px;font-weight:800;color:#2D2D2D">${currentUser.displayName || '이름 없음'}</div>
-        <div style="font-size:12px;color:#AAA;margin-top:3px">${currentUser.email}</div>
-        ${currentUser.isAdmin ? '<div style="font-size:11px;color:#1E3A8A;font-weight:700;margin-top:4px">👑 운영자</div>' : ''}
-      </div>
+    <div style="text-align:center;margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid #F5F5F5">
+      <div style="font-size:13px;color:#AAA">${currentUser.email}</div>
+      ${currentUser.isAdmin ? '<div style="font-size:11px;color:#1E3A8A;font-weight:700;margin-top:4px">👑 운영자</div>' : ''}
     </div>
 
-    ${dog ? `
-    <div style="margin-bottom:18px">
-      <div style="font-size:12px;font-weight:700;color:#E04E14;margin-bottom:10px">🐶 우리 강아지</div>
-      <div style="display:flex;align-items:center;gap:14px">
-        <div style="position:relative;cursor:pointer" onclick="document.getElementById('profile-dog-photo-input').click()">
-          ${dog.photoURL
-            ? `<img src="${dog.photoURL}" id="profile-dog-photo-preview" style="width:64px;height:64px;border-radius:50%;object-fit:cover;border:2.5px dashed #E8C8BC">`
-            : `<div id="profile-dog-photo-preview" style="width:64px;height:64px;border-radius:50%;background:#FFF8F5;border:2.5px dashed #E8C8BC;display:flex;align-items:center;justify-content:center;font-size:24px">📷</div>`}
-          <div style="position:absolute;bottom:0;right:0;width:20px;height:20px;background:#E04E14;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;color:white;border:2px solid white">✎</div>
-          <input type="file" id="profile-dog-photo-input" accept="image/*" style="display:none" onchange="onProfileDogPhotoSelected(event)">
-        </div>
-        <div>
-          <div style="font-size:15px;font-weight:700;color:#2D2D2D">${dog.name || '이름 없음'}</div>
-          ${dog.breed ? `<div style="font-size:12px;color:#888">${dog.breed}</div>` : ''}
-          ${dog.age ? `<div style="font-size:12px;color:#AAA">${dog.age}살</div>` : ''}
-        </div>
-      </div>
-      <div id="profile-photo-status" style="font-size:12px;color:#E04E14;margin-top:8px;display:none"></div>
-    </div>` : `
-    <div style="margin-bottom:18px;padding:14px;background:#FFF8F5;border-radius:12px;text-align:center">
-      <div style="font-size:13px;color:#AAA">강아지 정보가 없어요 🐾</div>
-    </div>`}
+    <div style="margin-bottom:14px">
+      <div style="font-size:12px;font-weight:700;color:#888;margin-bottom:6px">내 이름</div>
+      <input id="profile-display-name" type="text" placeholder="이름을 입력하세요"
+        value="${currentUser.displayName || ''}" style="${inpStyle}">
+    </div>
 
-    <button onclick="doLogout()" style="width:100%;padding:13px;background:#F5F5F5;color:#888;border:none;border-radius:14px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit">로그아웃</button>
+    <div style="font-size:12px;font-weight:700;color:#E04E14;margin-bottom:10px">🐶 우리 강아지</div>
+    <div style="display:flex;gap:14px;align-items:flex-start;margin-bottom:12px">
+      <div style="flex-shrink:0;position:relative;cursor:pointer" onclick="document.getElementById('profile-dog-photo-input').click()">
+        ${dogPhotoHTML}
+        <div style="position:absolute;bottom:0;right:0;width:22px;height:22px;background:#E04E14;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;color:white;border:2px solid white">✎</div>
+        <input type="file" id="profile-dog-photo-input" accept="image/*" style="display:none" onchange="onProfileDogPhotoSelected(event)">
+      </div>
+      <div style="flex:1;display:flex;flex-direction:column;gap:8px">
+        <input id="profile-dog-name" type="text" placeholder="강아지 이름"
+          value="${dog?.name||''}" style="${inpStyle}">
+        <input id="profile-dog-breed" type="text" placeholder="견종 (예: 말티즈)"
+          value="${dog?.breed||''}" style="${inpStyle}">
+        <input id="profile-dog-age" type="number" min="0" max="30" placeholder="나이 (숫자)"
+          value="${dog?.age||''}" style="${inpStyle}">
+      </div>
+    </div>
+    <div id="profile-photo-status" style="font-size:12px;color:#E04E14;margin-bottom:8px;display:none"></div>
+
+    <button onclick="saveProfileChanges()" id="btn-profile-save"
+      style="width:100%;padding:13px;background:#E04E14;color:white;border:none;border-radius:14px;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit;margin-bottom:10px">
+      저장하기
+    </button>
+    <button onclick="doLogout()"
+      style="width:100%;padding:13px;background:#F5F5F5;color:#AAA;border:none;border-radius:14px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit">
+      로그아웃
+    </button>
   `;
   openModal('profile-modal');
+}
+
+async function saveProfileChanges() {
+  if (!currentUser || !db) return;
+  const btn = document.getElementById('btn-profile-save');
+  if (btn) { btn.disabled = true; btn.textContent = '저장 중...'; }
+  try {
+    const newName  = (document.getElementById('profile-display-name')?.value || '').trim();
+    const dogName  = (document.getElementById('profile-dog-name')?.value || '').trim();
+    const dogBreed = (document.getElementById('profile-dog-breed')?.value || '').trim();
+    const dogAgeRaw = document.getElementById('profile-dog-age')?.value;
+    const dogAge   = dogAgeRaw !== '' ? Number(dogAgeRaw) : null;
+
+    if (newName && newName !== currentUser.displayName) {
+      await firebase.auth().currentUser.updateProfile({ displayName: newName });
+      currentUser.displayName = newName;
+      const initial = document.querySelector('#user-badge .user-initial');
+      if (initial) initial.textContent = newName.charAt(0).toUpperCase();
+    }
+
+    const updateData = {};
+    if (newName)  updateData.displayName = newName;
+    if (dogName)  updateData['dog.name']  = dogName;
+    if (dogBreed) updateData['dog.breed'] = dogBreed;
+    if (dogAge !== null && !isNaN(dogAge)) updateData['dog.age'] = dogAge;
+    if (Object.keys(updateData).length > 0) {
+      await db.collection('users').doc(currentUser.uid).update(updateData);
+    }
+
+    if (!currentDog) currentDog = {};
+    if (dogName)  currentDog.name  = dogName;
+    if (dogBreed) currentDog.breed = dogBreed;
+    if (dogAge !== null && !isNaN(dogAge)) currentDog.age = dogAge;
+
+    showToast('✅ 저장됐어요!');
+    closeModal('profile-modal');
+  } catch(err) {
+    console.warn('프로필 저장 실패:', err);
+    showToast('❌ 저장 실패. 다시 시도해주세요.');
+    if (btn) { btn.disabled = false; btn.textContent = '저장하기'; }
+  }
 }
 
 async function onProfileDogPhotoSelected(e) {
