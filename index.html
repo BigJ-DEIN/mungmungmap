@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <title>홍시의 대동여지도 🍅🐾</title>
+  <title>홍시의 대동여지도 🐾</title>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700;900&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
@@ -63,7 +63,14 @@
       box-shadow:0 4px 32px rgba(0,0,0,.06);
       text-align:center; position:relative; z-index:1;
     }
-    .login-logo { font-size:48px; margin-bottom:4px; }
+    /* ── 홍시(감) SVG 아이콘 ── */
+    .hongsi-icon {
+      display:inline-block;
+      width:1em; height:1.05em;
+      vertical-align:-0.1em;
+      background:none;
+    }
+    .login-logo { font-size:56px; margin-bottom:4px; line-height:1; }
     .login-title { font-size:24px; font-weight:900; color:#E04E14; margin-bottom:2px; letter-spacing:-.5px; }
     .login-title-sub { font-size:13px; color:#E04E14; font-weight:500; margin-bottom:4px; opacity:.8; }
     .login-subtitle { font-size:13px; color:#AAA; margin-bottom:24px; line-height:1.7; }
@@ -89,8 +96,21 @@
     .auth-divider { display:flex; align-items:center; gap:12px; margin:16px 0; color:#DDD; font-size:12px; }
     .auth-divider::before, .auth-divider::after { content:''; flex:1; height:1px; background:#EEE; }
     .auth-err { background:#FFEBEE; color:#C62828; border-radius:10px; padding:10px 14px; font-size:13px; margin-bottom:12px; text-align:left; display:none; }
-    .login-features { display:flex; gap:12px; justify-content:center; margin-top:16px; flex-wrap:wrap; }
-    .lf-item { font-size:12px; color:#999; display:flex; align-items:center; gap:4px; }
+    /* dog profile in register */
+    .dog-photo-upload {
+      width:88px; height:88px; border-radius:50%; border:2.5px dashed #E8C8BC;
+      display:flex; flex-direction:column; align-items:center; justify-content:center;
+      cursor:pointer; overflow:hidden; background:#FFF8F5; transition:border-color .2s;
+      position:relative; flex-shrink:0;
+    }
+    .dog-photo-upload:hover { border-color:#E04E14; }
+    .dog-photo-upload img { width:100%; height:100%; object-fit:cover; display:none; border-radius:50%; }
+    .dog-photo-upload .dpu-hint { font-size:10px; color:#CCC; text-align:center; line-height:1.4; pointer-events:none; }
+    .dog-photo-upload .dpu-icon { font-size:22px; margin-bottom:2px; }
+    .dog-fields-row { display:flex; gap:10px; align-items:flex-start; margin-bottom:12px; }
+    .dog-fields-col { flex:1; display:flex; flex-direction:column; gap:10px; }
+    .dog-section-label { font-size:12px; font-weight:700; color:#E04E14; margin-bottom:4px; margin-top:4px; display:flex; align-items:center; gap:6px; }
+    .dog-section-label::after { content:''; flex:1; height:1px; background:#F0F0F0; }
 
     /* ── APP ── */
     #app-screen { display:none; height:100%; width:100%; }
@@ -217,7 +237,7 @@
     .m-dot {
       width:20px; height:20px; border-radius:50%;
       border:2.5px solid white; box-shadow:0 2px 8px rgba(0,0,0,.25);
-      transition:transform .2s;
+      transition:width .2s, height .2s, transform .2s, margin .2s;
     }
     .m-dot.active { transform:scale(1.5) !important; box-shadow:0 3px 12px rgba(0,0,0,.35); }
     .m-dot.fee-marker { border-color:#FFD700; box-shadow:0 2px 8px rgba(212,160,23,.4); }
@@ -594,6 +614,42 @@
       appearance:none; -webkit-appearance:none;
     }
     .mem-place-select:focus { border-color:#E04E14; }
+    /* searchable place picker */
+    .place-picker-wrap { position:relative; margin-bottom:12px; }
+    .place-picker-input {
+      width:100%; padding:11px 14px; border:2px solid #EBEBEB; border-radius:12px;
+      font-size:14px; font-family:inherit; outline:none; background:white;
+    }
+    .place-picker-input:focus { border-color:#E04E14; }
+    .place-picker-input.has-val { border-color:#E04E14; background:#FFF8F5; }
+    .place-picker-dropdown {
+      position:absolute; top:calc(100% + 4px); left:0; right:0;
+      background:white; border:2px solid #EBEBEB; border-radius:12px;
+      max-height:220px; overflow-y:auto; z-index:9999;
+      box-shadow:0 4px 20px rgba(0,0,0,.12); display:none;
+    }
+    .place-picker-dropdown.open { display:block; }
+    .place-picker-item {
+      padding:10px 14px; font-size:13px; cursor:pointer; border-bottom:1px solid #F5F5F5;
+      display:flex; flex-direction:column; gap:2px;
+    }
+    .place-picker-item:last-child { border-bottom:none; }
+    .place-picker-item:hover, .place-picker-item.focused { background:#FFF3EE; }
+    .place-picker-item .pi-name { font-weight:600; color:#2D2D2D; }
+    .place-picker-item .pi-area { font-size:11px; color:#AAA; }
+    .place-picker-empty { padding:14px; font-size:13px; color:#BBB; text-align:center; }
+    .place-map-pick-btn {
+      width:100%; padding:9px 14px; border:2px dashed #E0C0B0; border-radius:12px;
+      background:#FFF8F5; font-size:13px; font-weight:600; color:#E04E14;
+      cursor:pointer; font-family:inherit; margin-bottom:12px; transition:background .15s;
+      display:flex; align-items:center; justify-content:center; gap:6px;
+    }
+    .place-map-pick-btn:hover { background:#FFE8DC; }
+    .place-map-pick-btn.picking { background:#E04E14; color:white; border-color:#E04E14; }
+    .place-map-pick-hint {
+      font-size:12px; color:#E04E14; text-align:center;
+      padding:6px 0 4px; display:none; animation:fadeIn .3s;
+    }
 
     /* Drawer memories section */
     .drawer-mem-section { margin-top:4px; }
@@ -656,10 +712,9 @@
 <div id="login-screen">
   <div class="login-bg-dots"></div>
   <div class="login-card">
-    <div class="login-logo">🍅</div>
+    <div class="login-logo" id="login-logo-icon"></div>
     <div class="login-title">홍시의 대동여지도</div>
-    <div class="login-title-sub">애견동반 카페·식당 지도</div>
-    <div class="login-subtitle" id="auth-subtitle">경기도 전 지역에서 강아지와 함께 갈 수 있는<br>카페와 식당을 한눈에 찾아보세요</div>
+    <div class="login-subtitle" id="auth-subtitle">함께 다녀온 곳들을 지도에 기록하고<br>좋아했던 순간을 모아두는 공간이에요 🐾</div>
 
     <div id="auth-err" class="auth-err"></div>
 
@@ -667,6 +722,28 @@
     <div class="form-group" id="fg-name" style="display:none">
       <label>이름 (닉네임)</label>
       <input type="text" id="auth-name" placeholder="홍길동" autocomplete="name"/>
+    </div>
+    <!-- Dog profile (register only) -->
+    <div id="fg-dog" style="display:none">
+      <div class="dog-section-label">🐶 우리 강아지 소개</div>
+      <div class="dog-fields-row">
+        <div class="dog-photo-upload" id="dog-photo-upload" onclick="document.getElementById('dog-photo-input').click()">
+          <div class="dpu-icon">📷</div>
+          <div class="dpu-hint">사진<br>추가</div>
+          <img id="dog-photo-preview" alt="">
+          <input type="file" id="dog-photo-input" accept="image/*" style="display:none" onchange="onDogPhotoSelected(event)">
+        </div>
+        <div class="dog-fields-col">
+          <div class="form-group" style="margin-bottom:0">
+            <label>강아지 이름</label>
+            <input type="text" id="dog-name" placeholder="홍시" autocomplete="off"/>
+          </div>
+          <div class="form-group" style="margin-bottom:0">
+            <label>나이</label>
+            <input type="text" id="dog-age" placeholder="3살 / 2022년생" autocomplete="off"/>
+          </div>
+        </div>
+      </div>
     </div>
     <div class="form-group">
       <label>이메일 주소</label>
@@ -678,13 +755,7 @@
     </div>
     <button class="btn-login" id="auth-btn" onclick="doAuth()">로그인하고 시작하기</button>
     <div class="auth-toggle" id="auth-toggle-row">
-      아직 계정이 없으신가요? <a onclick="switchAuthMode(true)">회원가입</a>
-    </div>
-    <div class="login-features">
-      <div class="lf-item">지도 탐색</div>
-      <div class="lf-item">조건 필터</div>
-      <div class="lf-item">입장료 분류</div>
-      <div class="lf-item">장소 제보</div>
+      처음이에요? <a onclick="switchAuthMode(true)">계정 만들기</a>
     </div>
   </div>
 </div>
@@ -694,10 +765,10 @@
 
   <!-- Header -->
   <div id="header">
-    <div class="hdr-logo">🍅 홍시의 대동여지도</div>
+    <div class="hdr-logo" id="hdr-logo-el">홍시의 대동여지도</div>
     <div id="search-wrap">
       <i class="fa fa-magnifying-glass search-icon"></i>
-      <input type="text" id="search-input" placeholder="카페, 동네 이름으로 검색..." oninput="onSearch()">
+      <input type="text" id="search-input" placeholder="카페, 동네 이름 검색..." oninput="onSearch()">
     </div>
     <div id="hdr-share">
       <button class="hdr-btn" onclick="copyShareLink()">공유</button>
@@ -775,12 +846,10 @@
       <div class="legend-item"><div class="legend-dot" style="background:#ED6820"></div><span>확인 완료</span></div>
       <div class="legend-item"><div class="legend-dot" style="background:#C8C8C8"></div><span>확인 필요</span></div>
       <div class="legend-item"><div class="legend-dot" style="background:#87CEEB"></div><span>검색 결과</span></div>
-      <div class="legend-item"><div class="legend-dot ld-fee" style="background:#E04E14; border-color:#FFD700"></div><span>입장료 있음</span></div>
-      <div class="legend-item"><div class="legend-dot" style="background:#87CEEB"></div><span>카카오 검색 결과</span></div>
     </div>
     <!-- Kakao Live Search -->
     <button id="live-search-btn" onclick="toggleLiveSearch()">
-      주변 애견 장소 더 찾기
+      🔍 주변에서 더 찾기
     </button>
     <div id="live-results-panel" style="display:none">
       <div class="lrp-list" id="lrp-list"></div>
@@ -810,10 +879,10 @@
   <div class="d-handle" style="margin-top:10px"></div>
   <div class="mem-panel-header">
     <h3>추억</h3>
-    <button class="btn-write-mem" onclick="openWriteMemory(null)">+ 추억 쓰기</button>
+    <button class="btn-write-mem" onclick="openWriteMemory(null)">✏️ 오늘 기록하기</button>
   </div>
   <div class="mem-feed" id="mem-feed">
-    <div class="mem-loading">불러오는 중...</div>
+    <div class="mem-loading">기억 꺼내는 중... 🐾</div>
   </div>
 </div>
 
@@ -822,23 +891,38 @@
   <div class="modal-sheet">
     <div class="modal-handle"></div>
     <div class="modal-content">
-      <div class="modal-title">추억 남기기</div>
-      <div class="modal-sub">방문했던 가게에서의 소감을 남겨보세요</div>
-      <select class="mem-place-select" id="mem-place-select">
-        <option value="">가게를 선택하세요...</option>
-      </select>
+      <div class="modal-title">📝 오늘의 기록</div>
+      <div id="mem-dog-badge" style="display:none;align-items:center;gap:8px;background:#FFF3EE;border-radius:10px;padding:8px 12px;margin-bottom:12px;font-size:13px;color:#E04E14;font-weight:600"></div>
+      <div class="modal-sub">어떤 곳에 다녀왔어요?</div>
+      <!-- searchable place picker -->
+      <div class="place-picker-wrap" id="place-picker-wrap">
+        <input type="text" class="place-picker-input" id="place-picker-input"
+               placeholder="가게 이름으로 검색..."
+               autocomplete="off"
+               oninput="onPlacePickerInput(this.value)"
+               onfocus="onPlacePickerFocus()"
+               onblur="onPlacePickerBlur()">
+        <div class="place-picker-dropdown" id="place-picker-dropdown"></div>
+      </div>
+      <!-- hidden real value -->
+      <input type="hidden" id="mem-place-select" value="">
+      <!-- map pick button -->
+      <button class="place-map-pick-btn" id="place-map-pick-btn" onclick="toggleMapPickMode()">
+        <i class="fa fa-map-marker-alt"></i> 지도에서 직접 고르기
+      </button>
+      <div class="place-map-pick-hint" id="place-map-pick-hint">지도의 마커를 눌러 장소를 선택하세요</div>
       <div class="mem-photo-area" id="mem-photo-area" onclick="document.getElementById('mem-photo-input').click()">
-        <div class="mem-photo-hint" id="mem-photo-hint">사진 추가 (선택)</div>
+        <div class="mem-photo-hint" id="mem-photo-hint">📸 사진도 같이 남겨요 (선택)</div>
         <div class="mem-photo-size" id="mem-photo-size"></div>
         <img id="mem-photo-preview" alt="">
         <input type="file" id="mem-photo-input" accept="image/*" style="display:none" onchange="onMemPhotoSelected(event)">
       </div>
       <div class="modal-field">
-        <textarea id="mem-text" placeholder="한 줄 후기, 강아지 반응, 소감 등..." rows="3" maxlength="280" style="height:80px"></textarea>
+        <textarea id="mem-text" placeholder="그날의 기억, 홍시 반응, 느낀 점..." rows="3" maxlength="280" style="height:80px"></textarea>
       </div>
       <div class="modal-actions">
         <button class="btn-modal-cancel" onclick="closeModal('memory-modal')">취소</button>
-        <button class="btn-modal-submit" id="mem-submit-btn" onclick="submitMemory()">올리기</button>
+        <button class="btn-modal-submit" id="mem-submit-btn" onclick="submitMemory()">기록하기</button>
       </div>
     </div>
   </div>
@@ -868,15 +952,15 @@
   <div class="modal-sheet">
     <div class="modal-handle"></div>
     <div class="modal-content">
-      <div class="modal-title">📝 새 장소 제보하기</div>
-      <div class="modal-sub">애견동반이 가능한 장소를 알려주세요. 확인 후 지도에 추가할게요!</div>
-      <div class="modal-field"><label>장소명 *</label><input id="rep-name" placeholder="카페 이름" /></div>
+      <div class="modal-title">🐾 새 장소 알려주기</div>
+      <div class="modal-sub">홍시랑 가기 좋은 곳 발견했어요? 확인 후 지도에 올릴게요!</div>
+      <div class="modal-field"><label>장소 이름 *</label><input id="rep-name" placeholder="카페 이름" /></div>
       <div class="modal-field"><label>주소</label><input id="rep-addr" placeholder="경기도..." /></div>
       <div class="modal-field"><label>전화번호</label><input id="rep-phone" placeholder="031-..." /></div>
-      <div class="modal-field"><label>상세 내용 / 출처 URL</label><textarea id="rep-note" rows="3" placeholder="애견동반 가능 여부, 조건, 네이버/카카오 링크 등"></textarea></div>
+      <div class="modal-field"><label>메모 / 출처 링크</label><textarea id="rep-note" rows="3" placeholder="강아지 동반 조건, 네이버/카카오 링크 등"></textarea></div>
       <div class="modal-actions">
         <button class="btn-modal-cancel" onclick="closeModal('submit-modal')">취소</button>
-        <button class="btn-modal-submit" onclick="submitReport()">제보 보내기 🐾</button>
+        <button class="btn-modal-submit" onclick="submitReport()">알려주기 🐾</button>
       </div>
     </div>
   </div>
@@ -916,6 +1000,37 @@
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
+// ══════════════════════════════════════════════════════
+//  🍑 홍시 SVG 아이콘 (감·연시 persimmon)
+// ══════════════════════════════════════════════════════
+const HONGSI_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 88" fill="none">
+  <!-- stem -->
+  <rect x="37" y="4" width="6" height="17" rx="3" fill="#3D6B24"/>
+  <!-- calyx: 4 leaves -->
+  <ellipse cx="40" cy="24" rx="5" ry="13" fill="#5A8A34" transform="rotate(0,40,24)" opacity=".95"/>
+  <ellipse cx="40" cy="24" rx="5" ry="13" fill="#4E7E2C" transform="rotate(45,40,24)" opacity=".9"/>
+  <ellipse cx="40" cy="24" rx="5" ry="13" fill="#5A8A34" transform="rotate(90,40,24)" opacity=".95"/>
+  <ellipse cx="40" cy="24" rx="5" ry="13" fill="#4E7E2C" transform="rotate(135,40,24)" opacity=".9"/>
+  <!-- calyx center -->
+  <circle cx="40" cy="24" r="5" fill="#3D6B24"/>
+  <!-- body shadow -->
+  <ellipse cx="40" cy="65" rx="33" ry="24" fill="#B84008" opacity=".25"/>
+  <!-- body -->
+  <ellipse cx="40" cy="60" rx="34" ry="28" fill="#E85C10"/>
+  <!-- top crease / indent -->
+  <ellipse cx="40" cy="34" rx="9" ry="4" fill="#C84808" opacity=".35"/>
+  <!-- highlight -->
+  <ellipse cx="28" cy="47" rx="12" ry="8" fill="#F5803C" opacity=".55"/>
+  <ellipse cx="24" cy="44" rx="5" ry="3.5" fill="#FFB07A" opacity=".45"/>
+  <!-- bottom highlight -->
+  <ellipse cx="52" cy="74" rx="7" ry="5" fill="#C84808" opacity=".2"/>
+</svg>`;
+
+// 홍시 아이콘 렌더 헬퍼 — size: CSS size string (e.g. '48px', '22px')
+function hongsiIcon(size='1em') {
+  return `<span class="hongsi-icon" style="width:${size};height:calc(${size} * 1.05)">${HONGSI_SVG}</span>`;
+}
+
 // ══════════════════════════════════════════════════════
 //  ⚙️  설정 영역 — Firebase 프로젝트 정보 입력
 // ══════════════════════════════════════════════════════
@@ -3217,9 +3332,10 @@ const COLOR_UNCERTAIN = STATUS_COLORS.unverified;
 
 function getPlaceStatus(p) {
   if (p.petStatus) return p.petStatus;
-  if (p.petConfirmed) return 'confirmed';
-  if (p.kakaoUrl || p.addedAt) return 'search';
-  return 'unverified';
+  // Legacy 매핑 — petStatus 없는 기존 장소
+  if (p.petConfirmed === true) return 'confirmed';
+  return 'unverified'; // 모든 등록 장소 기본값 (카카오 수집 포함)
+  // ※ 'search'(하늘색)는 라이브 검색 결과 전용 — addMarker에서 사용 안 함
 }
 
 async function updatePlaceStatus(placeId, status) {
@@ -3273,6 +3389,8 @@ function areaBadge(area) {
 //  STATE
 // ══════════════════════════════════════════════════════
 let currentUser   = null;   // { uid, email, displayName, isAdmin }
+let currentDog    = null;   // { name, age, photoURL }
+let dogRegBlob    = null;   // File blob for dog photo during registration
 let map           = null;
 let markers       = {};
 let activeFilters = { area:'all', largeDog:false, indoor:false, noCage:false, hasFee:false, noFee:false };
@@ -3292,12 +3410,13 @@ let authMode = 'login'; // login | register
 function switchAuthMode(toRegister) {
   authMode = toRegister ? 'register' : 'login';
   document.getElementById('fg-name').style.display       = toRegister ? '' : 'none';
-  document.getElementById('auth-btn').textContent         = toRegister ? '🐾 회원가입하기' : '🐶 로그인하고 시작하기';
+  document.getElementById('fg-dog').style.display        = toRegister ? '' : 'none';
+  document.getElementById('auth-btn').textContent         = toRegister ? '🐾 시작하기' : '🐶 로그인하고 시작하기';
   document.getElementById('auth-subtitle').innerHTML      = toRegister
-    ? '이메일과 비밀번호로 계정을 만들어보세요' : '경기도 전 지역에서 강아지와 함께 갈 수 있는<br>카페와 식당을 한눈에 찾아보세요';
+    ? '우리 강아지 소개도 같이 해줘요 🐾' : '함께 다녀온 곳들을 지도에 기록하고<br>좋아했던 순간을 모아두는 공간이에요 🐾';
   document.getElementById('auth-toggle-row').innerHTML    = toRegister
-    ? `이미 계정이 있으신가요? <a onclick="switchAuthMode(false)">로그인</a>`
-    : `아직 계정이 없으신가요? <a onclick="switchAuthMode(true)">회원가입</a>`;
+    ? `이미 계정이 있어요? <a onclick="switchAuthMode(false)">로그인</a>`
+    : `처음이에요? <a onclick="switchAuthMode(true)">계정 만들기</a>`;
   document.getElementById('auth-err').style.display = 'none';
   document.getElementById('auth-pw').autocomplete = toRegister ? 'new-password' : 'current-password';
 }
@@ -3329,15 +3448,24 @@ async function doAuth() {
     if (authMode === 'register') {
       credential = await auth.createUserWithEmailAndPassword(email, pw);
       await credential.user.updateProfile({ displayName: name });
+      // Upload dog photo if provided
+      const dogName = document.getElementById('dog-name').value.trim();
+      const dogAge  = document.getElementById('dog-age').value.trim();
+      let dogPhotoURL = null;
+      if (dogRegBlob) {
+        dogPhotoURL = await uploadDogPhoto(credential.user.uid, dogRegBlob);
+      }
+      const dogProfile = dogName ? { name: dogName, age: dogAge || '', photoURL: dogPhotoURL || '' } : null;
+      if (dogProfile) currentDog = dogProfile;
       // Save to Firestore
       await db.collection('users').doc(credential.user.uid).set({
         email, displayName: name,
         createdAt: firebase.firestore.FieldValue.serverTimestamp(),
         lastLoginAt: firebase.firestore.FieldValue.serverTimestamp(),
         loginCount: 1,
-        isAdmin: isAdmin(email)
+        isAdmin: isAdmin(email),
+        ...(dogProfile ? { dog: dogProfile } : {})
       });
-      // Email notification to admins
     } else {
       credential = await auth.signInWithEmailAndPassword(email, pw);
       // Update last login
@@ -3363,6 +3491,52 @@ async function doAuth() {
     };
     showAuthErr(msgs[e.code] || e.message);
   }
+}
+
+/* 강아지 사진 선택 핸들러 (회원가입) */
+function onDogPhotoSelected(e) {
+  const file = e.target.files[0]; if (!file) return;
+  dogRegBlob = file;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    const img = document.getElementById('dog-photo-preview');
+    img.src = ev.target.result;
+    img.style.display = 'block';
+    document.querySelector('.dog-photo-upload .dpu-hint').style.display = 'none';
+    document.querySelector('.dog-photo-upload .dpu-icon').style.display = 'none';
+  };
+  reader.readAsDataURL(file);
+}
+
+/* 강아지 사진 Firebase Storage에 업로드 */
+async function uploadDogPhoto(uid, blob) {
+  if (!firebaseReady || !firebase.storage) return null;
+  try {
+    const storage = firebase.storage();
+    const ref = storage.ref(`dog_photos/${uid}.webp`);
+    // compress to WebP
+    const canvas = document.createElement('canvas');
+    const img = new Image();
+    await new Promise(r => { img.onload = r; img.src = URL.createObjectURL(blob); });
+    const maxSz = 400;
+    const ratio = Math.min(maxSz/img.width, maxSz/img.height, 1);
+    canvas.width = img.width * ratio; canvas.height = img.height * ratio;
+    canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+    const webpBlob = await new Promise(r => canvas.toBlob(r, 'image/webp', 0.85));
+    await ref.put(webpBlob);
+    return await ref.getDownloadURL();
+  } catch(e) { console.warn('dog photo upload failed', e); return null; }
+}
+
+/* 강아지 프로필 Firestore에서 로드 */
+async function loadUserDogProfile(uid) {
+  if (!firebaseReady || !db) return;
+  try {
+    const doc = await db.collection('users').doc(uid).get();
+    if (doc.exists && doc.data().dog) {
+      currentDog = doc.data().dog;
+    }
+  } catch(e) {}
 }
 
 function showAuthErr(msg) {
@@ -3402,6 +3576,9 @@ function startApp(user) {
     document.getElementById('notif-dot').style.display  = 'block';
     document.getElementById('tab-list-dot').style.display = 'block';
   }
+
+  // load dog profile async (non-blocking)
+  loadUserDogProfile(user.uid).catch(() => {});
 
   requestAnimationFrame(() => setTimeout(initApp, 80));
 }
@@ -3520,6 +3697,28 @@ async function initApp() {
   }
 }
 
+function getMarkerSizeForZoom(z) {
+  if (z <= 10) return 8;
+  if (z <= 11) return 10;
+  if (z <= 12) return 13;
+  if (z <= 13) return 16;
+  if (z <= 14) return 18;
+  return 20;
+}
+
+function updateAllMarkerSizes() {
+  if (!map) return;
+  const z = map.getZoom();
+  const sz = getMarkerSizeForZoom(z);
+  document.querySelectorAll('.m-dot').forEach(dot => {
+    dot.style.width  = sz + 'px';
+    dot.style.height = sz + 'px';
+    dot.style.marginLeft = (-sz/2) + 'px';
+    dot.style.marginTop  = (-sz/2) + 'px';
+  });
+  // sync iconAnchor via marker pane offset trick: done via CSS margin above
+}
+
 function initMap() {
   map = L.map('map', { zoomControl:false }).setView([37.55, 127.1], 9);
   L.control.zoom({ position:'bottomright' }).addTo(map);
@@ -3530,13 +3729,17 @@ function initMap() {
   setTimeout(() => map.invalidateSize(), 300);
   places.forEach(addMarker);
   map.on('click', () => { if (activePlace) closeDrawer(); });
+  map.on('zoomend', updateAllMarkerSizes);
+  // apply initial size
+  setTimeout(updateAllMarkerSizes, 200);
 }
 
 function addMarker(p) {
   const color = STATUS_COLORS[getPlaceStatus(p)] || STATUS_COLORS.unverified;
   const feeClass = p.entryFee ? 'fee-marker' : '';
-  const html = `<div class="m-dot ${feeClass}" style="background:${color}" data-id="${p.id}"></div>`;
-  const icon = L.divIcon({ html, className:'', iconSize:[20,20], iconAnchor:[10,10] });
+  const sz = map ? getMarkerSizeForZoom(map.getZoom()) : 20;
+  const html = `<div class="m-dot ${feeClass}" style="background:${color};width:${sz}px;height:${sz}px;margin-left:${-sz/2}px;margin-top:${-sz/2}px" data-id="${p.id}"></div>`;
+  const icon = L.divIcon({ html, className:'', iconSize:[sz,sz], iconAnchor:[sz/2,sz/2] });
   const m = L.marker([p.lat, p.lng], { icon })
     .addTo(map)
     .on('click', e => { L.DomEvent.stopPropagation(e); openPlace(p); });
@@ -3682,16 +3885,15 @@ function renderLiveResults(rawData) {
     _inDB: dbNames.has(d.place_name.trim()) || coordInDB(parseFloat(d.y), parseFloat(d.x))
   }));
 
-  // Add sky-blue dots on map
-  liveData.forEach((d, i) => {
+  // 새 장소만 하늘색 마커로 지도에 표시 (이미 앱에 있는 곳은 제외)
+  liveData.filter(d => !d._inDB).forEach((d) => {
     const lat = parseFloat(d.y);
     const lng = parseFloat(d.x);
-    const dotColor = d._inDB ? '#4CAF50' : '#87CEEB';
-    const dotHtml = `<div style="width:14px;height:14px;border-radius:50%;background:${dotColor};border:2px solid white;box-shadow:0 1px 6px rgba(0,0,0,.3);cursor:pointer"></div>`;
+    const dotHtml = `<div style="width:14px;height:14px;border-radius:50%;background:#87CEEB;border:2px solid white;box-shadow:0 1px 6px rgba(0,0,0,.3);cursor:pointer"></div>`;
     const icon = L.divIcon({ html: dotHtml, className:'', iconSize:[14,14], iconAnchor:[7,7] });
     const m = L.marker([lat, lng], { icon })
       .addTo(map)
-      .on('click', () => showLivePopup(d, d._inDB));
+      .on('click', () => showLivePopup(d, false));
     liveMarkers.push(m);
   });
 
@@ -3801,6 +4003,7 @@ function toggleFilter(btn, type) {
 
 function getFiltered() {
   return places.filter(p => {
+    if (!p || p.id == null || !p.name) return false; // null 안전
     if (activeFilters.area !== 'all' && p.area !== activeFilters.area) return false;
     if (activeFilters.largeDog && !p.large) return false;
     if (activeFilters.indoor  && !p.indoor) return false;
@@ -3809,8 +4012,8 @@ function getFiltered() {
     if (activeFilters.noFee   && p.entryFee)  return false;
     if (searchText) {
       const q = searchText.toLowerCase();
-      return p.name.toLowerCase().includes(q) || p.addr.toLowerCase().includes(q) ||
-             p.note.toLowerCase().includes(q)  || p.cat.toLowerCase().includes(q);
+      return (p.name||'').toLowerCase().includes(q) || (p.addr||'').toLowerCase().includes(q) ||
+             (p.note||'').toLowerCase().includes(q)  || (p.cat||'').toLowerCase().includes(q);
     }
     return true;
   });
@@ -3847,7 +4050,7 @@ function filterPlaces() {
 function renderList(filtered) {
   const list = document.getElementById('place-list');
   const cnt  = document.getElementById('place-count');
-  cnt.textContent = `${filtered.length}개의 장소`;
+  cnt.textContent = `총 ${filtered.length}곳`;
 
   let html = '';
 
@@ -3868,7 +4071,7 @@ function renderList(filtered) {
   }
 
   if (!filtered.length && !liveData.length) {
-    list.innerHTML = `<div class="no-results"><div class="nr-emoji">🔍</div><p>조건에 맞는 장소가 없어요.<br>필터를 바꿔보세요.</p></div>`;
+    list.innerHTML = `<div class="no-results"><div class="nr-emoji">🔍</div><p>조건에 맞는 곳이 없어요.<br>다른 필터로 찾아볼까요?</p></div>`;
     return;
   }
 
@@ -3913,7 +4116,7 @@ function cardHtml(p) {
   const isActive = activePlace?.id === p.id;
   return `
   <div class="place-card ${isActive?'active':''} ${p.entryFee?'has-fee':''}" id="card-${p.id}"
-       onclick="openPlace(places.find(x=>x.id===${p.id}))">
+       onclick="openPlace(places.find(x=>x.id==${p.id}))">
     <div class="pc-top">
       <div class="pc-emoji">${p.emoji}</div>
       <div class="pc-info">
@@ -3958,10 +4161,10 @@ function openPlace(p) {
     if (card) card.scrollIntoView({ behavior:'smooth', block:'nearest' });
   }, 80);
 
-  const hoursHtml = p.hours.map(h => `
+  const hoursHtml = (p.hours || [{d:'영업시간', t:'카카오맵 확인'}]).map(h => `
     <div class="hours-row">
-      <span class="h-day">${h.d}</span>
-      <span class="h-time${h.t==='휴무'?' closed':''}">${h.t}</span>
+      <span class="h-day">${h.d||''}</span>
+      <span class="h-time${h.t==='휴무'?' closed':''}">${h.t||''}</span>
     </div>`).join('');
 
   const feeBanner = p.entryFee ? `
@@ -3999,7 +4202,7 @@ function openPlace(p) {
     <div class="hours-grid">${hoursHtml}</div>
     <div class="divider"></div>
     <div class="sec-label">상세 정보</div>
-    <div class="notes-box">${p.note}</div>
+    <div class="notes-box">${p.note || ''}</div>
     <div class="warn-note">⚠️ 방문 전 전화로 최신 정보 확인을 권장합니다</div>
     <div class="action-row">
       <button class="btn-act btn-primary" onclick="openKakaoMap(${p.id})">
@@ -4014,9 +4217,9 @@ function openPlace(p) {
       <div class="divider"></div>
       <div class="sec-label">추억</div>
       <div class="drawer-mem-feed" id="drawer-mem-list">
-        <div style="font-size:13px;color:#DDD;text-align:center;padding:12px 0">불러오는 중...</div>
+        <div style="font-size:13px;color:#DDD;text-align:center;padding:12px 0">기억 꺼내는 중...</div>
       </div>
-      <button class="btn-write-mem-drawer" onclick="openWriteMemory(${p.id})">+ 이 가게에서의 추억 남기기</button>
+      <button class="btn-write-mem-drawer" onclick="openWriteMemory(${p.id})">✏️ 여기서의 기억 남기기</button>
     </div>`;
 
   document.getElementById('detail-drawer').classList.add('open');
@@ -4108,17 +4311,143 @@ async function uploadMemPhoto(blob) {
 }
 
 /* 가게 선택 드롭다운 채우기 */
-function populateMemPlaceSelect(selectedId = null) {
-  const sel = document.getElementById('mem-place-select');
-  if (!sel) return;
-  sel.innerHTML = '<option value="">가게를 선택하세요...</option>';
-  [...places].filter(p => p && p.id != null && p.name).sort((a,b) => a.name.localeCompare(b.name,'ko')).forEach(p => {
-    const opt = document.createElement('option');
-    opt.value = p.id;
-    opt.textContent = `${p.name} (${p.area || ''})`;
-    if (selectedId && p.id === selectedId) opt.selected = true;
-    sel.appendChild(opt);
+// ── place picker helpers ──
+let pickerBlurTimer = null;
+let mapPickMode = false;
+let mapPickOrigHandler = null;
+
+function getValidPlaces() {
+  return [...places].filter(p => p && p.id != null && p.name);
+}
+
+function setPickedPlace(p) {
+  if (!p) return;
+  document.getElementById('mem-place-select').value = p.id;
+  document.getElementById('place-picker-input').value = `${p.name}${p.area ? ' · ' + p.area : ''}`;
+  document.getElementById('place-picker-input').classList.add('has-val');
+  document.getElementById('place-picker-dropdown').classList.remove('open');
+}
+
+function clearPickedPlace() {
+  document.getElementById('mem-place-select').value = '';
+  document.getElementById('place-picker-input').value = '';
+  document.getElementById('place-picker-input').classList.remove('has-val');
+}
+
+function onPlacePickerInput(q) {
+  const dropdown = document.getElementById('place-picker-dropdown');
+  // clear hidden val when typing
+  document.getElementById('mem-place-select').value = '';
+  document.getElementById('place-picker-input').classList.remove('has-val');
+  if (!q.trim()) { dropdown.classList.remove('open'); return; }
+  const kw = q.trim().toLowerCase();
+  const matches = getValidPlaces()
+    .filter(p => p.name.toLowerCase().includes(kw) || (p.area||'').toLowerCase().includes(kw))
+    .sort((a,b) => a.name.localeCompare(b.name,'ko'))
+    .slice(0, 40);
+  if (!matches.length) {
+    dropdown.innerHTML = `<div class="place-picker-empty">검색 결과가 없어요</div>`;
+  } else {
+    dropdown.innerHTML = matches.map(p =>
+      `<div class="place-picker-item" onmousedown="setPickedPlace({id:${p.id},name:'${p.name.replace(/'/g,'\\'')}',area:'${(p.area||'').replace(/'/g,'\\'')}'})" >
+        <span class="pi-name">${p.name}</span>
+        <span class="pi-area">${p.area || ''}</span>
+      </div>`
+    ).join('');
+  }
+  dropdown.classList.add('open');
+}
+
+function onPlacePickerFocus() {
+  clearTimeout(pickerBlurTimer);
+  const q = document.getElementById('place-picker-input').value;
+  if (q.trim().length > 0 && !document.getElementById('mem-place-select').value) {
+    onPlacePickerInput(q);
+  }
+}
+
+function onPlacePickerBlur() {
+  pickerBlurTimer = setTimeout(() => {
+    document.getElementById('place-picker-dropdown').classList.remove('open');
+  }, 200);
+}
+
+function toggleMapPickMode() {
+  if (mapPickMode) {
+    exitMapPickMode();
+    return;
+  }
+  mapPickMode = true;
+  const btn = document.getElementById('place-map-pick-btn');
+  const hint = document.getElementById('place-map-pick-hint');
+  btn.classList.add('picking');
+  btn.innerHTML = '<i class="fa fa-times"></i> 선택 취소';
+  hint.style.display = 'block';
+  // minimize modal to show map
+  const modal = document.getElementById('memory-modal');
+  modal.style.background = 'rgba(0,0,0,.2)';
+  const sheet = modal.querySelector('.modal-sheet');
+  sheet.style.transform = 'translateY(calc(100% - 56px))';
+  // attach map click handler
+  mapPickOrigHandler = (e) => {
+    // find nearest marker
+    const latlng = e.latlng;
+    let nearest = null, minDist = Infinity;
+    getValidPlaces().forEach(p => {
+      const d = map.distance(latlng, L.latLng(p.lat, p.lng));
+      if (d < minDist) { minDist = d; nearest = p; }
+    });
+    if (nearest && minDist < 500) {
+      setPickedPlace(nearest);
+    } else {
+      showToast('근처에 등록된 장소가 없어요');
+    }
+    exitMapPickMode();
+  };
+  map.once('click', mapPickOrigHandler);
+  map.off('click'); // remove old handler (close drawer)
+  map.once('click', (e) => {
+    L.DomEvent.stopPropagation(e);
+    const latlng = e.latlng;
+    let nearest = null, minDist = Infinity;
+    getValidPlaces().forEach(p => {
+      const d = map.distance(latlng, L.latLng(p.lat, p.lng));
+      if (d < minDist) { minDist = d; nearest = p; }
+    });
+    if (nearest && minDist < 500) {
+      setPickedPlace(nearest);
+      showToast(`"${nearest.name}" 선택됐어요`);
+    } else {
+      showToast('근처에 등록된 장소가 없어요');
+    }
+    exitMapPickMode();
   });
+}
+
+function exitMapPickMode() {
+  mapPickMode = false;
+  const btn = document.getElementById('place-map-pick-btn');
+  const hint = document.getElementById('place-map-pick-hint');
+  if (btn) { btn.classList.remove('picking'); btn.innerHTML = '<i class="fa fa-map-marker-alt"></i> 지도에서 직접 고르기'; }
+  if (hint) hint.style.display = 'none';
+  const modal = document.getElementById('memory-modal');
+  if (modal) {
+    modal.style.background = '';
+    const sheet = modal.querySelector('.modal-sheet');
+    if (sheet) sheet.style.transform = '';
+  }
+  // restore normal map click handler
+  map.off('click');
+  map.on('click', () => { if (activePlace) closeDrawer(); });
+}
+
+function populateMemPlaceSelect(selectedId = null) {
+  // new picker: just set value if selectedId given
+  clearPickedPlace();
+  if (selectedId != null) {
+    const p = getValidPlaces().find(x => x.id == selectedId);
+    if (p) setPickedPlace(p);
+  }
 }
 
 /* 추억 쓰기 모달 열기 */
@@ -4126,11 +4455,26 @@ function openWriteMemory(placeId) {
   memPhotoBlob = null;
   const preview = document.getElementById('mem-photo-preview');
   if (preview) { preview.style.display = 'none'; preview.src = ''; }
-  document.getElementById('mem-photo-hint').textContent = '사진 추가 (선택)';
+  document.getElementById('mem-photo-hint').textContent = '📸 사진도 같이 남겨요 (선택)';
   document.getElementById('mem-photo-size').textContent = '';
   document.getElementById('mem-text').value = '';
   document.getElementById('mem-photo-input').value = '';
   populateMemPlaceSelect(placeId);
+  exitMapPickMode();
+  // 강아지 배지 표시
+  const badge = document.getElementById('mem-dog-badge');
+  if (badge) {
+    if (currentDog && currentDog.name) {
+      let html = '';
+      if (currentDog.photoURL) html += `<img src="${currentDog.photoURL}" style="width:28px;height:28px;border-radius:50%;object-fit:cover;flex-shrink:0">`;
+      else html += `<span>🐶</span>`;
+      html += `<span>${currentDog.name}${currentDog.age ? ' · ' + currentDog.age : ''}</span>`;
+      badge.innerHTML = html;
+      badge.style.display = 'flex';
+    } else {
+      badge.style.display = 'none';
+    }
+  }
   document.getElementById('memory-modal').classList.add('open');
 }
 
@@ -4138,11 +4482,11 @@ function openWriteMemory(placeId) {
 async function submitMemory() {
   const placeId = parseInt(document.getElementById('mem-place-select').value);
   const text    = document.getElementById('mem-text').value.trim();
-  if (!placeId) { showToast('가게를 선택해주세요'); return; }
-  if (!text && !memPhotoBlob) { showToast('사진이나 글을 입력해주세요'); return; }
+  if (!placeId) { showToast('어디 다녀왔는지 골라줘요 🐾'); return; }
+  if (!text && !memPhotoBlob) { showToast('사진이나 한 마디라도 남겨봐요'); return; }
 
   const btn = document.getElementById('mem-submit-btn');
-  btn.disabled = true; btn.textContent = '올리는 중...';
+  btn.disabled = true; btn.textContent = '저장 중...';
 
   let photoURL = null;
   if (memPhotoBlob) photoURL = await uploadMemPhoto(memPhotoBlob);
@@ -4156,6 +4500,12 @@ async function submitMemory() {
     userName:  currentUser?.displayName || currentUser?.email?.split('@')[0] || '익명',
     text,
     photoURL,
+    // 강아지 정보 자동 포함
+    ...(currentDog && currentDog.name ? {
+      dogName:     currentDog.name,
+      dogAge:      currentDog.age || '',
+      dogPhotoURL: currentDog.photoURL || ''
+    } : {}),
     createdAt: firebaseReady ? firebase.firestore.FieldValue.serverTimestamp() : new Date()
   };
 
@@ -4168,9 +4518,9 @@ async function submitMemory() {
     localStorage.setItem('mem_local', JSON.stringify(local.slice(0, 100)));
   }
 
-  btn.disabled = false; btn.textContent = '올리기';
+  btn.disabled = false; btn.textContent = '기록하기';
   closeModal('memory-modal');
-  showToast('추억이 등록됐어요!');
+  showToast('오늘 기록 남겼어요 🐾');
   memPhotoBlob = null;
 
   // 열려있는 패널/drawer 새로고침
@@ -4194,13 +4544,19 @@ function timeAgo(ts) {
 function renderMemoryCard(m, showPlace = true) {
   const img = m.photoURL ? `<img class="mem-card-img" src="${m.photoURL}" loading="lazy" alt="">` : '';
   const placeTag = showPlace && m.placeName ? `<div class="mem-place-tag">${m.placeName}</div>` : '';
+  // 강아지 정보 배지
+  let dogBadge = '';
+  if (m.dogName) {
+    const dogImg = m.dogPhotoURL ? `<img src="${m.dogPhotoURL}" style="width:20px;height:20px;border-radius:50%;object-fit:cover;vertical-align:middle;margin-right:4px">` : '🐶 ';
+    dogBadge = `<span style="display:inline-flex;align-items:center;font-size:11px;color:#E04E14;font-weight:600;margin-right:6px">${dogImg}${m.dogName}${m.dogAge ? ' · ' + m.dogAge : ''}</span>`;
+  }
   return `<div class="mem-card">
     ${img}
     <div class="mem-card-body">
       ${placeTag}
       ${m.text ? `<div class="mem-text">${m.text.replace(/\n/g,'<br>')}</div>` : ''}
       <div class="mem-meta">
-        <span>${m.userName || '익명'}</span>
+        ${dogBadge}<span>${m.userName || '익명'}</span>
         <span>${timeAgo(m.createdAt)}</span>
       </div>
     </div>
@@ -4211,7 +4567,7 @@ function renderMemoryCard(m, showPlace = true) {
 async function loadMemoriesFeed() {
   const feed = document.getElementById('mem-feed');
   if (!feed) return;
-  feed.innerHTML = '<div class="mem-loading">불러오는 중...</div>';
+  feed.innerHTML = '<div class="mem-loading">기억 꺼내는 중...</div>';
 
   let mems = [];
   if (firebaseReady && db) {
@@ -4225,7 +4581,7 @@ async function loadMemoriesFeed() {
   mems = [...local, ...mems].slice(0, 60);
 
   if (!mems.length) {
-    feed.innerHTML = `<div class="mem-empty">아직 추억이 없어요 🐾<br>방문했던 가게에서의 소감을 남겨보세요!</div>`;
+    feed.innerHTML = `<div class="mem-empty">아직 기록이 없어요 🐾<br>홍시와 다녀온 곳의 기억을 남겨봐요!</div>`;
     return;
   }
   feed.innerHTML = mems.map(m => renderMemoryCard(m, true)).join('');
@@ -4255,17 +4611,19 @@ async function refreshDrawerMemories(placeId) {
   const inner = document.getElementById('drawer-mem-list');
   if (!inner) return;
   if (!mems.length) {
-    inner.innerHTML = '<div style="font-size:13px;color:#CCC;text-align:center;padding:16px 0">아직 추억이 없어요</div>';
+    inner.innerHTML = '<div style="font-size:13px;color:#CCC;text-align:center;padding:16px 0">아직 기록이 없어요. 첫 번째로 남겨봐요 🐾</div>';
     return;
   }
-  inner.innerHTML = mems.map(m => `
-    <div class="drawer-mem-card">
+  inner.innerHTML = mems.map(m => {
+    const dogPart = m.dogName ? `🐶 ${m.dogName}${m.dogAge ? ' · '+m.dogAge : ''} · ` : '';
+    return `<div class="drawer-mem-card">
       ${m.photoURL ? `<img src="${m.photoURL}" loading="lazy" alt="">` : ''}
       <div class="drawer-mem-card-body">
         ${m.text ? `<div class="drawer-mem-text">${m.text.replace(/\n/g,'<br>')}</div>` : ''}
-        <div class="drawer-mem-meta">${m.userName || '익명'} · ${timeAgo(m.createdAt)}</div>
+        <div class="drawer-mem-meta">${dogPart}${m.userName || '익명'} · ${timeAgo(m.createdAt)}</div>
       </div>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 }
 
 // ══════════════════════════════════════════════════════
@@ -4276,6 +4634,7 @@ function openSubmitModal() {
 }
 function closeModal(id) {
   document.getElementById(id).classList.remove('open');
+  if (id === 'memory-modal') exitMapPickMode();
 }
 function modalOverlayClick(e, id) {
   if (e.target === e.currentTarget) closeModal(id);
@@ -4285,7 +4644,7 @@ async function submitReport() {
   const addr  = document.getElementById('rep-addr').value.trim();
   const phone = document.getElementById('rep-phone').value.trim();
   const note  = document.getElementById('rep-note').value.trim();
-  if (!name) { showToast('장소명을 입력해주세요'); return; }
+  if (!name) { showToast('장소 이름을 적어줘요 🙏'); return; }
 
   if (firebaseReady && db) {
     await db.collection('reports').add({
@@ -4299,7 +4658,7 @@ async function submitReport() {
   }
   closeModal('submit-modal');
   ['rep-name','rep-addr','rep-phone','rep-note'].forEach(id => document.getElementById(id).value='');
-  showToast('✅ 제보가 접수됐어요! 검토 후 추가할게요 🙏');
+  showToast('전달됐어요! 확인 후 지도에 올릴게요 🙏');
 }
 
 // ══════════════════════════════════════════════════════
@@ -4944,7 +5303,8 @@ async function impAddToApp() {
       if (isNaN(lat) || isNaN(lng)) continue;
       const newPlace = {
         id: nextId++, name: p.place_name, cat: p.cat||'기타', area: p.area||'기타',
-        petConfirmed: p.confirmed||false, addr: p.road_address_name||p.address_name||'',
+        petConfirmed: p.confirmed||false, petStatus: p.confirmed ? 'confirmed' : 'unverified',
+        addr: p.road_address_name||p.address_name||'',
         phone: p.phone||'', lat, lng, large: p.large||false, small: true,
         indoor: p.indoor||false, outdoor: true, stroller: false, cage: p.cage||false,
         entryFee: p.fee?'입장료 있음':null, note:'', kakaoUrl: p.place_url||null,
@@ -5260,6 +5620,41 @@ document.addEventListener('DOMContentLoaded', () => {
   if (!firebaseReady) {
     document.getElementById('auth-email').addEventListener('keypress', e => { if(e.key==='Enter') doAuth(); });
     document.getElementById('auth-pw').addEventListener('keypress',    e => { if(e.key==='Enter') doAuth(); });
+  }
+})();
+
+// ── 홍시 SVG 아이콘 주입 ──
+(function injectHongsiIcons() {
+  const loginLogo = document.getElementById('login-logo-icon');
+  if (loginLogo) {
+    loginLogo.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 88" style="width:56px;height:58px;display:block;margin:0 auto">
+      <rect x="37" y="4" width="6" height="17" rx="3" fill="#3D6B24"/>
+      <ellipse cx="40" cy="24" rx="5" ry="13" fill="#5A8A34" transform="rotate(0,40,24)" opacity=".95"/>
+      <ellipse cx="40" cy="24" rx="5" ry="13" fill="#4E7E2C" transform="rotate(45,40,24)" opacity=".9"/>
+      <ellipse cx="40" cy="24" rx="5" ry="13" fill="#5A8A34" transform="rotate(90,40,24)" opacity=".95"/>
+      <ellipse cx="40" cy="24" rx="5" ry="13" fill="#4E7E2C" transform="rotate(135,40,24)" opacity=".9"/>
+      <circle cx="40" cy="24" r="5" fill="#3D6B24"/>
+      <ellipse cx="40" cy="65" rx="33" ry="24" fill="#B84008" opacity=".18"/>
+      <ellipse cx="40" cy="60" rx="34" ry="28" fill="#E85C10"/>
+      <ellipse cx="40" cy="34" rx="9" ry="4" fill="#C84808" opacity=".3"/>
+      <ellipse cx="28" cy="47" rx="12" ry="8" fill="#F5803C" opacity=".55"/>
+      <ellipse cx="24" cy="44" rx="5" ry="3.5" fill="#FFB07A" opacity=".45"/>
+    </svg>`;
+  }
+  const hdrLogo = document.getElementById('hdr-logo-el');
+  if (hdrLogo) {
+    hdrLogo.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 88" style="width:22px;height:23px;display:inline-block;vertical-align:-5px;margin-right:5px;flex-shrink:0">
+      <rect x="37" y="4" width="6" height="17" rx="3" fill="#3D6B24"/>
+      <ellipse cx="40" cy="24" rx="5" ry="13" fill="#5A8A34" transform="rotate(0,40,24)" opacity=".95"/>
+      <ellipse cx="40" cy="24" rx="5" ry="13" fill="#4E7E2C" transform="rotate(45,40,24)" opacity=".9"/>
+      <ellipse cx="40" cy="24" rx="5" ry="13" fill="#5A8A34" transform="rotate(90,40,24)" opacity=".95"/>
+      <ellipse cx="40" cy="24" rx="5" ry="13" fill="#4E7E2C" transform="rotate(135,40,24)" opacity=".9"/>
+      <circle cx="40" cy="24" r="5" fill="#3D6B24"/>
+      <ellipse cx="40" cy="60" rx="34" ry="28" fill="#E85C10"/>
+      <ellipse cx="40" cy="34" rx="9" ry="4" fill="#C84808" opacity=".3"/>
+      <ellipse cx="28" cy="47" rx="12" ry="8" fill="#F5803C" opacity=".55"/>
+      <ellipse cx="24" cy="44" rx="5" ry="3.5" fill="#FFB07A" opacity=".45"/>
+    </svg>홍시의 대동여지도`;
   }
 })();
 </script>
