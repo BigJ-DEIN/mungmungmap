@@ -8019,6 +8019,8 @@ async function nwFlushStatusBatch(batch_arr, setV2At = true) {
       if (!firestoreId) return;
       const data = { petStatus: status };
       if (setV2At && nowStr) data.lastV2At = nowStr;
+      // rejected 장소는 active:false — Firestore 로드에서 제외해 메모리 누적 방지
+      if (status === 'rejected') data.active = false;
       batch.update(db.collection('places').doc(firestoreId), data);
     });
     await batch.commit().catch(e => console.warn('nwFlushBatch err', e));
