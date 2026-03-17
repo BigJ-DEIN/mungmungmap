@@ -4705,35 +4705,122 @@ function startApp(user) {
 // ══════════════════════════════════════════════════════
 //  PLACES — Firestore 기반 데이터 관리
 // ══════════════════════════════════════════════════════
-const PLACES_CACHE_KEY = 'hj_places_v3';
-const PLACES_CACHE_TS_KEY = 'hj_places_ts_v3';
-const PLACES_CACHE_TTL = 5 * 60 * 1000; // 5분
+const PLACES_CACHE_KEY    = 'hj_places_v4';
+const PLACES_CACHE_TS_KEY  = 'hj_places_ts_v4';
+const PLACES_CACHE_TTL     = 12 * 60 * 60 * 1000; // 12시간
 
-async function loadPlacesFromFirestore() {
+// 뷰포트 타일 로딩 — 타일 크기 2° × 2° (~222km)
+const VP_TILE_DEG  = 2.0;
+const _loadedTiles = new Set();   // "latFloor_lngFloor" 문자열
+let   _vpLoadTimer = null;        // debounce timer
+
+function _tileKey(lat, lng) {
+  return `${Math.floor(lat / VP_TILE_DEG)}_${Math.floor(lng / VP_TILE_DEG)}`;
+}
+function _markAllTilesLoaded() {
+  // 한국 전체 범위 (위도 33-39, 경도 124-130)를 타일로 마킹
+  for (let la = 33; la < 39; la += VP_TILE_DEG)
+    for (let lo = 124; lo < 130; lo += VP_TILE_DEG)
+      _loadedTiles.add(_tileKey(la, lo));
+}
+
+async function loadViewportPlaces() {
   if (!firebaseReady || !db) return;
-  const now = Date.now();
+
+  // ── 1. localStorage 캐시 유효하면 바로 복원 ──────────────────────────────
+  const now    = Date.now();
   const cacheTs = parseInt(localStorage.getItem(PLACES_CACHE_TS_KEY) || '0');
-  const cached = localStorage.getItem(PLACES_CACHE_KEY);
+  const cached  = localStorage.getItem(PLACES_CACHE_KEY);
   if (cached && (now - cacheTs) < PLACES_CACHE_TTL) {
     try {
       const arr = JSON.parse(cached);
-      if (arr.length > 0) { places.length = 0; arr.forEach(p => places.push(p)); return; }
+      if (arr.length > 0) {
+        places.length = 0;
+        arr.forEach(p => places.push(p));
+        _markAllTilesLoaded();          // 전체 이미 로딩됨 표시
+        if (clusterGroup) places.forEach(addMarker);
+        return;
+      }
     } catch(e) {}
   }
-  try {
-    const snap = await db.collection('places').where('active','==',true).get();
-    if (snap.empty) return;
-    places.length = 0;
-    snap.docs.forEach(doc => places.push({ ...doc.data(), firestoreId: doc.id }));
-    places.sort((a,b) => (a.id||0)-(b.id||0));
-    localStorage.setItem(PLACES_CACHE_KEY, JSON.stringify(places));
+
+  // ── 2. 현재 뷰포트 타일 계산 ─────────────────────────────────────────────
+  if (!map) return;
+  const bounds  = map.getBounds().pad(0.05); // 5% 패딩
+  const latMin  = Math.floor(bounds.getSouth() / VP_TILE_DEG) * VP_TILE_DEG;
+  const latMax  = Math.floor(bounds.getNorth() / VP_TILE_DEG) * VP_TILE_DEG;
+  const lngMin  = Math.floor(bounds.getWest()  / VP_TILE_DEG) * VP_TILE_DEG;
+  const lngMax  = Math.floor(bounds.getEast()  / VP_TILE_DEG) * VP_TILE_DEG;
+
+  const tilesToFetch = [];
+  for (let la = latMin; la <= latMax; la += VP_TILE_DEG)
+    for (let lo = lngMin; lo <= lngMax; lo += VP_TILE_DEG) {
+      const key = _tileKey(la, lo);
+      if (!_loadedTiles.has(key)) tilesToFetch.push({ la, lo, key });
+    }
+
+  if (!tilesToFetch.length) return; // 모두 이미 로딩됨
+
+  // ── 3. 타일별 Firestore 쿼리 ─────────────────────────────────────────────
+  let anyNew = false;
+  for (const tile of tilesToFetch) {
+    try {
+      // lat 단일 필드 범위쿼리 (자동 인덱스) — active/lng는 클라이언트 필터
+      const snap = await db.collection('places')
+        .where('lat', '>=', tile.la)
+        .where('lat', '<',  tile.la + VP_TILE_DEG)
+        .get();
+
+      const existingIds = new Set(places.map(p => p.firestoreId).filter(Boolean));
+      const newBatch = [];
+      snap.docs.forEach(doc => {
+        const p = { ...doc.data(), firestoreId: doc.id };
+        if (p.active === false) return;                                   // 비활성 제외
+        if (p.lng == null || p.lng < tile.lo || p.lng >= tile.lo + VP_TILE_DEG) return; // lng 필터
+        if (existingIds.has(doc.id)) return;                              // 중복 제외
+        places.push(p);
+        newBatch.push(p);
+      });
+
+      _loadedTiles.add(tile.key);
+
+      if (newBatch.length > 0 && clusterGroup) {
+        newBatch.forEach(addMarker);
+        anyNew = true;
+      }
+    } catch(e) {
+      console.error('[Firestore] tile load failed:', tile.key, e);
+    }
+  }
+
+  if (anyNew) {
+    places.sort((a, b) => (a.id || 0) - (b.id || 0));
+    filterPlaces();
+  }
+
+  // ── 4. 한국 전체 타일 로딩 완료 시 localStorage 캐시 저장 ─────────────────
+  if (_allKoreaTilesLoaded()) {
+    localStorage.setItem(PLACES_CACHE_KEY,    JSON.stringify(places));
     localStorage.setItem(PLACES_CACHE_TS_KEY, now.toString());
-  } catch(e) { console.error('[Firestore] places load failed:', e); }
+  }
+}
+
+function _allKoreaTilesLoaded() {
+  for (let la = 33; la < 39; la += VP_TILE_DEG)
+    for (let lo = 124; lo < 130; lo += VP_TILE_DEG)
+      if (!_loadedTiles.has(_tileKey(la, lo))) return false;
+  return true;
+}
+
+function _scheduleVpLoad() {
+  clearTimeout(_vpLoadTimer);
+  _vpLoadTimer = setTimeout(loadViewportPlaces, 600);
 }
 
 function invalidatePlacesCache() {
   localStorage.removeItem(PLACES_CACHE_KEY);
   localStorage.removeItem(PLACES_CACHE_TS_KEY);
+  _loadedTiles.clear();   // 타일 캐시도 초기화 → 다음 뷰포트 이동 시 재로딩
 }
 
 /* 폐업 신고 (관리자 전용) — 장소 데이터/추억 유지, isClosed 플래그만 추가 */
@@ -4829,15 +4916,28 @@ async function migratePlacesToFirestore() {
 //  INIT APP
 // ══════════════════════════════════════════════════════
 async function initApp() {
-  await loadPlacesFromFirestore();  // Firestore → places 배열 채우기
-  initMap();
+  initMap();                        // 지도 먼저 → viewport bounds 확보
+  await loadViewportPlaces();       // 현재 뷰포트 타일만 로딩
   filterPlaces();
   loadNotices();
-  // Deep link
+  // Deep link — 뷰포트 밖 장소일 수 있으므로 Firestore fallback 포함
   const sharedId = parseInt(new URLSearchParams(window.location.search).get('place'));
   if (sharedId) {
-    const p = places.find(x => x.id === sharedId);
-    if (p) setTimeout(() => openPlace(p), 900);
+    let p = places.find(x => x.id === sharedId);
+    if (p) {
+      setTimeout(() => openPlace(p), 900);
+    } else if (firebaseReady && db) {
+      // 메모리에 없으면 Firestore에서 직접 조회
+      try {
+        const snap = await db.collection('places').where('id', '==', sharedId).limit(1).get();
+        if (!snap.empty) {
+          p = { ...snap.docs[0].data(), firestoreId: snap.docs[0].id };
+          places.push(p);
+          if (clusterGroup) addMarker(p);
+          setTimeout(() => openPlace(p), 900);
+        }
+      } catch(e) { console.error('[deeplink] fetch failed:', e); }
+    }
   }
   // Log visit
   if (firebaseReady && currentUser) {
@@ -4904,9 +5004,11 @@ function initMap() {
   });
   map.addLayer(clusterGroup);
 
-  places.forEach(addMarker);
-  map.on('click', () => { if (activePlace) closeDrawer(); });
+  // 마커는 loadViewportPlaces() 에서 추가 (initApp에서 호출됨)
+  map.on('click',   () => { if (activePlace) closeDrawer(); });
   map.on('zoomend', updateAllMarkerSizes);
+  map.on('moveend', _scheduleVpLoad);   // 지도 이동 시 새 타일 로딩
+  map.on('zoomend', _scheduleVpLoad);   // 줌 변경 시도 새 타일 로딩
   setTimeout(updateAllMarkerSizes, 200);
 
   // 현재 위치로 이동 (구 단위 줌 = 13)
