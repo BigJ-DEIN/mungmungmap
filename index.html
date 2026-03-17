@@ -7239,7 +7239,7 @@ let nwPipeline = {
   regionIdx: 0,         // NATIONWIDE_REGIONS 현재 인덱스
   totalRegions: NATIONWIDE_REGIONS.length,
   regionStatus: {},     // { 'province_name': { lastCollect, lastV1, lastV2, placeCount } }
-  stats: { collected: 0, v1Done: 0, v2Done: 0, v2Skipped: 0, upgraded: 0 },
+  stats: { collected: 0, v1Done: 0, v2Done: 0, v2Skipped: 0, upgraded: 0, rejected: 0 },
   log: [],
 };
 
@@ -8294,6 +8294,7 @@ async function nwVerifyStage2Region(regionName) {
       if (newStatus !== 'rejected') nwUpdateMarkerColor(p.id, newStatus);
       pendingBatch.push({ firestoreId: p.firestoreId, status: newStatus, nowStr });
       if (newStatus !== 'rejected') upgraded++;
+      else nwPipeline.stats.rejected++;
       nwUpdateLog(`  ${newStatus === 'rejected' ? '✗' : '↑'} ${p.name} → ${newStatus}`);
     } else if (p.firestoreId && firebaseReady && db) {
       // lastV2At 만 업데이트 (비동기, await 불필요)
@@ -8427,7 +8428,7 @@ function stopNationwidePipeline() {
 function resetNationwidePipeline() {
   if (nwPipeline.running) return;
   nwPipeline.regionIdx = 0;
-  nwPipeline.stats = { collected: 0, v1Done: 0, v2Done: 0, v2Skipped: 0, upgraded: 0 };
+  nwPipeline.stats = { collected: 0, v1Done: 0, v2Done: 0, v2Skipped: 0, upgraded: 0, rejected: 0 };
   nwPipeline.regionStatus = {};
   nwPipeline.log = [];
   nwSaveState();
@@ -8466,7 +8467,7 @@ async function resetAndClearPipeline() {
 
     // 파이프라인 상태 초기화
     nwPipeline.regionIdx = 0;
-    nwPipeline.stats = { collected: 0, v1Done: 0, v2Done: 0, v2Skipped: 0, upgraded: 0 };
+    nwPipeline.stats = { collected: 0, v1Done: 0, v2Done: 0, v2Skipped: 0, upgraded: 0, rejected: 0 };
     nwPipeline.regionStatus = {};
     nwPipeline.log = [];
     nwPipeline.running = false;
@@ -8571,8 +8572,8 @@ function renderNationwidePipelineUI() {
       </div>
     </div>
 
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px">
-      ${[['수집', nwPipeline.stats.collected,'#3B82F6'],['1단계↑',nwPipeline.stats.v1Done,'#A8D86E'],['2단계↑',nwPipeline.stats.upgraded,'#F07030'],['스킵',nwPipeline.stats.v2Skipped,'#9CA3AF']].map(([l,v,c])=>
+    <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:6px;margin-bottom:12px">
+      ${[['수집', nwPipeline.stats.collected,'#3B82F6'],['1단계↑',nwPipeline.stats.v1Done,'#A8D86E'],['2단계처리',nwPipeline.stats.v2Done,'#F07030'],['확정↑',nwPipeline.stats.upgraded,'#22C55E'],['거절✗',nwPipeline.stats.rejected,'#EF4444'],['스킵',nwPipeline.stats.v2Skipped,'#9CA3AF']].map(([l,v,c])=>
         `<div style="background:#fff;border-radius:8px;padding:8px;text-align:center;box-shadow:0 1px 4px rgba(0,0,0,.06)">
           <div style="font-size:18px;font-weight:800;color:${c}">${v}</div>
           <div style="font-size:10px;color:#9CA3AF;font-weight:600">${l}</div>
