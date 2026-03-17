@@ -3372,9 +3372,100 @@ function startApp(user) {
 }
 
 // ══════════════════════════════════════════════════════
+//  PLACES — Firestore 기반 데이터 관리
+// ══════════════════════════════════════════════════════
+const PLACES_CACHE_KEY = 'hj_places_v3';
+const PLACES_CACHE_TS_KEY = 'hj_places_ts_v3';
+const PLACES_CACHE_TTL = 5 * 60 * 1000; // 5분
+
+async function loadPlacesFromFirestore() {
+  if (!firebaseReady || !db) return;
+  const now = Date.now();
+  const cacheTs = parseInt(localStorage.getItem(PLACES_CACHE_TS_KEY) || '0');
+  const cached = localStorage.getItem(PLACES_CACHE_KEY);
+  if (cached && (now - cacheTs) < PLACES_CACHE_TTL) {
+    try {
+      const arr = JSON.parse(cached);
+      if (arr.length > 0) { places.length = 0; arr.forEach(p => places.push(p)); return; }
+    } catch(e) {}
+  }
+  try {
+    const snap = await db.collection('places').where('active','==',true).get();
+    if (snap.empty) return;
+    places.length = 0;
+    snap.docs.forEach(doc => places.push({ ...doc.data(), firestoreId: doc.id }));
+    places.sort((a,b) => (a.id||0)-(b.id||0));
+    localStorage.setItem(PLACES_CACHE_KEY, JSON.stringify(places));
+    localStorage.setItem(PLACES_CACHE_TS_KEY, now.toString());
+  } catch(e) { console.error('[Firestore] places load failed:', e); }
+}
+
+function invalidatePlacesCache() {
+  localStorage.removeItem(PLACES_CACHE_KEY);
+  localStorage.removeItem(PLACES_CACHE_TS_KEY);
+}
+
+/* 장소 삭제 (관리자 전용) */
+async function adminDeletePlace(placeId) {
+  const place = places.find(p => p.id === placeId);
+  if (!place) return;
+  if (!confirm(`"${place.name}" 장소를 삭제하시겠어요?\n(폐업 또는 오등록 시 사용)`)) return;
+  if (firebaseReady && db && place.firestoreId) {
+    try {
+      await db.collection('places').doc(place.firestoreId).update({
+        active: false,
+        deletedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        deletedBy: currentUser?.uid || 'admin'
+      });
+    } catch(e) { showToast('삭제 실패: ' + e.message); return; }
+  }
+  const idx = places.findIndex(p => p.id === placeId);
+  if (idx !== -1) places.splice(idx, 1);
+  if (markers[placeId]) { map.removeLayer(markers[placeId]); delete markers[placeId]; }
+  invalidatePlacesCache();
+  filterPlaces();
+  closeDrawer();
+  showToast(`🗑️ "${place.name}" 삭제됐어요`);
+}
+
+/* Firestore로 기존 장소 마이그레이션 (관리자 전용, 최초 1회) */
+async function migratePlacesToFirestore() {
+  if (!firebaseReady || !db) { showToast('Firebase 필요'); return; }
+  const btn = document.getElementById('btn-migrate-places');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ 확인 중...'; }
+  const existSnap = await db.collection('places').limit(1).get();
+  if (!existSnap.empty) {
+    if (!confirm('Firestore에 이미 장소가 있어요.\n기존 장소 위에 없는 것만 추가할까요?')) {
+      if (btn) { btn.disabled = false; btn.textContent = '☁️ Firestore 업로드'; } return;
+    }
+  }
+  // 이미 Firestore에 있는 이름 수집
+  const existSnap2 = await db.collection('places').get();
+  const fsNames = new Set(existSnap2.docs.map(d => d.data().name));
+  const toUpload = places.filter(p => p && p.id != null && !p.firestoreId && !fsNames.has(p.name));
+  if (!toUpload.length) { showToast('추가할 장소가 없어요 (모두 이미 등록됨)'); if (btn) { btn.disabled = false; btn.textContent = '☁️ Firestore 업로드'; } return; }
+  let done = 0;
+  const CHUNK = 400;
+  for (let i = 0; i < toUpload.length; i += CHUNK) {
+    const batch = db.batch();
+    toUpload.slice(i, i + CHUNK).forEach(p => {
+      const ref = db.collection('places').doc();
+      batch.set(ref, { ...p, active: true, addedAt: firebase.firestore.FieldValue.serverTimestamp() });
+      done++;
+    });
+    await batch.commit();
+    if (btn) btn.textContent = `⏳ ${Math.min(i+CHUNK, toUpload.length)}/${toUpload.length}`;
+  }
+  invalidatePlacesCache();
+  if (btn) { btn.disabled = false; btn.textContent = '✅ 완료'; }
+  showToast(`✅ ${done}개 장소를 Firestore에 업로드했어요!`, 4000);
+}
+
+// ══════════════════════════════════════════════════════
 //  INIT APP
 // ══════════════════════════════════════════════════════
-function initApp() {
+async function initApp() {
+  await loadPlacesFromFirestore();  // Firestore → places 배열 채우기
   initMap();
   filterPlaces();
   loadNotices();
@@ -3540,8 +3631,8 @@ function renderLiveResults(rawData) {
   }
 
   // Check which are already in our DB
-  const dbNames = new Set(places.map(p => p.name.trim()));
-  const dbCoords = places.map(p => [p.lat, p.lng]);
+  const dbNames = new Set(places.filter(p=>p&&p.name).map(p => p.name.trim()));
+  const dbCoords = places.filter(p=>p&&p.lat!=null).map(p => [p.lat, p.lng]);
 
   function coordInDB(lat, lng) {
     return dbCoords.some(([dlat, dlng]) =>
@@ -3883,6 +3974,7 @@ function openPlace(p) {
         <i class="fa fa-share-nodes"></i> 공유
       </button>
     </div>
+    ${currentUser?.isAdmin ? `<button onclick="adminDeletePlace(${p.id})" style="width:100%;margin-top:8px;padding:9px;background:#FFF5F5;color:#C62828;border:1.5px solid #FFCDD2;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">🗑️ 폐업·오등록 삭제</button>` : ''}
     <div class="drawer-mem-section" id="drawer-mem-section">
       <div class="divider"></div>
       <div class="sec-label">추억</div>
@@ -3985,10 +4077,10 @@ function populateMemPlaceSelect(selectedId = null) {
   const sel = document.getElementById('mem-place-select');
   if (!sel) return;
   sel.innerHTML = '<option value="">가게를 선택하세요...</option>';
-  [...places].sort((a,b) => a.name.localeCompare(b.name,'ko')).forEach(p => {
+  [...places].filter(p => p && p.id != null && p.name).sort((a,b) => a.name.localeCompare(b.name,'ko')).forEach(p => {
     const opt = document.createElement('option');
     opt.value = p.id;
-    opt.textContent = `${p.name} (${p.area})`;
+    opt.textContent = `${p.name} (${p.area || ''})`;
     if (selectedId && p.id === selectedId) opt.selected = true;
     sel.appendChild(opt);
   });
@@ -4645,6 +4737,7 @@ function renderAdminImporter() {
       <strong>🟠 확인완료</strong> = 카테고리가 애견카페/펫카페/애견운동장 (자동) 또는 카카오맵 직접 확인 후 수동 체크<br>
       <strong>⚪ 확인필요</strong> = 나머지. 카카오맵 🗺 링크로 직접 확인 후 변경 가능
     </div>
+    ${!firebaseReady ? `<div style="background:#FFF3E0;border-left:3px solid #FF9800;padding:7px 10px;border-radius:6px;font-size:11px;color:#E65100;margin-bottom:8px">⚠️ Firebase 미연결 — 등록해도 새로고침 시 사라집니다. Firebase 설정 후 사용해주세요.</div>` : `<div style="background:#E8F5E9;border-left:3px solid #43A047;padding:7px 10px;border-radius:6px;font-size:12px;color:#1B5E20;margin-bottom:8px;display:flex;align-items:center;gap:8px">✅ Firestore 연결됨 — 등록한 장소가 모든 사용자에게 즉시 반영됩니다.<button id="btn-migrate-places" onclick="migratePlacesToFirestore()" style="margin-left:auto;padding:4px 10px;background:#43A047;color:white;border:none;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit">☁️ 기존 장소 Firestore 업로드</button></div>`}
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
       <button style="padding:9px 16px;background:#E04E14;color:white;border:none;border-radius:10px;font-size:13px;font-weight:700;font-family:inherit;cursor:pointer" id="imp-btn" onclick="impStartSearch()" ${imp.running?'disabled':''}>
         ${imp.running?'⏳ 검색 중...': all.length?'🔄 다시 검색':'🔍 경기도 전역 검색 시작'}
@@ -4764,57 +4857,80 @@ function impCatEmoji(cat) {
   return '🐾';
 }
 
-/* 수집된 장소를 앱에 바로 등록 */
-function impAddToApp() {
+/* 수집된 장소를 앱에 바로 등록 (Firestore 저장) */
+async function impAddToApp() {
   const sel = Object.values(imp.found).filter(p => !p.inDB && !p._skip);
   if (!sel.length) { showToast('등록할 장소가 없어요'); return; }
 
-  const maxId = Math.max(...places.map(p => p.id), 194);
-  let nextId = maxId + 1;
+  const addBtn = document.querySelector('[onclick="impAddToApp()"]');
+  if (addBtn) { addBtn.disabled = true; addBtn.textContent = '⏳ 저장 중...'; }
 
+  const maxId = Math.max(...places.filter(p=>p&&p.id!=null).map(p => p.id), 194);
+  let nextId = maxId + 1;
   const added = [];
-  for (const p of sel) {
-    const lat = parseFloat(p.y), lng = parseFloat(p.x);
-    if (isNaN(lat) || isNaN(lng)) continue;
-    const newPlace = {
-      id: nextId++,
-      name: p.place_name,
-      cat: p.cat || '기타',
-      area: p.area || '기타',
-      petConfirmed: p.confirmed,
-      addr: p.road_address_name || p.address_name || '',
-      phone: p.phone || '',
-      lat, lng,
-      large: p.large || false,
-      small: true,
-      indoor: p.indoor || false,
-      outdoor: true,
-      stroller: false,
-      cage: p.cage || false,
-      entryFee: p.fee ? '입장료 있음 (방문 전 확인)' : null,
-      note: `카카오 수집 장소. ${p.category_name || ''}`.trim(),
-      kakaoUrl: p.place_url || null,
-      emoji: impCatEmoji(p.cat),
-      hours: [{d:'영업시간', t:'카카오맵 확인'}]
-    };
-    places.push(newPlace);
-    // 지도에 마커 추가
-    if (map) addMarker(newPlace);
-    // importer에서 등록됨으로 표시
-    if (imp.found[p.id]) imp.found[p.id].inDB = true;
-    added.push(newPlace);
+
+  if (firebaseReady && db) {
+    // Firestore에 batch write (최대 400개씩)
+    const CHUNK = 400;
+    for (let i = 0; i < sel.length; i += CHUNK) {
+      const batch = db.batch();
+      const chunk = sel.slice(i, i + CHUNK);
+      for (const p of chunk) {
+        const lat = parseFloat(p.y), lng = parseFloat(p.x);
+        if (isNaN(lat) || isNaN(lng)) continue;
+        const id = nextId++;
+        const ref = db.collection('places').doc();
+        const newPlace = {
+          id, name: p.place_name, cat: p.cat || '기타', area: p.area || '기타',
+          petConfirmed: p.confirmed || false,
+          addr: p.road_address_name || p.address_name || '', phone: p.phone || '',
+          lat, lng, large: p.large || false, small: true,
+          indoor: p.indoor || false, outdoor: true, stroller: false, cage: p.cage || false,
+          entryFee: p.fee ? '입장료 있음 (방문 전 확인)' : null,
+          note: '', kakaoUrl: p.place_url || null,
+          emoji: impCatEmoji(p.cat), hours: [{d:'영업시간', t:'카카오맵 확인'}],
+          active: true,
+          addedAt: firebase.firestore.FieldValue.serverTimestamp(),
+          addedBy: currentUser?.uid || 'admin'
+        };
+        batch.set(ref, newPlace);
+        added.push({ ...newPlace, firestoreId: ref.id });
+        if (imp.found[p.id]) imp.found[p.id].inDB = true;
+      }
+      await batch.commit();
+      if (addBtn) addBtn.textContent = `⏳ ${Math.min(i+CHUNK, sel.length)}/${sel.length} 저장 중...`;
+    }
+  } else {
+    // Firestore 없을 때: 메모리만 (임시)
+    for (const p of sel) {
+      const lat = parseFloat(p.y), lng = parseFloat(p.x);
+      if (isNaN(lat) || isNaN(lng)) continue;
+      const newPlace = {
+        id: nextId++, name: p.place_name, cat: p.cat||'기타', area: p.area||'기타',
+        petConfirmed: p.confirmed||false, addr: p.road_address_name||p.address_name||'',
+        phone: p.phone||'', lat, lng, large: p.large||false, small: true,
+        indoor: p.indoor||false, outdoor: true, stroller: false, cage: p.cage||false,
+        entryFee: p.fee?'입장료 있음':null, note:'', kakaoUrl: p.place_url||null,
+        emoji: impCatEmoji(p.cat), hours:[{d:'영업시간',t:'카카오맵 확인'}]
+      };
+      added.push(newPlace);
+      if (imp.found[p.id]) imp.found[p.id].inDB = true;
+    }
   }
 
-  filterPlaces(); // 목록 갱신
-  renderAdminImporter(); // 임포터 UI 갱신
-
-  showToast(`✅ ${added.length}개 장소가 앱에 등록됐어요!`, 3500);
+  // 로컬 배열 + 지도 마커 추가
+  added.forEach(p => { places.push(p); if (map) addMarker(p); });
+  invalidatePlacesCache();
+  filterPlaces();
+  renderAdminImporter();
+  if (addBtn) { addBtn.disabled = false; addBtn.textContent = `✅ 지금 바로 앱에 등록 (0개)`; }
+  showToast(`✅ ${added.length}개 장소가 등록됐어요!${firebaseReady ? ' (Firestore 저장 완료)' : ' (Firestore 없음 - 임시)'}`, 4000);
 }
 
 function impShowExport(){
   const sel=Object.values(imp.found).filter(p=>!p.inDB&&!p._skip);
   if(!sel.length){ showToast('선택된 장소가 없어요'); return; }
-  const maxId = Math.max(...places.map(p=>p.id), 194);
+  const maxId = Math.max(...places.filter(p=>p&&p.id!=null).map(p=>p.id), 194);
   let id=maxId+1;
   const lines=sel.map(p=>{
     const lat=parseFloat(p.y), lng=parseFloat(p.x);
