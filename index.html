@@ -343,7 +343,7 @@
     .ic { background:#FAFAFA; border-radius:11px; padding:11px 10px; }
     .ic-lbl { font-size:10px; color:#BBB; font-weight:500; margin-bottom:4px; }
     .ic-val { font-size:13px; font-weight:700; }
-    .ic-val.yes{color:#2E7D32} .ic-val.no{color:#C62828} .ic-val.warn{color:#BF360C}
+    .ic-val.yes{color:#2E7D32} .ic-val.no{color:#C62828} .ic-val.warn{color:#BF360C} .ic-val.unknown{color:#AAAAAA}
     /* 수정 가능 셀 – 일반 유저: 수정 요청 / 관리자: 바로 수정 */
     .ic.editable { cursor:pointer; border:1.5px solid transparent; transition:border-color .15s,background .15s; }
     .ic.editable:hover { border-color:#E8C8BC; background:#FFF8F5; }
@@ -5486,9 +5486,9 @@ function getFiltered() {
     if (!p || p.id == null || !p.name) return false; // null 안전
     if (getPlaceStatus(p) === 'rejected') return false; // 펫 비적합 판정 제외
     if (activeFilters.area !== 'all' && p.area !== activeFilters.area) return false;
-    if (activeFilters.largeDog && !p.large) return false;
-    if (activeFilters.indoor  && !p.indoor) return false;
-    if (activeFilters.noCage  && p.cage) return false;
+    if (activeFilters.largeDog && p.large !== true) return false;  // null(미확인) 포함 제외
+    if (activeFilters.indoor  && p.indoor !== true) return false;  // null(미확인) 포함 제외
+    if (activeFilters.noCage  && p.cage === true) return false;    // null(미확인)은 케이지 불필요 필터에서 제외 안 함
     if (activeFilters.hasFee  && !p.entryFee) return false;
     if (activeFilters.noFee   && p.entryFee)  return false;
     if (activeFilters.catType !== 'all' && getCatKey(p) !== activeFilters.catType) return false;
@@ -5601,9 +5601,9 @@ function cardHtml(p) {
       </div>
     </div>
     <div class="pc-tags">
-      ${p.large ? '<span class="tag t-green">🐕 대형견 OK</span>' : '<span class="tag t-gray">소형견만</span>'}
-      ${p.indoor ? '<span class="tag t-blue">🏠 실내 가능</span>' : '<span class="tag t-orange">🌿 테라스만</span>'}
-      ${p.cage   ? '<span class="tag t-red">📦 케이지 필수</span>' : ''}
+      ${p.large === true ? '<span class="tag t-green">🐕 대형견 OK</span>' : p.large === false ? '<span class="tag t-gray">소형견만</span>' : '<span class="tag t-gray">🐕 견종 미확인</span>'}
+      ${p.indoor === true ? '<span class="tag t-blue">🏠 실내 가능</span>' : p.indoor === false ? '<span class="tag t-orange">🌿 테라스만</span>' : '<span class="tag t-gray">🏠 실내여부 미확인</span>'}
+      ${p.cage === true ? '<span class="tag t-red">📦 케이지 필수</span>' : p.cage === false ? '' : ''}
       ${p.entryFee ? `<span class="tag t-gold">💰 입장료 있음</span>` : ''}
     </div>
   </div>`;
@@ -5688,12 +5688,12 @@ function openPlace(p) {
           : `<div style="font-size:10px;color:#CCC">탭해서 오류 신고</div>`}
     </div>
     <div class="info-grid">
-      ${icCell(p.id,'large',p.large,'🐕 대형견',p.large?'✅ 가능':'❌ 불가',p.large?'yes':'no')}
-      ${icCell(p.id,'small',p.small,'🐩 소형견',p.small?'✅ 가능':'❌ 불가',p.small?'yes':'no')}
-      ${icCell(p.id,'indoor',p.indoor,'🏠 실내 입장',p.indoor?'✅ 가능':'⚠️ 불가',p.indoor?'yes':'warn')}
-      ${icCell(p.id,'outdoor',p.outdoor,'🌿 야외·테라스',p.outdoor?'✅ 있음':'❌ 없음',p.outdoor?'yes':'no')}
-      ${icCell(p.id,'stroller',p.stroller,'🛒 개모차',p.stroller?'⚠️ 필수':'✅ 불필요',p.stroller?'warn':'yes')}
-      ${icCell(p.id,'cage',p.cage,'📦 케이지',p.cage?'⚠️ 필수':'✅ 불필요',p.cage?'warn':'yes')}
+      ${icCell(p.id,'large',p.large,'🐕 대형견',p.large===true?'✅ 가능':p.large===false?'❌ 불가':'❓ 미확인',p.large===true?'yes':p.large===false?'no':'unknown')}
+      ${icCell(p.id,'small',p.small,'🐩 소형견',p.small===true?'✅ 가능':p.small===false?'❌ 불가':'❓ 미확인',p.small===true?'yes':p.small===false?'no':'unknown')}
+      ${icCell(p.id,'indoor',p.indoor,'🏠 실내 입장',p.indoor===true?'✅ 가능':p.indoor===false?'⚠️ 불가':'❓ 미확인',p.indoor===true?'yes':p.indoor===false?'warn':'unknown')}
+      ${icCell(p.id,'outdoor',p.outdoor,'🌿 야외·테라스',p.outdoor===true?'✅ 있음':p.outdoor===false?'❌ 없음':'❓ 미확인',p.outdoor===true?'yes':p.outdoor===false?'no':'unknown')}
+      ${icCell(p.id,'stroller',p.stroller,'🛒 개모차',p.stroller===true?'⚠️ 필수':p.stroller===false?'✅ 불필요':'❓ 미확인',p.stroller===true?'warn':p.stroller===false?'yes':'unknown')}
+      ${icCell(p.id,'cage',p.cage,'📦 케이지',p.cage===true?'⚠️ 필수':p.cage===false?'✅ 불필요':'❓ 미확인',p.cage===true?'warn':p.cage===false?'yes':'unknown')}
     </div>
     <div class="sec-label">영업시간</div>
     <div class="hours-grid editable" onclick="onFieldClick(${p.id},'hours')" title="${currentUser?.isAdmin?'클릭해서 수정':'오류 신고'}">
@@ -7451,8 +7451,8 @@ async function impAddToApp() {
           petConfirmed: p.confirmed || false,
           petStatus: p.confirmed ? 'confirmed' : 'search',
           addr: p.road_address_name || p.address_name || '', phone: p.phone || '',
-          lat, lng, large: p.large || false, small: true,
-          indoor: p.indoor || false, outdoor: true, stroller: false, cage: p.cage || false,
+          lat, lng, large: p.large ?? null, small: true,
+          indoor: p.indoor ?? null, outdoor: true, stroller: null, cage: p.cage ?? null,
           entryFee: p.fee ? '입장료 있음 (방문 전 확인)' : null,
           note: '', kakaoUrl: p.place_url || null,
           emoji: impCatEmoji(p.cat), hours: [{d:'영업시간', t:'카카오맵 확인'}],
@@ -7476,8 +7476,8 @@ async function impAddToApp() {
         id: nextId++, name: p.place_name, cat: p.cat||'기타', area: p.area||'기타',
         petConfirmed: p.confirmed||false, petStatus: p.confirmed ? 'confirmed' : 'unverified',
         addr: p.road_address_name||p.address_name||'',
-        phone: p.phone||'', lat, lng, large: p.large||false, small: true,
-        indoor: p.indoor||false, outdoor: true, stroller: false, cage: p.cage||false,
+        phone: p.phone||'', lat, lng, large: p.large ?? null, small: true,
+        indoor: p.indoor ?? null, outdoor: true, stroller: null, cage: p.cage ?? null,
         entryFee: p.fee?'입장료 있음':null, note:'', kakaoUrl: p.place_url||null,
         emoji: impCatEmoji(p.cat), hours:[{d:'영업시간',t:'카카오맵 확인'}]
       };
@@ -8016,9 +8016,9 @@ async function nwCollectRegion(region) {
             area:      region.name,
             province:  region.province,
             petStatus: _confirmed ? 'confirmed' : 'unverified',
-            large: false, small: true,
-            indoor: false, outdoor: true,
-            stroller: false, cage: false,
+            large: null, small: true,   // null = 미확인 (근거 없으면 판정 안 함)
+            indoor: null, outdoor: true,
+            stroller: null, cage: null,
             note: '',
             hours: [{ d: '영업시간', t: '카카오맵 확인' }],
             active:    true,
@@ -8069,9 +8069,9 @@ async function nwCollectRegion(region) {
             area:      region.name,
             province:  region.province,
             petStatus: 'unverified', // stage2 Kakao 페이지 스크래핑으로 최종 판단
-            large: false, small: true,
-            indoor: false, outdoor: true,
-            stroller: false, cage: false,
+            large: null, small: true,   // null = 미확인
+            indoor: null, outdoor: true,
+            stroller: null, cage: null,
             note: '',
             hours: [{ d: '영업시간', t: '카카오맵 확인' }],
             active:    true,
