@@ -214,7 +214,8 @@
     .filter-chip.nofee-chip.active { background:#2E7D32; border-color:#2E7D32; color:white; }
 
     /* ── PLACE LIST ── */
-    #place-list { flex:1; overflow-y:auto; padding:6px; -webkit-overflow-scrolling:touch; }
+    #place-list { flex:1; overflow-y:auto; padding:6px; -webkit-overflow-scrolling:touch;
+      overscroll-behavior-y:contain; touch-action:pan-y; min-height:80px; }
     #place-list::-webkit-scrollbar { width:3px; }
     #place-list::-webkit-scrollbar-thumb { background:#EEE; border-radius:2px; }
     .list-section-header {
@@ -308,10 +309,11 @@
       background:white; border-radius:20px 20px 0 0;
       box-shadow:0 -4px 30px rgba(0,0,0,.13);
       z-index:800; transform:translateY(100%);
-      transition:transform .3s cubic-bezier(.4,0,.2,1);
+      transition:transform .3s cubic-bezier(.4,0,.2,1), max-height .3s cubic-bezier(.4,0,.2,1);
       max-height:72vh; overflow-y:auto;
     }
     #detail-drawer.open { transform:translateY(0); }
+    #detail-drawer.expanded { max-height:calc(100vh - var(--hdr-h)); border-radius:0; }
     #detail-drawer::-webkit-scrollbar { width:3px; }
     #detail-drawer::-webkit-scrollbar-thumb { background:#EEE; border-radius:2px; }
     .d-handle { width:36px; height:4px; background:#E0E0E0; border-radius:2px; margin:11px auto 2px; }
@@ -320,7 +322,13 @@
     .d-icon { width:52px; height:52px; border-radius:15px; background:#FDEEE8; display:flex; align-items:center; justify-content:center; font-size:25px; flex-shrink:0; }
     .d-name { font-size:18px; font-weight:800; color:#2D2D2D; line-height:1.3; }
     .d-sub { font-size:12px; color:#AAA; margin-top:3px; line-height:1.5; }
-    .d-close { width:28px; height:28px; border-radius:50%; border:none; background:#F0F0F0; cursor:pointer; font-size:12px; display:flex; align-items:center; justify-content:center; color:#888; flex-shrink:0; margin-left:auto; }
+    .d-close { width:28px; height:28px; border-radius:50%; border:none; background:#F0F0F0; cursor:pointer; font-size:12px; display:flex; align-items:center; justify-content:center; color:#888; flex-shrink:0; }
+    .d-expand { width:28px; height:28px; border-radius:50%; border:none; background:#F0F0F0; cursor:pointer; font-size:13px; display:flex; align-items:center; justify-content:center; color:#888; flex-shrink:0; margin-left:4px; }
+    /* 드로어 바깥 클릭 시 닫기용 투명 오버레이 */
+    #drawer-overlay {
+      display:none; position:fixed; inset:0; z-index:799; background:transparent; cursor:pointer;
+    }
+    #drawer-overlay.active { display:block; }
     .fee-banner {
       background:linear-gradient(135deg,#FFF8E1,#FFFDE7); border:1.5px solid #FFE082;
       border-radius:12px; padding:12px 16px; margin-bottom:14px;
@@ -586,15 +594,18 @@
         height:50vh; transform:translateY(100%);
         border-radius:20px 20px 0 0;
         box-shadow:0 -4px 30px rgba(0,0,0,.15);
-        z-index:700;
+        z-index:700; overflow:hidden;
       }
       #sidebar.mobile-open { transform:translateY(0); }
+      /* 지역 칩이 많이 펼쳐져도 quick-filters가 place-list 공간을 다 잡아먹지 않도록 */
+      #sidebar.mobile-open #quick-filters { max-height:55%; overflow-y:auto; flex-shrink:0; }
 
       /* Map fills screen */
       #map { left:0; top:var(--hdr-h); bottom:calc(var(--tabs-h) + env(safe-area-inset-bottom, 0px)); right:0; }
 
       /* Detail drawer above bottom tabs */
       #detail-drawer { left:0; bottom:calc(var(--tabs-h) + env(safe-area-inset-bottom, 0px)); max-height:80vh; }
+      #detail-drawer.expanded { max-height:calc(100vh - var(--hdr-h) - var(--tabs-h) - env(safe-area-inset-bottom, 0px)); }
 
       /* Map legend repositioned */
       .map-legend { bottom:calc(var(--tabs-h) + env(safe-area-inset-bottom, 0px) + 12px); left:10px; }
@@ -779,6 +790,31 @@
     .drawer-mem-card img { width:100%; max-height:150px; object-fit:cover; display:block; }
     .drawer-mem-card-body { padding:9px 12px 11px; }
     .drawer-mem-text { font-size:13px; color:#2D2D2D; line-height:1.55; }
+
+    /* ── 공개/비공개 토글 스위치 ── */
+    .mem-privacy-row {
+      display:flex; align-items:center; justify-content:space-between;
+      background:#F9F9F9; border-radius:10px; padding:9px 12px; margin-bottom:12px;
+    }
+    .mem-privacy-label { font-size:13px; color:#555; font-weight:600; }
+    .toggle-sw { position:relative; width:42px; height:24px; flex-shrink:0; }
+    .toggle-sw input { display:none; }
+    .toggle-track {
+      position:absolute; inset:0; background:#CCC; border-radius:24px;
+      cursor:pointer; transition:background .2s;
+    }
+    .toggle-track::before {
+      content:''; position:absolute; width:18px; height:18px;
+      left:3px; top:3px; background:#fff; border-radius:50%;
+      transition:transform .2s; box-shadow:0 1px 3px rgba(0,0,0,.2);
+    }
+    .toggle-sw input:checked + .toggle-track { background:#F07030; }
+    .toggle-sw input:checked + .toggle-track::before { transform:translateX(18px); }
+    /* 비공개 배지 */
+    .mem-private-badge {
+      font-size:10px; font-weight:700; color:#888; background:#F0F0F0;
+      padding:2px 6px; border-radius:6px; margin-left:6px; flex-shrink:0;
+    }
     .drawer-mem-meta { font-size:11px; color:#C0C0C0; margin-top:5px; }
     .btn-write-mem-drawer {
       width:100%; padding:10px; margin-top:10px; background:#FFF3EE;
@@ -802,6 +838,48 @@
     .fab:hover { transform:scale(1.08); }
     .fab-primary { background:#E04E14; color:#fff; }
     .fab-secondary { background:#fff; color:#E04E14; }
+
+    /* ── 내 위치 버튼 ── */
+    #btn-locate {
+      position:fixed; right:14px;
+      bottom:calc(var(--tabs-h) + env(safe-area-inset-bottom,0px) + 68px);
+      z-index:711;
+      width:46px; height:46px; border-radius:50%; border:none; cursor:pointer;
+      background:#fff; color:#4285F4; font-size:20px;
+      box-shadow:0 4px 14px rgba(0,0,0,.22);
+      display:flex; align-items:center; justify-content:center;
+      transition:transform .2s, background .2s, color .2s;
+    }
+    #btn-locate:hover { transform:scale(1.08); }
+    #btn-locate.tracking { background:#4285F4; color:#fff; }
+    /* 데스크탑: 탭바 없으므로 위치 조정 */
+    @media (min-width:768px) {
+      #btn-locate { bottom:24px; right:20px; }
+    }
+
+    /* ── 내 위치 파란 점 (Google Maps 스타일) ── */
+    .my-loc-wrap {
+      position:relative; width:18px; height:18px;
+    }
+    .my-loc-dot {
+      position:absolute; inset:0;
+      background:#4285F4; border:2.5px solid #fff; border-radius:50%;
+      box-shadow:0 2px 6px rgba(66,133,244,.5);
+      z-index:2;
+    }
+    .my-loc-pulse {
+      position:absolute; top:50%; left:50%;
+      transform:translate(-50%,-50%);
+      width:40px; height:40px;
+      background:rgba(66,133,244,.2);
+      border-radius:50%;
+      animation:loc-pulse 2.2s ease-out infinite;
+      z-index:1;
+    }
+    @keyframes loc-pulse {
+      0%   { transform:translate(-50%,-50%) scale(.3); opacity:.8; }
+      100% { transform:translate(-50%,-50%) scale(1.6); opacity:0; }
+    }
 
     /* ── 홍시야 도와줘! 피드백 버튼 ── */
     #feedback-fab {
@@ -1053,6 +1131,20 @@
         <button class="filter-chip" data-cond="케이지불필요"  onclick="toggleFilter(this,'케이지불필요')">케이지 불필요</button>
         <button class="filter-chip fee-chip" data-cond="입장료있음" onclick="toggleFilter(this,'입장료있음')">입장료</button>
       </div>
+      <!-- 장소 종류 필터 -->
+      <div class="qf-row" style="margin-bottom:2px">
+        <span style="font-size:10px;font-weight:700;color:#BBB;white-space:nowrap;margin-right:2px">장소</span>
+        <button class="filter-chip active" data-cat="all"        onclick="setCatFilter(this,'all')">전체</button>
+        <button class="filter-chip" data-cat="cafe"              onclick="setCatFilter(this,'cafe')">☕ 카페</button>
+        <button class="filter-chip" data-cat="petcafe"           onclick="setCatFilter(this,'petcafe')">🐾 애견카페</button>
+        <button class="filter-chip" data-cat="restaurant"        onclick="setCatFilter(this,'restaurant')">🍽 식당</button>
+        <button class="filter-chip" data-cat="bakery"            onclick="setCatFilter(this,'bakery')">🥐 베이커리</button>
+        <button class="filter-chip" data-cat="park"              onclick="setCatFilter(this,'park')">🏃 운동장</button>
+        <button class="filter-chip" data-cat="hotel"             onclick="setCatFilter(this,'hotel')">🏨 숙소</button>
+        <button class="filter-chip" data-cat="hospital"          onclick="setCatFilter(this,'hospital')">🏥 동물병원</button>
+        <button class="filter-chip" data-cat="grooming"          onclick="setCatFilter(this,'grooming')">✂️ 미용</button>
+        <button class="filter-chip" data-cat="other"             onclick="setCatFilter(this,'other')">📍 기타</button>
+      </div>
       <!-- 지역 필터 토글 -->
       <div class="qf-row">
         <button class="area-toggle-btn" id="area-toggle-btn" onclick="toggleAreaFilter()">
@@ -1199,6 +1291,9 @@
     </div>
   </div>
 
+  <!-- 드로어 바깥 클릭 감지 오버레이 -->
+  <div id="drawer-overlay" onclick="closeDrawer()"></div>
+
   <!-- Detail Drawer -->
   <div id="detail-drawer">
     <div class="d-handle"></div>
@@ -1210,8 +1305,12 @@
     <button class="fab fab-secondary" onclick="toggleMobileSidebar()" title="목록 보기">
       <i class="fa fa-list"></i>
     </button>
-
   </div>
+
+  <!-- 내 위치 버튼 (모바일+데스크탑 공통) -->
+  <button id="btn-locate" onclick="toggleLocationTracking()" title="내 위치">
+    <i class="fa fa-location-arrow"></i>
+  </button>
 
 </div>
 
@@ -1265,6 +1364,14 @@
       <div class="modal-field">
         <textarea id="mem-text" placeholder="그날의 기억, 홍시 반응, 느낀 점..." rows="3" maxlength="280" style="height:80px"></textarea>
       </div>
+      <!-- 공개/비공개 토글 -->
+      <div class="mem-privacy-row">
+        <span class="mem-privacy-label" id="mem-privacy-label">🌐 공개 — 모두의 추억에 보여요</span>
+        <label class="toggle-sw">
+          <input type="checkbox" id="mem-is-public" checked onchange="onMemPrivacyChange()">
+          <span class="toggle-track"></span>
+        </label>
+      </div>
       <div class="modal-actions">
         <button class="btn-modal-cancel" onclick="closeModal('memory-modal')">취소</button>
         <button class="btn-modal-submit" id="mem-submit-btn" onclick="submitMemory()">기록하기</button>
@@ -1307,6 +1414,17 @@
         <button class="btn-modal-cancel" onclick="closeModal('submit-modal')">취소</button>
         <button class="btn-modal-submit" onclick="submitReport()">알려주기 🐾</button>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ PROFILE MODAL ══ -->
+<div class="modal-overlay" id="profile-modal" onclick="modalOverlayClick(event,'profile-modal')">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-content">
+      <div class="modal-title">👤 내 프로필</div>
+      <div id="profile-modal-body"></div>
     </div>
   </div>
 </div>
@@ -3750,7 +3868,7 @@ let dogRegBlob    = null;   // File blob for dog photo during registration
 let map           = null;
 let clusterGroup  = null;
 let markers       = {};
-let activeFilters = { area:'all', largeDog:false, indoor:false, noCage:false, hasFee:false, noFee:false };
+let activeFilters = { area:'all', largeDog:false, indoor:false, noCage:false, hasFee:false, noFee:false, catType:'all' };
 let activePlace   = null;
 let searchText    = '';
 let mobileTab     = 'map';   // map | list | filter
@@ -3812,11 +3930,12 @@ async function doAuth() {
       const dogBreed = document.getElementById('dog-breed')?.value.trim() || '';
       let dogPhotoURL = null;
       if (dogRegBlob) {
-        dogPhotoURL = await uploadDogPhoto(credential.user.uid, dogRegBlob);
+        try { dogPhotoURL = await uploadDogPhoto(credential.user.uid, dogRegBlob); }
+        catch(photoErr) { console.warn('강아지 사진 업로드 실패 (무시하고 계속):', photoErr); }
       }
       const dogProfile = dogName ? { name: dogName, age: dogAge || '', breed: dogBreed, photoURL: dogPhotoURL || '' } : null;
       if (dogProfile) currentDog = dogProfile;
-      // Save to Firestore
+      // Save to Firestore — 사진 업로드 실패 여부와 무관하게 항상 저장
       await db.collection('users').doc(credential.user.uid).set({
         email, displayName: name,
         createdAt: firebase.firestore.FieldValue.serverTimestamp(),
@@ -3827,12 +3946,27 @@ async function doAuth() {
       });
     } else {
       credential = await auth.signInWithEmailAndPassword(email, pw);
-      // Update last login
+      // Update last login — 문서가 없으면 (회원가입 도중 오류로 누락) 전체 필드로 새로 생성
       if (db) {
-        db.collection('users').doc(credential.user.uid).set({
-          lastLoginAt: firebase.firestore.FieldValue.serverTimestamp(),
-          loginCount: firebase.firestore.FieldValue.increment(1)
-        }, { merge: true });
+        const u = credential.user;
+        const docRef = db.collection('users').doc(u.uid);
+        const existing = await docRef.get();
+        if (!existing.exists) {
+          // Firestore 문서 누락 → 복구 생성
+          await docRef.set({
+            email: u.email,
+            displayName: u.displayName || '',
+            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+            lastLoginAt: firebase.firestore.FieldValue.serverTimestamp(),
+            loginCount: 1,
+            isAdmin: isAdmin(u.email)
+          });
+        } else {
+          docRef.set({
+            lastLoginAt: firebase.firestore.FieldValue.serverTimestamp(),
+            loginCount: firebase.firestore.FieldValue.increment(1)
+          }, { merge: true });
+        }
       }
     }
     const user = credential.user;
@@ -3887,7 +4021,7 @@ async function uploadDogPhoto(uid, blob) {
     const canvas = document.createElement('canvas');
     const img = new Image();
     await new Promise(r => { img.onload = r; img.src = URL.createObjectURL(blob); });
-    const maxSz = 400;
+    const maxSz = 250;
     const ratio = Math.min(maxSz/img.width, maxSz/img.height, 1);
     canvas.width = img.width * ratio; canvas.height = img.height * ratio;
     canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
@@ -3922,8 +4056,81 @@ async function doLogout() {
 
 function showUserMenu() {
   if (!currentUser) return;
-  const info = `${currentUser.displayName || currentUser.email}${currentUser.isAdmin ? '\n👑 운영자' : ''}`;
-  showToast(`👤 ${info}`);
+  const dog = currentDog;
+  const photoHTML = dog?.photoURL
+    ? `<img src="${dog.photoURL}" style="width:80px;height:80px;border-radius:50%;object-fit:cover;border:3px solid #FDEEE8">`
+    : `<div style="width:80px;height:80px;border-radius:50%;background:#FDEEE8;display:flex;align-items:center;justify-content:center;font-size:34px">🐶</div>`;
+
+  document.getElementById('profile-modal-body').innerHTML = `
+    <div style="display:flex;align-items:center;gap:16px;margin-bottom:20px;padding-bottom:16px;border-bottom:1px solid #F5F5F5">
+      <div style="flex-shrink:0">${photoHTML}</div>
+      <div>
+        <div style="font-size:16px;font-weight:800;color:#2D2D2D">${currentUser.displayName || '이름 없음'}</div>
+        <div style="font-size:12px;color:#AAA;margin-top:3px">${currentUser.email}</div>
+        ${currentUser.isAdmin ? '<div style="font-size:11px;color:#1E3A8A;font-weight:700;margin-top:4px">👑 운영자</div>' : ''}
+      </div>
+    </div>
+
+    ${dog ? `
+    <div style="margin-bottom:18px">
+      <div style="font-size:12px;font-weight:700;color:#E04E14;margin-bottom:10px">🐶 우리 강아지</div>
+      <div style="display:flex;align-items:center;gap:14px">
+        <div style="position:relative;cursor:pointer" onclick="document.getElementById('profile-dog-photo-input').click()">
+          ${dog.photoURL
+            ? `<img src="${dog.photoURL}" id="profile-dog-photo-preview" style="width:64px;height:64px;border-radius:50%;object-fit:cover;border:2.5px dashed #E8C8BC">`
+            : `<div id="profile-dog-photo-preview" style="width:64px;height:64px;border-radius:50%;background:#FFF8F5;border:2.5px dashed #E8C8BC;display:flex;align-items:center;justify-content:center;font-size:24px">📷</div>`}
+          <div style="position:absolute;bottom:0;right:0;width:20px;height:20px;background:#E04E14;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;color:white;border:2px solid white">✎</div>
+          <input type="file" id="profile-dog-photo-input" accept="image/*" style="display:none" onchange="onProfileDogPhotoSelected(event)">
+        </div>
+        <div>
+          <div style="font-size:15px;font-weight:700;color:#2D2D2D">${dog.name || '이름 없음'}</div>
+          ${dog.breed ? `<div style="font-size:12px;color:#888">${dog.breed}</div>` : ''}
+          ${dog.age ? `<div style="font-size:12px;color:#AAA">${dog.age}살</div>` : ''}
+        </div>
+      </div>
+      <div id="profile-photo-status" style="font-size:12px;color:#E04E14;margin-top:8px;display:none"></div>
+    </div>` : `
+    <div style="margin-bottom:18px;padding:14px;background:#FFF8F5;border-radius:12px;text-align:center">
+      <div style="font-size:13px;color:#AAA">강아지 정보가 없어요 🐾</div>
+    </div>`}
+
+    <button onclick="doLogout()" style="width:100%;padding:13px;background:#F5F5F5;color:#888;border:none;border-radius:14px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit">로그아웃</button>
+  `;
+  openModal('profile-modal');
+}
+
+async function onProfileDogPhotoSelected(e) {
+  const file = e.target.files[0]; if (!file) return;
+  const statusEl = document.getElementById('profile-photo-status');
+  if (statusEl) { statusEl.style.display = 'block'; statusEl.textContent = '업로드 중...'; }
+
+  try {
+    // 미리보기 즉시 표시
+    const reader = new FileReader();
+    reader.onload = ev => {
+      const prev = document.getElementById('profile-dog-photo-preview');
+      if (prev) { prev.outerHTML = `<img id="profile-dog-photo-preview" src="${ev.target.result}" style="width:64px;height:64px;border-radius:50%;object-fit:cover;border:2.5px dashed #E8C8BC">`; }
+    };
+    reader.readAsDataURL(file);
+
+    // 리사이즈(max 400px WebP) 후 Storage 업로드
+    const photoURL = await uploadDogPhoto(currentUser.uid, file);
+    if (!photoURL) throw new Error('URL 없음');
+
+    // Firestore 업데이트
+    if (db) {
+      const updateData = { 'dog.photoURL': photoURL };
+      await db.collection('users').doc(currentUser.uid).update(updateData);
+    }
+    // 로컬 상태 반영
+    if (currentDog) currentDog.photoURL = photoURL;
+
+    if (statusEl) { statusEl.textContent = '✅ 사진이 업데이트됐어요!'; }
+    setTimeout(() => { if (statusEl) statusEl.style.display = 'none'; }, 2500);
+  } catch(err) {
+    if (statusEl) { statusEl.textContent = '❌ 업로드 실패. 다시 시도해주세요.'; }
+    console.warn('프로필 사진 업로드 실패:', err);
+  }
 }
 
 
@@ -4287,11 +4494,44 @@ function invalidatePlacesCache() {
   localStorage.removeItem(PLACES_CACHE_TS_KEY);
 }
 
-/* 장소 삭제 (관리자 전용) */
+/* 폐업 신고 (관리자 전용) — 장소 데이터/추억 유지, isClosed 플래그만 추가 */
+async function adminMarkClosed(placeId) {
+  const place = places.find(p => p.id === placeId);
+  if (!place) return;
+  if (!confirm(`"${place.name}" 장소를 폐업으로 표시할까요?\n장소 정보와 추억은 그대로 유지돼요.`)) return;
+  if (firebaseReady && db && place.firestoreId) {
+    try {
+      await db.collection('places').doc(place.firestoreId).update({
+        isClosed: true,
+        closedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        closedBy: currentUser?.uid || 'admin'
+      });
+    } catch(e) { showToast('폐업 처리 실패: ' + e.message); return; }
+  }
+  // 메모리 업데이트
+  place.isClosed = true;
+  place.closedAt = new Date().toISOString();
+  // 마커를 회색으로 변경
+  const info = markers[placeId];
+  if (info) {
+    const el = info.marker.getElement();
+    if (info.isHeart) {
+      const heart = el?.querySelector('.m-heart'); if (heart) heart.style.color = '#AAAAAA';
+    } else {
+      const dot = el?.querySelector('.m-dot'); if (dot) dot.style.background = '#AAAAAA';
+    }
+  }
+  invalidatePlacesCache();
+  // 드로어 새로고침 (폐업 배너 표시)
+  showDrawer(place);
+  showToast(`🏚️ "${place.name}" 폐업으로 표시됐어요`);
+}
+
+/* 오등록 삭제 (관리자 전용) — 지도에서 완전 제거 */
 async function adminDeletePlace(placeId) {
   const place = places.find(p => p.id === placeId);
   if (!place) return;
-  if (!confirm(`"${place.name}" 장소를 삭제하시겠어요?\n(폐업 또는 오등록 시 사용)`)) return;
+  if (!confirm(`"${place.name}" 장소를 오등록으로 삭제할까요?\n지도에서 완전히 제거됩니다.`)) return;
   if (firebaseReady && db && place.firestoreId) {
     try {
       await db.collection('places').doc(place.firestoreId).update({
@@ -4439,6 +4679,107 @@ function initMap() {
   }
 }
 
+// ══════════════════════════════════════════════════════
+//  내 위치 실시간 추적
+// ══════════════════════════════════════════════════════
+let _locWatchId   = null;
+let _locMarker    = null;
+let _locCircle    = null;  // 정확도 원
+let _locTracking  = false;
+let _locCentered  = false; // 첫 위치 수신 후 지도 이동 여부
+
+function toggleLocationTracking() {
+  if (_locTracking) {
+    stopLocationTracking();
+    showToast('위치 추적을 종료했어요');
+  } else {
+    startLocationTracking();
+  }
+}
+
+function startLocationTracking() {
+  if (!navigator.geolocation) {
+    showToast('이 기기는 위치 서비스를 지원하지 않아요');
+    return;
+  }
+  _locTracking = true;
+  _locCentered = false;
+  const btn = document.getElementById('btn-locate');
+  if (btn) btn.classList.add('tracking');
+
+  // watchPosition: 위치가 바뀔 때마다 점 업데이트
+  _locWatchId = navigator.geolocation.watchPosition(
+    pos => {
+      const { latitude: lat, longitude: lng, accuracy } = pos.coords;
+      updateLocationMarker(lat, lng, accuracy);
+      // 처음 수신 시 지도 중심 이동
+      if (!_locCentered) {
+        map.setView([lat, lng], Math.max(map.getZoom(), 15), { animate: true });
+        _locCentered = true;
+      }
+    },
+    err => handleLocationError(err),
+    { enableHighAccuracy: true, timeout: 15000, maximumAge: 3000 }
+  );
+}
+
+function stopLocationTracking() {
+  if (_locWatchId !== null) {
+    navigator.geolocation.clearWatch(_locWatchId);
+    _locWatchId = null;
+  }
+  if (_locMarker)  { map.removeLayer(_locMarker);  _locMarker  = null; }
+  if (_locCircle)  { map.removeLayer(_locCircle);  _locCircle  = null; }
+  _locTracking = false;
+  _locCentered = false;
+  const btn = document.getElementById('btn-locate');
+  if (btn) btn.classList.remove('tracking');
+}
+
+function updateLocationMarker(lat, lng, accuracy) {
+  if (!map) return;
+
+  // ① 정확도 반경 원 (옅은 파란 원)
+  if (!_locCircle) {
+    _locCircle = L.circle([lat, lng], {
+      radius:      accuracy,
+      color:       '#4285F4',
+      fillColor:   '#4285F4',
+      fillOpacity: 0.08,
+      weight:      1,
+      opacity:     0.35
+    }).addTo(map);
+  } else {
+    _locCircle.setLatLng([lat, lng]);
+    _locCircle.setRadius(accuracy);
+  }
+
+  // ② 파란 점 마커 (펄스 애니메이션)
+  const icon = L.divIcon({
+    className: '',
+    html: '<div class="my-loc-wrap"><div class="my-loc-pulse"></div><div class="my-loc-dot"></div></div>',
+    iconSize:   [18, 18],
+    iconAnchor: [9, 9]
+  });
+
+  if (!_locMarker) {
+    _locMarker = L.marker([lat, lng], { icon, zIndexOffset: 2000 }).addTo(map);
+  } else {
+    _locMarker.setLatLng([lat, lng]);
+    _locMarker.setIcon(icon); // 아이콘 갱신 (pulse 재시작)
+  }
+}
+
+function handleLocationError(err) {
+  const msgs = {
+    1: '위치 권한이 거부됐어요. 브라우저 설정에서 위치 접근을 허용해 주세요.',
+    2: '현재 위치를 가져올 수 없어요.',
+    3: '위치 요청 시간이 초과됐어요.'
+  };
+  showToast(msgs[err.code] || '위치를 가져올 수 없어요', 3500);
+  stopLocationTracking();
+}
+
 // 사용자가 추억을 남긴 장소 ID 집합
 const userVisitedPlaceIds = new Set();
 
@@ -4474,25 +4815,37 @@ function upgradeToHeartMarker(placeId) {
   markers[placeId] = { marker: m, color, isHeart: true };
 }
 
-/* 장소 유형 → 레이블 */
-function getTypeLabel(p) {
-  const cat = (p.category || p.type || '').toLowerCase();
+/* 장소 유형 → 필터 키 */
+function getCatKey(p) {
+  const cat = (p.cat || p.category || p.type || '').toLowerCase();
   const name = (p.name || '').toLowerCase();
-  if (cat.includes('애견카페')||cat.includes('펫카페')||cat.includes('반려견카페')||cat.includes('도그카페')) return '🐾 카페';
-  if (cat.includes('애견운동장')||cat.includes('반려견운동장')||cat.includes('파크')||name.includes('운동장')||name.includes('파크')) return '🏃 운동장';
-  if (cat.includes('동물병원')||cat.includes('수의')||name.includes('동물병원')||name.includes('동물의료')) return '🏥 동물병원';
-  if (cat.includes('훈련')||name.includes('훈련소')||name.includes('훈련센터')||name.includes('아카데미')) return '🎓 훈련소';
-  if (cat.includes('펜션')||cat.includes('호텔')||name.includes('펜션')||name.includes('호텔')||name.includes('리조트')) return '🏨 숙소';
-  if (cat.includes('미용')||cat.includes('그루밍')||name.includes('미용')||name.includes('그루밍')) return '✂️ 미용';
-  if (cat.includes('카페')||name.includes('카페')||name.includes('coffee')||name.includes('커피')) return '☕ 카페';
-  if (cat.includes('음식점')||cat.includes('식당')||cat.includes('레스토랑')||cat.includes('브런치')) return '🍽 식당';
-  if (cat.includes('빵')||cat.includes('베이커리')||name.includes('베이커리')||name.includes('빵집')) return '🥐 베이커리';
-  return '';
+  if (cat.includes('애견카페')||cat.includes('펫카페')||cat.includes('반려견카페')||cat.includes('도그카페')) return 'petcafe';
+  if (cat.includes('애견운동장')||cat.includes('반려견운동장')||cat.includes('파크')||name.includes('운동장')||name.includes('파크')) return 'park';
+  if (cat.includes('동물병원')||cat.includes('수의')||name.includes('동물병원')||name.includes('동물의료')) return 'hospital';
+  if (cat.includes('훈련')||name.includes('훈련소')||name.includes('훈련센터')||name.includes('아카데미')) return 'training';
+  if (cat.includes('펜션')||cat.includes('호텔')||name.includes('펜션')||name.includes('호텔')||name.includes('리조트')) return 'hotel';
+  if (cat.includes('미용')||cat.includes('그루밍')||name.includes('미용')||name.includes('그루밍')) return 'grooming';
+  if (cat.includes('카페')||name.includes('카페')||name.includes('coffee')||name.includes('커피')) return 'cafe';
+  if (cat.includes('음식점')||cat.includes('식당')||cat.includes('레스토랑')||cat.includes('브런치')) return 'restaurant';
+  if (cat.includes('빵')||cat.includes('베이커리')||name.includes('베이커리')||name.includes('빵집')) return 'bakery';
+  return 'other';
+}
+
+const CAT_LABEL = {
+  petcafe:'🐾 애견카페', park:'🏃 운동장', hospital:'🏥 동물병원',
+  training:'🎓 훈련소', hotel:'🏨 숙소', grooming:'✂️ 미용',
+  cafe:'☕ 카페', restaurant:'🍽 식당', bakery:'🥐 베이커리', other:'📍 기타'
+};
+
+/* 장소 유형 → 마커 레이블 (항상 반환) */
+function getTypeLabel(p) {
+  return CAT_LABEL[getCatKey(p)] || '📍 기타';
 }
 
 function addMarker(p) {
   if (!clusterGroup) return; // 지도 초기화 전이면 skip
-  const color = STATUS_COLORS[getPlaceStatus(p)] || STATUS_COLORS.unverified;
+  // 폐업 장소는 회색 마커
+  const color = p.isClosed ? '#AAAAAA' : (STATUS_COLORS[getPlaceStatus(p)] || STATUS_COLORS.unverified);
   const sz = map ? getMarkerSizeForZoom(map.getZoom()) : 20;
   if (userVisitedPlaceIds.has(p.id)) {
     const hs = Math.round(sz * 1.6);
@@ -4775,6 +5128,14 @@ function toggleFilter(btn, type) {
   if (isMobile()) setMobileTab('list');
 }
 
+function setCatFilter(btn, catKey) {
+  document.querySelectorAll('[data-cat]').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  activeFilters.catType = catKey;
+  filterPlaces();
+  if (isMobile()) setMobileTab('list');
+}
+
 function getFiltered() {
   return places.filter(p => {
     if (!p || p.id == null || !p.name) return false; // null 안전
@@ -4784,6 +5145,7 @@ function getFiltered() {
     if (activeFilters.noCage  && p.cage) return false;
     if (activeFilters.hasFee  && !p.entryFee) return false;
     if (activeFilters.noFee   && p.entryFee)  return false;
+    if (activeFilters.catType !== 'all' && getCatKey(p) !== activeFilters.catType) return false;
     if (searchText) {
       const q = searchText.toLowerCase();
       return (p.name||'').toLowerCase().includes(q) || (p.addr||'').toLowerCase().includes(q) ||
@@ -4935,6 +5297,16 @@ function openPlace(p) {
       <span class="h-time${h.t==='휴무'?' closed':''}">${h.t||''}</span>
     </div>`).join('');
 
+  // 폐업 배너
+  const closedBanner = p.isClosed ? `
+    <div style="background:#F5F5F5;border-radius:12px;padding:12px 14px;margin-bottom:12px;display:flex;align-items:center;gap:10px;border:1.5px solid #E0E0E0">
+      <span style="font-size:22px">🏚️</span>
+      <div>
+        <div style="font-size:13px;font-weight:800;color:#666">폐업한 가게예요</div>
+        <div style="font-size:12px;color:#999;margin-top:2px">방문이 어렵지만 추억은 그대로 남아있어요</div>
+      </div>
+    </div>` : '';
+
   const feeBanner = p.entryFee ? `
     <div class="fee-banner">
       <div class="fee-banner-icon">💰</div>
@@ -4947,15 +5319,19 @@ function openPlace(p) {
 
   document.getElementById('drawer-content').innerHTML = `
     <div class="d-header">
-      <div class="d-icon">${p.emoji}</div>
+      <div class="d-icon" style="${p.isClosed ? 'filter:grayscale(1);opacity:.6' : ''}">${p.emoji}</div>
       <div style="flex:1;min-width:0">
-        <div class="d-name">${p.name}</div>
+        <div class="d-name" style="${p.isClosed ? 'color:#999;text-decoration:line-through' : ''}">${p.name}${p.isClosed ? ' <span style="font-size:11px;font-weight:700;color:#999;background:#F0F0F0;padding:2px 6px;border-radius:6px;text-decoration:none;display:inline-block">폐업</span>' : ''}</div>
         <div class="d-sub">${areaBadge(p.area)}&nbsp;${p.cat}${p.entryFee?'&nbsp;<span class="ab ab-fee">💰 입장료</span>':''}</div>
         <div class="d-sub" style="margin-top:3px">📍 ${p.addr}</div>
         ${p.phone ? `<div class="d-sub">📞 <a href="tel:${p.phone}" style="color:inherit">${p.phone}</a></div>` : ''}
       </div>
-      <button class="d-close" onclick="closeDrawer()">✕</button>
+      <div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0">
+        <button class="d-expand" id="btn-drawer-expand" onclick="toggleDrawerExpand()" title="전체보기">⬆</button>
+        <button class="d-close" onclick="closeDrawer()">✕</button>
+      </div>
     </div>
+    ${closedBanner}
     ${feeBanner}
     <div class="sec-label">반려견 정책</div>
     <div class="info-grid">
@@ -4988,17 +5364,43 @@ function openPlace(p) {
         <div style="font-size:13px;color:#DDD;text-align:center;padding:12px 0">기억 꺼내는 중...</div>
       </div>
     </div>
-    ${currentUser?.isAdmin ? `<button onclick="adminDeletePlace(${p.id})" style="width:100%;margin-top:12px;padding:9px;background:#FFF5F5;color:#C62828;border:1.5px solid #FFCDD2;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">🗑️ 폐업·오등록 삭제</button>` : ''}`;
+    ${currentUser?.isAdmin ? `
+      <div style="display:flex;gap:8px;margin-top:12px">
+        ${!p.isClosed ? `<button onclick="adminMarkClosed(${p.id})" style="flex:1;padding:9px;background:#F5F5F5;color:#666;border:1.5px solid #DDD;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">🏚️ 폐업 신고</button>` : ''}
+        <button onclick="adminDeletePlace(${p.id})" style="flex:1;padding:9px;background:#FFF5F5;color:#C62828;border:1.5px solid #FFCDD2;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">🗑️ 오등록 삭제</button>
+      </div>` : ''}`;
 
   document.getElementById('detail-drawer').classList.add('open');
+  document.getElementById('drawer-overlay').classList.add('active');
+  _drawerOpenAt = Date.now(); // 레이스 컨디션 방지용 타임스탬프
   // 추억 비동기 로드
   refreshDrawerMemories(p.id);
   // skipCloseDrawer=true: map 탭 전환 시 방금 연 drawer를 닫지 않도록
   if (isMobile()) setMobileTab('map', true);
 }
 
+let _drawerOpenAt = 0;
+let _drawerExpanded = false;
+
+function toggleDrawerExpand() {
+  _drawerExpanded = !_drawerExpanded;
+  document.getElementById('detail-drawer').classList.toggle('expanded', _drawerExpanded);
+  const btn = document.getElementById('btn-drawer-expand');
+  if (btn) btn.textContent = _drawerExpanded ? '⬇' : '⬆';
+}
+
 function closeDrawer() {
+  // 방금 열린 직후 마커 탭 이벤트가 map.click으로도 전파돼 즉시 닫히는 현상 방지 (300ms 쿨다운)
+  if (Date.now() - _drawerOpenAt < 300) return;
   document.getElementById('detail-drawer').classList.remove('open');
+  document.getElementById('drawer-overlay').classList.remove('active');
+  // 확장 상태 리셋
+  if (_drawerExpanded) {
+    _drawerExpanded = false;
+    document.getElementById('detail-drawer').classList.remove('expanded');
+    const btn = document.getElementById('btn-drawer-expand');
+    if (btn) btn.textContent = '⬆';
+  }
   if (activePlace) { setMarkerActive(activePlace.id, false); activePlace = null; }
   filterPlaces();
 }
@@ -5163,9 +5565,11 @@ function toggleMapPickMode() {
   map.off('click');
   map.on('click', () => { /* 빈 지도 클릭 무시 */ });
 
-  // 피드백 FAB 숨기기 (맵픽 모드 중 간섭 방지)
+  // 피드백 FAB + 위치 버튼 숨기기 (맵픽 모드 중 간섭 방지)
   const fab = document.getElementById('feedback-fab');
   if (fab) fab.style.display = 'none';
+  const locBtn = document.getElementById('btn-locate');
+  if (locBtn) locBtn.style.display = 'none';
 }
 
 function exitMapPickMode() {
@@ -5174,9 +5578,11 @@ function exitMapPickMode() {
   // 힌트 바 숨기기
   document.getElementById('map-pick-bar').classList.remove('visible');
 
-  // 피드백 FAB 복원
+  // 피드백 FAB + 위치 버튼 복원
   const fab = document.getElementById('feedback-fab');
   if (fab) fab.style.display = '';
+  const locBtn = document.getElementById('btn-locate');
+  if (locBtn) locBtn.style.display = '';
 
   // 지도 클릭 핸들러 복원 (모달 복원 전에 먼저)
   map.off('click');
@@ -5201,6 +5607,14 @@ function populateMemPlaceSelect(selectedId = null) {
 }
 
 /* 추억 쓰기 모달 열기 */
+function onMemPrivacyChange() {
+  const isPublic = document.getElementById('mem-is-public').checked;
+  const label = document.getElementById('mem-privacy-label');
+  if (label) label.textContent = isPublic
+    ? '🌐 공개 — 모두의 추억에 보여요'
+    : '🔒 비공개 — 나만 볼 수 있어요';
+}
+
 function openWriteMemory(placeId) {
   memPhotoBlob = null;
   const preview = document.getElementById('mem-photo-preview');
@@ -5209,6 +5623,9 @@ function openWriteMemory(placeId) {
   document.getElementById('mem-photo-size').textContent = '';
   document.getElementById('mem-text').value = '';
   document.getElementById('mem-photo-input').value = '';
+  // 공개/비공개 기본값: 공개
+  const pubChk = document.getElementById('mem-is-public');
+  if (pubChk) { pubChk.checked = true; onMemPrivacyChange(); }
   populateMemPlaceSelect(placeId);
   exitMapPickMode();
   // 강아지 배지 표시
@@ -5242,6 +5659,7 @@ async function submitMemory() {
   if (memPhotoBlob) photoURL = await uploadMemPhoto(memPhotoBlob);
 
   const place = places.find(p => p.id === placeId);
+  const isPublic = document.getElementById('mem-is-public')?.checked !== false; // 기본 true
   const memData = {
     placeId,
     placeName: place ? place.name : '',
@@ -5250,6 +5668,7 @@ async function submitMemory() {
     userName:  currentUser?.displayName || currentUser?.email?.split('@')[0] || '익명',
     text,
     photoURL,
+    isPublic,  // ★ 공개/비공개
     // 강아지 정보 자동 포함
     ...(currentDog && currentDog.name ? {
       dogName:     currentDog.name,
@@ -5304,10 +5723,16 @@ function renderMemoryCard(m, showPlace = true) {
     const dogImg = m.dogPhotoURL ? `<img src="${m.dogPhotoURL}" style="width:20px;height:20px;border-radius:50%;object-fit:cover;vertical-align:middle;margin-right:4px">` : '🐶 ';
     dogBadge = `<span style="display:inline-flex;align-items:center;font-size:11px;color:#E04E14;font-weight:600;margin-right:6px">${dogImg}${m.dogName}${m.dogAge ? ' · ' + m.dogAge : ''}</span>`;
   }
+  // 비공개 배지 (내 글에서만 표시)
+  const isMyMem = m.userId && currentUser?.uid && m.userId === currentUser.uid;
+  const privBadge = (m.isPublic === false && isMyMem)
+    ? `<span class="mem-private-badge">🔒 비공개</span>` : '';
   return `<div class="mem-card">
     ${img}
     <div class="mem-card-body">
-      ${placeTag}
+      <div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap">
+        ${placeTag}${privBadge}
+      </div>
       ${m.text ? `<div class="mem-text">${m.text.replace(/\n/g,'<br>')}</div>` : ''}
       <div class="mem-meta">
         ${dogBadge}<span>${m.userName || '익명'}</span>
@@ -5341,7 +5766,7 @@ async function loadMemoriesFeed() {
       if (isMine && currentUser?.uid) {
         query = query.where('userId', '==', currentUser.uid);
       }
-      const snap = await query.limit(50).get();
+      const snap = await query.limit(100).get();
       mems = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     } catch(e) { console.warn('memories load error:', e); }
   }
@@ -5349,8 +5774,15 @@ async function loadMemoriesFeed() {
   // 로컬 저장된 것도 병합 (나의 추억 탭에서만)
   if (isMine) {
     const local = JSON.parse(localStorage.getItem('mem_local') || '[]');
-    mems = [...local, ...mems].slice(0, 60);
+    mems = [...local, ...mems];
   }
+
+  // ★ 모두의 추억: 비공개 글 필터링 (isPublic === false인 것 제외, 기존 글은 undefined → 공개 처리)
+  if (!isMine) {
+    mems = mems.filter(m => m.isPublic !== false);
+  }
+
+  mems = mems.slice(0, 60);
 
   if (!mems.length) {
     const emptyMsg = isMine
@@ -5369,13 +5801,17 @@ async function loadPlaceMemories(placeId) {
     try {
       const snap = await db.collection('memories')
         .where('placeId','==', placeId)
-        .orderBy('createdAt','desc').limit(20).get();
+        .orderBy('createdAt','desc').limit(30).get();
       mems = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     } catch(e) { console.warn('place memories error:', e); }
   }
   const local = JSON.parse(localStorage.getItem('mem_local') || '[]');
   const localFiltered = local.filter(m => m.placeId === placeId);
-  return [...localFiltered, ...mems].slice(0, 20);
+  let all = [...localFiltered, ...mems];
+  // 비공개 글은 본인만 볼 수 있음
+  const myUid = currentUser?.uid;
+  all = all.filter(m => m.isPublic !== false || (myUid && m.userId === myUid));
+  return all.slice(0, 20);
 }
 
 /* Drawer 추억 섹션 새로고침 */
@@ -5497,17 +5933,21 @@ function setMobileTab(tab, skipCloseDrawer) {
     sidebar.classList.add('mobile-open');
     memPanel.classList.remove('mobile-open');
     document.getElementById('fab-list').style.display = 'none';
+    // 지도가 터치 이벤트를 가로채지 않도록 비활성화
+    if (map) { map.dragging.disable(); map.touchZoom.disable(); map.tap?.disable(); }
   } else if (tab === 'memories') {
     sidebar.classList.remove('mobile-open');
     memPanel.classList.add('mobile-open');
     document.getElementById('fab-list').style.display = 'none';
     loadMemoriesFeed();
+    if (map) { map.dragging.disable(); map.touchZoom.disable(); map.tap?.disable(); }
   } else {
-    // map tab
+    // map tab — 지도 인터랙션 복원
     sidebar.classList.remove('mobile-open');
     memPanel.classList.remove('mobile-open');
     if (!skipCloseDrawer) closeDrawer();
     document.getElementById('fab-list').style.display = 'flex';
+    if (map) { map.dragging.enable(); map.touchZoom.enable(); map.tap?.enable(); }
   }
   if (map) setTimeout(() => map.invalidateSize(), 350);
 }
@@ -5641,8 +6081,14 @@ async function renderDashboard() {
 }
 
 async function renderAdminUsers() {
-  const snap = await db.collection('users').orderBy('createdAt','desc').get();
-  const users = snap.docs.map(d => ({ id:d.id, ...d.data() }));
+  // orderBy('createdAt') 사용 시 createdAt 필드가 없는 문서는 결과에서 제외됨 → 전체 조회 후 JS 정렬
+  const snap = await db.collection('users').get();
+  const users = snap.docs.map(d => ({ id:d.id, ...d.data() }))
+    .sort((a,b) => {
+      const ta = a.createdAt?.toMillis?.() ?? a.createdAt ?? 0;
+      const tb = b.createdAt?.toMillis?.() ?? b.createdAt ?? 0;
+      return tb - ta;
+    });
 
   document.getElementById('admin-content').innerHTML = `
     <div class="admin-section">
@@ -6504,6 +6950,21 @@ async function stage1FirestoreSync() {
 
 /* ── 2단계 자동검증 엔진 ─────────────────────────────── */
 
+/* ── 공유 CORS 프록시 요청 큐 ──
+   두 파이프라인(전국 + 2단계 자동검증)이 동시에 실행될 때
+   프록시 요청을 최대 2개로 제한해 서로 자동 조율합니다. */
+const _proxyQueue = {
+  maxConcurrent: 3, running: 0, queue: [],
+  async acquire() {
+    if (this.running < this.maxConcurrent) { this.running++; return; }
+    return new Promise(r => this.queue.push(r));
+  },
+  release() {
+    this.running = Math.max(0, this.running - 1);
+    if (this.queue.length > 0) { this.running++; this.queue.shift()(); }
+  }
+};
+
 /* CORS 프록시를 통해 카카오맵 페이지 HTML 가져오기 */
 async function fetchKakaoPagePetSignal(url) {
   const PROXIES = [
@@ -6520,7 +6981,10 @@ async function fetchKakaoPagePetSignal(url) {
 
   for (const proxyFn of PROXIES) {
     try {
-      const res = await fetch(proxyFn(url), { signal: AbortSignal.timeout(14000) });
+      await _proxyQueue.acquire();
+      let res;
+      try { res = await fetch(proxyFn(url), { signal: AbortSignal.timeout(6000) }); }
+      finally { _proxyQueue.release(); }
       if (!res.ok) {
         if (autoV.running) autoV.proxyFail = (autoV.proxyFail||0)+1;
         continue;
@@ -6593,7 +7057,7 @@ async function fetchKakaoCategorySignal(placeName, lat, lng) {
     try {
       if (!window.kakao?.maps?.services?.Places) { resolve({ found: false, skip: true }); return; }
       const ps = new kakao.maps.services.Places();
-      const timer = setTimeout(() => resolve({ found: false, timeout: true }), 6000);
+      const timer = setTimeout(() => resolve({ found: false, timeout: true }), 3000);
       ps.keywordSearch(placeName, (data, status) => {
         clearTimeout(timer);
         if (status !== kakao.maps.services.Status.OK || !data.length) {
@@ -6639,7 +7103,10 @@ async function fetchNaverBlogSignal(placeName) {
 
   for (const proxyFn of PROXIES) {
     try {
-      const res = await fetch(proxyFn(url), { signal: AbortSignal.timeout(12000) });
+      await _proxyQueue.acquire();
+      let res;
+      try { res = await fetch(proxyFn(url), { signal: AbortSignal.timeout(5000) }); }
+      finally { _proxyQueue.release(); }
       if (!res.ok) continue;
       const raw = await res.text();
       if (raw.length < 500) continue;
@@ -6657,6 +7124,22 @@ async function fetchNaverBlogSignal(placeName) {
       const hasName   = lower.includes(nameLower);
       const hasPetKw  = PET_BLOG_KW.some(kw => lower.includes(kw));
 
+      // ★ 최근 3개월 날짜 + 장소 이름 + 펫 키워드가 같은 단락(300자 이내)에 등장 → verified
+      const cutoff3mo = Date.now() - 90 * 24 * 60 * 60 * 1000;
+      const dateRe = /(\d{4})[.\-년][ ]?(\d{1,2})[.\-월][ ]?(\d{1,2})/g;
+      let dm, hasRecentNearPet = false;
+      while ((dm = dateRe.exec(lower)) !== null) {
+        const d = new Date(`${dm[1]}-${dm[2].padStart(2,'0')}-${dm[3].padStart(2,'0')}`).getTime();
+        if (!isNaN(d) && d > cutoff3mo) {
+          // 날짜 기준 앞뒤 300자 단락 안에 장소명 + 펫 키워드 둘 다 있어야 strong
+          const snip = lower.slice(Math.max(0, dm.index - 300), dm.index + 300);
+          const snipHasName   = snip.includes(nameLower);
+          const snipHasPetKw  = PET_BLOG_KW.some(kw => snip.includes(kw));
+          if (snipHasName && snipHasPetKw) { hasRecentNearPet = true; break; }
+        }
+      }
+
+      if (hasName && hasPetKw && hasRecentNearPet) return { found: true, strong: true };
       if (hasName && hasPetKw) return { found: true, strong: false };
       // 이름이 없어도 검색 자체에서 반려동물 키워드가 나오면 약한 신호
       if (hasPetKw && !noResult) return { found: true, strong: false, weak: true };
@@ -7137,10 +7620,12 @@ async function runAutoStage2Verify() {
     return (statusRank[b]??-1) > (statusRank[a]??-1) ? b : a;
   }
 
-  for (const p of allTargets) {
-    if (autoV.stop) break;
+  /* ── 3-worker 병렬 처리: 장소 한 개씩 순서대로 꺼내서 동시에 검증 ── */
+  const _workQueue = [...allTargets];
+
+  async function _processOnePlace(p) {
+    if (autoV.stop) return;
     autoV.cur = p.name;
-    refreshAutoVerifyPanel();
 
     const currentStatus = getPlaceStatus(p);
     let newStatus = null;
@@ -7153,26 +7638,22 @@ async function runAutoStage2Verify() {
     }
 
     // ── 채널 2·3·4: 네트워크 체크 병렬 실행 ──────────────────────
-    // (이미 verified 아닌 경우만, 불필요한 요청 방지)
     if (newStatus !== 'verified') {
       const [memRes, sdkRes, naverRes, kakaoPageRes] = await Promise.all([
-        // 채널 2: Firestore 방문 기록
         checkRecentMemoryForPlace(p.id),
-        // 채널 3: 카카오 SDK 카테고리 (프록시 불필요)
         fetchKakaoCategorySignal(p.name, p.lat, p.lng),
-        // 채널 4: 네이버 블로그 검색
         fetchNaverBlogSignal(p.name),
-        // 채널 5: 카카오맵 페이지 스크래핑 (kakaoUrl 없으면 스킵)
         p.kakaoUrl ? fetchKakaoPagePetSignal(p.kakaoUrl) : Promise.resolve({ found: false })
       ]);
 
-      // 각 채널 결과 반영 (더 높은 등급으로만 업그레이드)
       if (memRes)           { newStatus = pickBetter(newStatus, 'verified');  autoV.ch_memory++; }
       if (sdkRes.found)     { newStatus = pickBetter(newStatus, 'confirmed'); autoV.ch_kakaoSdk++; }
-      if (naverRes.found)   { newStatus = pickBetter(newStatus, 'confirmed'); autoV.ch_naver++; }
+      if (naverRes.found)   {
+        newStatus = pickBetter(newStatus, naverRes.strong ? 'verified' : 'confirmed');
+        autoV.ch_naver++;
+      }
       if (kakaoPageRes.found) {
-        const cand = kakaoPageRes.strong ? 'verified' : 'confirmed';
-        newStatus = pickBetter(newStatus, cand);
+        newStatus = pickBetter(newStatus, kakaoPageRes.strong ? 'verified' : 'confirmed');
         autoV.ch_kakaoPage++;
       }
     }
@@ -7182,7 +7663,6 @@ async function runAutoStage2Verify() {
       const nowStr = new Date().toISOString();
       p.petStatus = newStatus;
       p.lastV2At  = nowStr;
-      // 마커 색 즉시 반영
       const info = markers[p.id];
       if (info) {
         const color = STATUS_COLORS[newStatus] || STATUS_COLORS.unverified;
@@ -7203,9 +7683,18 @@ async function runAutoStage2Verify() {
 
     autoV.done++;
     refreshAutoVerifyPanel();
-    // 병렬 요청이 있을 경우 간격을 살짝 줌 (프록시 부하 방지)
-    await new Promise(r => setTimeout(r, 300));
   }
+
+  /* 3개 워커가 공유 큐에서 장소를 꺼내 동시에 처리 */
+  const CONCURRENT_PLACES = 3;
+  async function _worker() {
+    while (!autoV.stop) {
+      const p = _workQueue.shift();
+      if (!p) break;
+      await _processOnePlace(p);
+    }
+  }
+  await Promise.all(Array.from({ length: CONCURRENT_PLACES }, _worker));
 
   await flushPendingSync();
   autoV.running = false;
