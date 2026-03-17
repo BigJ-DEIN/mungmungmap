@@ -7942,19 +7942,23 @@ async function nwSavePlacesToFirestore(newPlaces) {
   return count;
 }
 
-/* 파이프라인용 Firestore 배치 flush + 실시간 스탯 갱신 */
-async function nwFlushStatusBatch(batch_arr) {
+/* 파이프라인용 Firestore 배치 flush + 실시간 스탯 갱신
+   setV2At=false 이면 petStatus 만 씀 (1단계용) — lastV2At 을 쓰면 2단계 30일 스킵에 걸림 */
+async function nwFlushStatusBatch(batch_arr, setV2At = true) {
   if (!firebaseReady || !db || !batch_arr.length) return;
   const CHUNK = 400;
   for (let i = 0; i < batch_arr.length; i += CHUNK) {
     const batch = db.batch();
     batch_arr.slice(i, i + CHUNK).forEach(({ firestoreId, status, nowStr }) => {
-      if (firestoreId) batch.update(db.collection('places').doc(firestoreId), { petStatus: status, lastV2At: nowStr });
+      if (!firestoreId) return;
+      const data = { petStatus: status };
+      if (setV2At && nowStr) data.lastV2At = nowStr;
+      batch.update(db.collection('places').doc(firestoreId), data);
     });
     await batch.commit().catch(e => console.warn('nwFlushBatch err', e));
   }
   invalidatePlacesCache();
-  refreshVerifyStats(); // ← 실시간 스탯 갱신
+  refreshVerifyStats();
 }
 
 /* 마커 색상 즉시 반영 헬퍼 */
@@ -7981,9 +7985,10 @@ async function nwVerifyStage1Region(regionName) {
   let upgraded = 0;
   const pendingBatch = [];
 
+  // 1단계는 lastV2At 을 쓰지 않음 (setV2At=false) — 2단계 30일 스킵 필터에 걸리지 않도록
   const flush = async () => {
     if (!pendingBatch.length) return;
-    await nwFlushStatusBatch([...pendingBatch]);
+    await nwFlushStatusBatch([...pendingBatch], false);
     pendingBatch.length = 0;
   };
 
@@ -7993,10 +7998,9 @@ async function nwVerifyStage1Region(regionName) {
     // ── 빠른 경로: 로컬 이름/카테고리 키워드 (네트워크 없음) ──
     const localText = ((p.name||'') + ' ' + (p.cat||'')).toLowerCase();
     if (PET_KW_STAGE1.some(kw => localText.includes(kw.toLowerCase()))) {
-      const nowStr = new Date().toISOString();
-      p.petStatus = 'confirmed'; p.lastV2At = nowStr;
+      p.petStatus = 'confirmed';  // lastV2At 건드리지 않음
       nwUpdateMarkerColor(p.id, 'confirmed');
-      pendingBatch.push({ firestoreId: p.firestoreId, status: 'confirmed', nowStr });
+      pendingBatch.push({ firestoreId: p.firestoreId, status: 'confirmed', nowStr: null });
       upgraded++;
       if (pendingBatch.length >= 50) await flush();
       continue; // API 호출 스킵
@@ -8012,16 +8016,15 @@ async function nwVerifyStage1Region(regionName) {
         if (r.ok) {
           const j = await r.json();
           if (j.documents?.some(d => d.id === p.kakaoId || d.place_name === p.name)) {
-            const nowStr = new Date().toISOString();
-            p.petStatus = 'confirmed'; p.lastV2At = nowStr;
+            p.petStatus = 'confirmed';  // lastV2At 건드리지 않음
             nwUpdateMarkerColor(p.id, 'confirmed');
-            pendingBatch.push({ firestoreId: p.firestoreId, status: 'confirmed', nowStr });
+            pendingBatch.push({ firestoreId: p.firestoreId, status: 'confirmed', nowStr: null });
             upgraded++;
             if (pendingBatch.length >= 50) await flush();
           }
         }
       } catch(e) {}
-      await new Promise(r => setTimeout(r, 150)); // 250→150ms
+      await new Promise(r => setTimeout(r, 150));
     }
   }
   await flush();
