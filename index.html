@@ -4,13 +4,29 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>홍시의 대동여지도 🐾</title>
+  <!-- PWA / 홈화면 아이콘 -->
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="홍시지도">
+  <meta name="theme-color" content="#E04E14">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700;900&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css"/>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css"/>
+  <link rel="manifest" href="manifest.json"/>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
   <!-- Kakao Maps SDK (Services library for Places search) -->
   <!-- ★ API 키 설정 필요: developers.kakao.com → 내 애플리케이션 → JavaScript 키 입력 -->
   <script>
     window.KAKAO_JS_KEY = '8636f71c9fd0f4b857622a9ba0be7dcb';
+    // PWA 홈화면 추가 - beforeinstallprompt 이벤트 가능한 빨리 캡처
+    window._pwaInstallPrompt = null;
+    window.addEventListener('beforeinstallprompt', e => {
+      e.preventDefault();
+      window._pwaInstallPrompt = e;
+    });
   </script>
   <!-- Firebase -->
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
@@ -241,6 +257,20 @@
     }
     .m-dot.active { transform:scale(1.5) !important; box-shadow:0 3px 12px rgba(0,0,0,.35); }
     .m-dot.fee-marker { border-color:#FFD700; box-shadow:0 2px 8px rgba(212,160,23,.4); }
+    /* 클러스터 버블 */
+    .cluster-bubble {
+      background:#E04E14; color:white;
+      border:2.5px solid white; border-radius:50%;
+      display:flex; align-items:center; justify-content:center;
+      font-size:12px; font-weight:800; font-family:'Noto Sans KR',sans-serif;
+      box-shadow:0 2px 10px rgba(224,78,20,.45);
+      width:100%; height:100%;
+    }
+    .cluster-bubble.mid  { background:#c02800; font-size:11px; }
+    .cluster-bubble.big  { background:#9a1f00; font-size:10px; }
+    /* Leaflet 기본 클러스터 아이콘 숨기기 */
+    .marker-cluster { background:transparent !important; }
+    .marker-cluster div { background:transparent !important; }
     /* 하트 마커 — 사용자가 추억을 남긴 곳 */
     .m-heart {
       font-size:20px; line-height:1; user-select:none; cursor:pointer;
@@ -778,6 +808,10 @@
             <label>나이</label>
             <input type="text" id="dog-age" placeholder="3살 / 2022년생" autocomplete="off"/>
           </div>
+          <div class="form-group" style="margin-bottom:0">
+            <label>견종</label>
+            <input type="text" id="dog-breed" placeholder="포메라니안 / 믹스" autocomplete="off"/>
+          </div>
         </div>
       </div>
     </div>
@@ -788,6 +822,14 @@
     <div class="form-group">
       <label>비밀번호</label>
       <input type="password" id="auth-pw" placeholder="6자리 이상" autocomplete="current-password"/>
+    </div>
+    <!-- 홈화면 추가 체크박스 (회원가입 시에만 표시) -->
+    <div id="fg-homescreen" style="display:none; margin-bottom:12px">
+      <label style="display:flex; align-items:center; gap:8px; font-size:13px; color:#666; cursor:pointer; user-select:none">
+        <input type="checkbox" id="chk-homescreen" checked
+          style="width:16px;height:16px;accent-color:#F07030;cursor:pointer;">
+        <span>📲 홍시지도를 홈화면에 추가할게요</span>
+      </label>
     </div>
     <button class="btn-login" id="auth-btn" onclick="doAuth()">로그인하고 시작하기</button>
     <div class="auth-toggle" id="auth-toggle-row">
@@ -1048,6 +1090,7 @@
 <div id="toast"></div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
 <script>
 // ══════════════════════════════════════════════════════
 //  🍑 홍시 SVG 아이콘 (감·연시 persimmon)
@@ -3444,9 +3487,10 @@ function areaBadge(area) {
 //  STATE
 // ══════════════════════════════════════════════════════
 let currentUser   = null;   // { uid, email, displayName, isAdmin }
-let currentDog    = null;   // { name, age, photoURL }
+let currentDog    = null;   // { name, age, breed, photoURL }
 let dogRegBlob    = null;   // File blob for dog photo during registration
 let map           = null;
+let clusterGroup  = null;
 let markers       = {};
 let activeFilters = { area:'all', largeDog:false, indoor:false, noCage:false, hasFee:false, noFee:false };
 let activePlace   = null;
@@ -3466,6 +3510,7 @@ function switchAuthMode(toRegister) {
   authMode = toRegister ? 'register' : 'login';
   document.getElementById('fg-name').style.display       = toRegister ? '' : 'none';
   document.getElementById('fg-dog').style.display        = toRegister ? '' : 'none';
+  document.getElementById('fg-homescreen').style.display  = toRegister ? '' : 'none';
   document.getElementById('auth-btn').textContent         = toRegister ? '🐾 시작하기' : '🐶 로그인하고 시작하기';
   document.getElementById('auth-subtitle').innerHTML      = toRegister
     ? '우리 강아지 소개도 같이 해줘요 🐾' : '함께 다녀온 곳들을 지도에 기록하고<br>좋아했던 순간을 모아두는 공간이에요 🐾';
@@ -3504,13 +3549,14 @@ async function doAuth() {
       credential = await auth.createUserWithEmailAndPassword(email, pw);
       await credential.user.updateProfile({ displayName: name });
       // Upload dog photo if provided
-      const dogName = document.getElementById('dog-name').value.trim();
-      const dogAge  = document.getElementById('dog-age').value.trim();
+      const dogName  = document.getElementById('dog-name').value.trim();
+      const dogAge   = document.getElementById('dog-age').value.trim();
+      const dogBreed = document.getElementById('dog-breed')?.value.trim() || '';
       let dogPhotoURL = null;
       if (dogRegBlob) {
         dogPhotoURL = await uploadDogPhoto(credential.user.uid, dogRegBlob);
       }
-      const dogProfile = dogName ? { name: dogName, age: dogAge || '', photoURL: dogPhotoURL || '' } : null;
+      const dogProfile = dogName ? { name: dogName, age: dogAge || '', breed: dogBreed, photoURL: dogPhotoURL || '' } : null;
       if (dogProfile) currentDog = dogProfile;
       // Save to Firestore
       await db.collection('users').doc(credential.user.uid).set({
@@ -3533,6 +3579,16 @@ async function doAuth() {
     }
     const user = credential.user;
     const userData = { uid: user.uid, email: user.email, displayName: user.displayName || name, isAdmin: isAdmin(user.email) };
+
+    // 회원가입 시 홈화면 추가 체크 여부 확인
+    if (authMode === 'register') {
+      const wantsHomescreen = document.getElementById('chk-homescreen')?.checked;
+      if (wantsHomescreen) {
+        // 약간의 딜레이 후 실행 (startApp UI 전환 완료 후)
+        setTimeout(() => tryAddToHomescreen(), 800);
+      }
+    }
+
     startApp(userData);
   } catch(e) {
     btn.disabled = false;
@@ -3615,6 +3671,72 @@ function showUserMenu() {
 
 
 // ══════════════════════════════════════════════════════
+//  PWA 홈화면 추가
+// ══════════════════════════════════════════════════════
+function tryAddToHomescreen() {
+  const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+  const isInStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+
+  // 이미 설치된 경우 스킵
+  if (isInStandalone) return;
+
+  if (window._pwaInstallPrompt) {
+    // Android/Chrome: 네이티브 설치 프롬프트
+    window._pwaInstallPrompt.prompt();
+    window._pwaInstallPrompt.userChoice.then(() => {
+      window._pwaInstallPrompt = null;
+    });
+  } else if (isIOS) {
+    // iOS Safari: 수동 안내 모달
+    showIOSInstallGuide();
+  }
+  // 그 외 (데스크탑 등)는 조용히 스킵
+}
+
+function showIOSInstallGuide() {
+  const overlay = document.createElement('div');
+  overlay.id = 'ios-install-overlay';
+  overlay.style.cssText = `
+    position:fixed; inset:0; background:rgba(0,0,0,0.55); z-index:99999;
+    display:flex; align-items:flex-end; justify-content:center;
+  `;
+  overlay.innerHTML = \`
+    <div style="
+      background:#fff; border-radius:20px 20px 0 0; padding:28px 24px 40px;
+      width:100%; max-width:480px; box-shadow:0 -4px 24px rgba(0,0,0,0.18);
+      text-align:center; font-family:'Noto Sans KR',sans-serif;
+    ">
+      <div style="font-size:40px; margin-bottom:8px;">📲</div>
+      <div style="font-size:17px; font-weight:700; color:#2D2D2D; margin-bottom:6px;">홈화면에 추가하기</div>
+      <div style="font-size:13px; color:#666; line-height:1.7; margin-bottom:20px;">
+        Safari 아래 공유 버튼을 누르고<br>
+        <b style="color:#F07030">홈 화면에 추가</b>를 선택하면<br>
+        앱처럼 바로 열 수 있어요 🐾
+      </div>
+      <div style="display:flex; align-items:center; justify-content:center; gap:10px; margin-bottom:20px;">
+        <div style="background:#f5f5f5; border-radius:12px; padding:10px 16px; font-size:22px;">
+          □↑
+        </div>
+        <div style="font-size:13px; color:#888; text-align:left; line-height:1.5;">
+          Safari 하단<br><b>공유 버튼</b> 탭
+        </div>
+        <div style="color:#ccc; font-size:18px;">→</div>
+        <div style="background:#f5f5f5; border-radius:12px; padding:10px 16px; font-size:13px; font-weight:600; color:#2D2D2D;">
+          홈 화면에<br>추가
+        </div>
+      </div>
+      <button onclick="document.getElementById('ios-install-overlay').remove()" style="
+        background:#F07030; color:#fff; border:none; border-radius:24px;
+        padding:12px 32px; font-size:15px; font-weight:700; cursor:pointer; width:100%;
+      ">알겠어요!</button>
+      <div style="margin-top:12px; font-size:12px; color:#bbb; cursor:pointer;"
+        onclick="document.getElementById('ios-install-overlay').remove()">나중에 할게요</div>
+    </div>
+  \`;
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+  document.body.appendChild(overlay);
+}
+
 //  START APP
 // ══════════════════════════════════════════════════════
 function startApp(user) {
@@ -3690,7 +3812,7 @@ async function adminDeletePlace(placeId) {
   }
   const idx = places.findIndex(p => p.id === placeId);
   if (idx !== -1) places.splice(idx, 1);
-  if (markers[placeId]) { map.removeLayer(markers[placeId]); delete markers[placeId]; }
+  if (markers[placeId]) { (clusterGroup || map).removeLayer(markers[placeId].marker || markers[placeId]); delete markers[placeId]; }
   invalidatePlacesCache();
   filterPlaces();
   closeDrawer();
@@ -3791,6 +3913,26 @@ function initMap() {
     subdomains:'abcd', maxZoom:19
   }).addTo(map);
   setTimeout(() => map.invalidateSize(), 300);
+
+  // 마커 클러스터 그룹
+  clusterGroup = L.markerClusterGroup({
+    disableClusteringAtZoom: 14,
+    maxClusterRadius: 55,
+    spiderfyOnMaxZoom: false,
+    showCoverageOnHover: false,
+    zoomToBoundsOnClick: true,
+    iconCreateFunction(cluster) {
+      const n = cluster.getChildCount();
+      const cls = n >= 100 ? 'big' : n >= 20 ? 'mid' : '';
+      const sz  = n >= 100 ? 44 : n >= 20 ? 38 : 32;
+      return L.divIcon({
+        html: `<div class="cluster-bubble ${cls}">${n}</div>`,
+        className: '', iconSize: [sz, sz], iconAnchor: [sz/2, sz/2]
+      });
+    }
+  });
+  map.addLayer(clusterGroup);
+
   places.forEach(addMarker);
   map.on('click', () => { if (activePlace) closeDrawer(); });
   map.on('zoomend', updateAllMarkerSizes);
@@ -3831,37 +3973,37 @@ function upgradeToHeartMarker(placeId) {
   if (!info || info.isHeart) return;
   const place = places.find(p => p.id === placeId);
   if (!place) return;
-  info.marker.remove();
+  clusterGroup ? clusterGroup.removeLayer(info.marker) : info.marker.remove();
   const sz = map ? getMarkerSizeForZoom(map.getZoom()) : 20;
   const hs = Math.round(sz * 1.6);
   const color = info.color || STATUS_COLORS[getPlaceStatus(place)] || STATUS_COLORS.unverified;
   const html = `<div class="m-heart" style="color:${color};font-size:${hs}px;margin-left:${-hs/2}px;margin-top:${-hs*0.9}px" data-id="${placeId}">♥</div>`;
   const icon = L.divIcon({ html, className:'', iconSize:[hs,hs], iconAnchor:[hs/2,hs*0.9] });
   const m = L.marker([place.lat, place.lng], { icon })
-    .addTo(map)
-    .on('click', e => { L.DomEvent.stopPropagation(e); openPlace(place); });
+    .on('click', e => { L.DomEvent.stopPropagation(e); if (mapPickMode) { setPickedPlace(place); showToast(`"${place.name}" 선택됐어요 🐾`); exitMapPickMode(); } else { openPlace(place); } });
+  clusterGroup ? clusterGroup.addLayer(m) : m.addTo(map);
   markers[placeId] = { marker: m, color, isHeart: true };
 }
 
 function addMarker(p) {
+  if (!clusterGroup) return; // 지도 초기화 전이면 skip
   const color = STATUS_COLORS[getPlaceStatus(p)] || STATUS_COLORS.unverified;
   const feeClass = p.entryFee ? 'fee-marker' : '';
   const sz = map ? getMarkerSizeForZoom(map.getZoom()) : 20;
-  // 이미 방문한 곳이면 바로 하트로
   if (userVisitedPlaceIds.has(p.id)) {
     const hs = Math.round(sz * 1.6);
     const html = `<div class="m-heart ${feeClass}" style="color:${color};font-size:${hs}px;margin-left:${-hs/2}px;margin-top:${-hs*0.9}px" data-id="${p.id}">♥</div>`;
     const icon = L.divIcon({ html, className:'', iconSize:[hs,hs], iconAnchor:[hs/2,hs*0.9] });
     const m = L.marker([p.lat, p.lng], { icon })
-      .addTo(map)
       .on('click', e => { L.DomEvent.stopPropagation(e); if (mapPickMode) { setPickedPlace(p); showToast(`"${p.name}" 선택됐어요 🐾`); exitMapPickMode(); } else { openPlace(p); } });
+    clusterGroup.addLayer(m);
     markers[p.id] = { marker:m, color, isHeart: true };
   } else {
     const html = `<div class="m-dot ${feeClass}" style="background:${color};width:${sz}px;height:${sz}px;margin-left:${-sz/2}px;margin-top:${-sz/2}px" data-id="${p.id}"></div>`;
     const icon = L.divIcon({ html, className:'', iconSize:[sz,sz], iconAnchor:[sz/2,sz/2] });
     const m = L.marker([p.lat, p.lng], { icon })
-      .addTo(map)
       .on('click', e => { L.DomEvent.stopPropagation(e); if (mapPickMode) { setPickedPlace(p); showToast(`"${p.name}" 선택됐어요 🐾`); exitMapPickMode(); } else { openPlace(p); } });
+    clusterGroup.addLayer(m);
     markers[p.id] = { marker:m, color };
   }
 }
@@ -4165,12 +4307,15 @@ function onSearch() {
 function filterPlaces() {
   const filtered = getFiltered();
   renderList(filtered);
-  places.forEach(p => {
-    const m = markers[p.id]; if (!m) return;
-    const show = !!filtered.find(f => f.id === p.id);
-    if (show && !map.hasLayer(m.marker)) m.marker.addTo(map);
-    if (!show && map.hasLayer(m.marker)) map.removeLayer(m.marker);
-  });
+  if (clusterGroup) {
+    places.forEach(p => {
+      const m = markers[p.id]; if (!m) return;
+      const show = !!filtered.find(f => f.id === p.id);
+      const inCluster = clusterGroup.hasLayer(m.marker);
+      if (show && !inCluster) clusterGroup.addLayer(m.marker);
+      if (!show && inCluster) clusterGroup.removeLayer(m.marker);
+    });
+  }
 }
 
 function renderList(filtered) {
