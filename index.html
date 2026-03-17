@@ -657,6 +657,23 @@
     .place-picker-item .pi-name { font-weight:600; color:#2D2D2D; }
     .place-picker-item .pi-area { font-size:11px; color:#AAA; }
     .place-picker-empty { padding:14px; font-size:13px; color:#BBB; text-align:center; }
+    /* 지도에서 직접 고르기 — 플로팅 힌트 바 */
+    #map-pick-bar {
+      display:none; position:fixed; bottom:100px; left:50%;
+      transform:translateX(-50%);
+      z-index:9500; background:rgba(30,30,30,.88);
+      color:white; border-radius:28px; padding:11px 18px 11px 20px;
+      font-size:13px; font-weight:600; white-space:nowrap;
+      align-items:center; gap:12px;
+      box-shadow:0 4px 20px rgba(0,0,0,.35);
+      backdrop-filter:blur(6px);
+    }
+    #map-pick-bar.visible { display:flex; }
+    #map-pick-bar button {
+      padding:5px 13px; background:#E04E14; color:white; border:none;
+      border-radius:16px; font-size:12px; font-weight:700; cursor:pointer;
+      font-family:inherit; flex-shrink:0;
+    }
     .place-map-pick-btn {
       width:100%; padding:9px 14px; border:2px dashed #E0C0B0; border-radius:12px;
       background:#FFF8F5; font-size:13px; font-weight:600; color:#E04E14;
@@ -859,6 +876,12 @@
   </div>
 
   <!-- Map -->
+  <!-- 지도에서 직접 고르기 플로팅 힌트 바 -->
+  <div id="map-pick-bar">
+    <span>📍 마커를 눌러 장소를 선택하세요</span>
+    <button onclick="exitMapPickMode()">취소</button>
+  </div>
+
   <div id="map">
     <div class="map-legend">
       <div style="font-size:10px;font-weight:800;color:#E04E14;letter-spacing:.4px;margin-bottom:6px">우리 추억</div>
@@ -3831,14 +3854,14 @@ function addMarker(p) {
     const icon = L.divIcon({ html, className:'', iconSize:[hs,hs], iconAnchor:[hs/2,hs*0.9] });
     const m = L.marker([p.lat, p.lng], { icon })
       .addTo(map)
-      .on('click', e => { L.DomEvent.stopPropagation(e); openPlace(p); });
+      .on('click', e => { L.DomEvent.stopPropagation(e); if (mapPickMode) { setPickedPlace(p); showToast(`"${p.name}" 선택됐어요 🐾`); exitMapPickMode(); } else { openPlace(p); } });
     markers[p.id] = { marker:m, color, isHeart: true };
   } else {
     const html = `<div class="m-dot ${feeClass}" style="background:${color};width:${sz}px;height:${sz}px;margin-left:${-sz/2}px;margin-top:${-sz/2}px" data-id="${p.id}"></div>`;
     const icon = L.divIcon({ html, className:'', iconSize:[sz,sz], iconAnchor:[sz/2,sz/2] });
     const m = L.marker([p.lat, p.lng], { icon })
       .addTo(map)
-      .on('click', e => { L.DomEvent.stopPropagation(e); openPlace(p); });
+      .on('click', e => { L.DomEvent.stopPropagation(e); if (mapPickMode) { setPickedPlace(p); showToast(`"${p.name}" 선택됐어요 🐾`); exitMapPickMode(); } else { openPlace(p); } });
     markers[p.id] = { marker:m, color };
   }
 }
@@ -4481,52 +4504,33 @@ function onPlacePickerBlur() {
 }
 
 function toggleMapPickMode() {
-  if (mapPickMode) {
-    exitMapPickMode();
-    return;
-  }
+  if (mapPickMode) { exitMapPickMode(); return; }
   mapPickMode = true;
-  const btn = document.getElementById('place-map-pick-btn');
-  const hint = document.getElementById('place-map-pick-hint');
-  btn.classList.add('picking');
-  btn.innerHTML = '<i class="fa fa-times"></i> 선택 취소';
-  hint.style.display = 'block';
-  // minimize modal to show map
+
+  // 모달 완전히 숨기기 (pointer-events 포함)
   const modal = document.getElementById('memory-modal');
-  modal.style.background = 'rgba(0,0,0,.2)';
-  const sheet = modal.querySelector('.modal-sheet');
-  sheet.style.transform = 'translateY(calc(100% - 56px))';
-  // attach map click handler
-  mapPickOrigHandler = (e) => {
-    // find nearest marker
+  modal.classList.remove('open');
+  modal.style.pointerEvents = 'none';
+  modal.style.opacity = '0';
+
+  // 플로팅 힌트 바 표시
+  document.getElementById('map-pick-bar').classList.add('visible');
+
+  // 마커 클릭으로 선택 (각 marker의 click 이벤트가 처리)
+  // + 지도 빈 곳 클릭 시 가장 가까운 장소 찾기
+  map.off('click');
+  map.on('click', (e) => {
     const latlng = e.latlng;
     let nearest = null, minDist = Infinity;
     getValidPlaces().forEach(p => {
       const d = map.distance(latlng, L.latLng(p.lat, p.lng));
       if (d < minDist) { minDist = d; nearest = p; }
     });
-    if (nearest && minDist < 500) {
+    if (nearest && minDist < 400) {
       setPickedPlace(nearest);
+      showToast(`"${nearest.name}" 선택됐어요 🐾`);
     } else {
-      showToast('근처에 등록된 장소가 없어요');
-    }
-    exitMapPickMode();
-  };
-  map.once('click', mapPickOrigHandler);
-  map.off('click'); // remove old handler (close drawer)
-  map.once('click', (e) => {
-    L.DomEvent.stopPropagation(e);
-    const latlng = e.latlng;
-    let nearest = null, minDist = Infinity;
-    getValidPlaces().forEach(p => {
-      const d = map.distance(latlng, L.latLng(p.lat, p.lng));
-      if (d < minDist) { minDist = d; nearest = p; }
-    });
-    if (nearest && minDist < 500) {
-      setPickedPlace(nearest);
-      showToast(`"${nearest.name}" 선택됐어요`);
-    } else {
-      showToast('근처에 등록된 장소가 없어요');
+      showToast('마커를 직접 눌러주세요');
     }
     exitMapPickMode();
   });
@@ -4534,17 +4538,19 @@ function toggleMapPickMode() {
 
 function exitMapPickMode() {
   mapPickMode = false;
-  const btn = document.getElementById('place-map-pick-btn');
-  const hint = document.getElementById('place-map-pick-hint');
-  if (btn) { btn.classList.remove('picking'); btn.innerHTML = '<i class="fa fa-map-marker-alt"></i> 지도에서 직접 고르기'; }
-  if (hint) hint.style.display = 'none';
+
+  // 힌트 바 숨기기
+  document.getElementById('map-pick-bar').classList.remove('visible');
+
+  // 모달 복원
   const modal = document.getElementById('memory-modal');
   if (modal) {
-    modal.style.background = '';
-    const sheet = modal.querySelector('.modal-sheet');
-    if (sheet) sheet.style.transform = '';
+    modal.style.pointerEvents = '';
+    modal.style.opacity = '';
+    modal.classList.add('open');
   }
-  // restore normal map click handler
+
+  // 지도 클릭 핸들러 복원
   map.off('click');
   map.on('click', () => { if (activePlace) closeDrawer(); });
 }
