@@ -5351,6 +5351,11 @@ function impShowExport(){
 //  ADMIN: 검증 관리 탭
 // ══════════════════════════════════════════════════════
 const PET_KW_STAGE1 = ['애견카페','펫카페','반려견카페','도그카페','애견운동장','반려견운동장','애견파크','반려동물카페','애견호텔','펫호텔','반려견동반'];
+const PET_FACILITY_KW = ['반려견동반','반려동물동반','반려견 동반','반려동물 동반','애견동반','애견 동반','반려동물 가능','반려견 가능','반려동물'];
+const PET_REVIEW_KW   = ['강아지','반려견','애견','멍멍이','퍼피','강쥐','멍멍','반려동물','펫프렌들리','dog friendly'];
+
+// 2단계 자동검증 상태
+let autoV = { running:false, stop:false, total:0, done:0, upgraded:0, cur:'', log:[] };
 
 function renderVerifyTab() {
   const content = document.getElementById('admin-content');
@@ -5373,9 +5378,11 @@ function renderVerifyTab() {
     .sort((a,b) => b[1].length - a[1].length)
     .map(([area, ps]) => `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid #F5F5F5">
       <span style="font-size:13px;font-weight:600">${area}</span>
-      <span style="font-size:12px;color:#888">${ps.length}개 검증 필요</span>
-      <button onclick="startStage2Verify('${area}')" style="padding:4px 10px;background:#E04E14;color:white;border:none;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit">2단계 검증 시작</button>
+      <span style="font-size:12px;color:#888">${ps.length}개 대기</span>
     </div>`).join('');
+
+  // 자동검증 진행 상태 패널
+  const autoPanel = autoV.running || autoV.done > 0 ? buildAutoVerifyPanel() : '';
 
   content.innerHTML = `
     <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:16px">
@@ -5398,18 +5405,54 @@ function renderVerifyTab() {
     </div>
     <div style="font-size:12px;color:#888;margin-bottom:12px">총 ${total}개 장소 · 검증 완료율 ${Math.round((counts.verified+counts.confirmed)/total*100)}%</div>
 
-    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px">
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
       <button id="btn-stage1-auto" onclick="stage1BatchAutoVerify()" style="padding:9px 16px;background:#ED6820;color:white;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">
-        🔍 1단계 자동검증 실행 (카테고리 키워드)
+        🔍 1단계 자동검증
+      </button>
+      <button id="btn-stage2-auto" onclick="runAutoStage2Verify()" ${autoV.running?'disabled':''} style="padding:9px 16px;background:#E04E14;color:white;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;${autoV.running?'opacity:.6':''}">
+        🤖 2단계 자동검증 (카카오맵)
       </button>
       <button onclick="stage1FirestoreSync()" style="padding:9px 16px;background:#F5F5F5;color:#555;border:none;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">
-        ☁️ Firestore petStatus 동기화
+        ☁️ Firestore 동기화
       </button>
     </div>
 
-    <div style="font-size:13px;font-weight:700;margin-bottom:8px;color:#333">지역별 2단계 검증 대기</div>
+    ${autoPanel ? `<div id="auto-verify-panel">${autoPanel}</div>` : '<div id="auto-verify-panel"></div>'}
+
+    <div style="font-size:13px;font-weight:700;margin-bottom:8px;color:#333">지역별 현황</div>
     <div style="background:white;border-radius:10px;padding:4px 12px;border:1px solid #F0F0F0">
-      ${areaRows || '<div style="padding:12px;text-align:center;color:#AAA;font-size:13px">검증 필요 장소 없음 🎉</div>'}
+      ${areaRows || '<div style="padding:12px;text-align:center;color:#AAA;font-size:13px">확인 필요 장소 없음 🎉</div>'}
+    </div>
+  `;
+}
+
+function buildAutoVerifyPanel() {
+  if (!autoV.running && autoV.done === 0) return '';
+  const pct = autoV.total > 0 ? Math.round(autoV.done / autoV.total * 100) : 0;
+  const logHtml = autoV.log.slice(0,10).map(l =>
+    `<div style="display:flex;align-items:center;gap:6px;padding:3px 0;font-size:11px;border-bottom:1px solid #F5F5F5">
+      <span style="width:10px;height:10px;border-radius:50%;background:${STATUS_COLORS[l.status]||'#CCC'};flex-shrink:0;display:inline-block"></span>
+      <span style="font-weight:700;color:${l.status==='verified'?'#E04E14':l.status==='confirmed'?'#ED6820':'#888'}">${l.status==='verified'?'검증완료':'확인완료'}</span>
+      <span style="color:#555;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${l.name}</span>
+    </div>`
+  ).join('');
+  return `
+    <div style="background:white;border-radius:12px;border:2px solid #FDEEE8;padding:14px;margin-bottom:14px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <span style="font-size:13px;font-weight:800;color:#E04E14">🤖 2단계 자동검증 ${autoV.running?'진행 중':'완료'}</span>
+        ${autoV.running
+          ? `<button onclick="autoV.stop=true" style="padding:3px 10px;background:#E04E14;color:white;border:none;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit">중지</button>`
+          : `<span style="font-size:11px;color:#888">완료 ✓</span>`}
+      </div>
+      <div style="background:#F5F5F5;border-radius:6px;height:8px;margin-bottom:6px;overflow:hidden">
+        <div style="background:linear-gradient(90deg,#E04E14,#ED6820);height:100%;width:${pct}%;transition:width .3s;border-radius:6px"></div>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:11px;color:#888;margin-bottom:8px">
+        <span>${autoV.done} / ${autoV.total} 확인</span>
+        <span style="color:#E04E14;font-weight:700">↑ ${autoV.upgraded}개 업그레이드</span>
+      </div>
+      ${autoV.running && autoV.cur ? `<div style="font-size:11px;color:#AAA;margin-bottom:8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">🔍 ${autoV.cur} 확인 중...</div>` : ''}
+      ${logHtml ? `<div style="max-height:120px;overflow-y:auto">${logHtml}</div>` : ''}
     </div>
   `;
 }
@@ -5483,70 +5526,115 @@ async function stage1FirestoreSync() {
   renderVerifyTab();
 }
 
-/* 2단계 검증: 특정 지역 장소들의 카카오맵 페이지 열기 */
-let verifyQueue = [], verifyIdx = 0;
-function startStage2Verify(area) {
-  verifyQueue = places.filter(p => p && (area === 'all' || p.area === area) && ['search','unverified'].includes(getPlaceStatus(p)));
-  verifyIdx = 0;
-  if (!verifyQueue.length) { showToast('검증할 장소 없음'); return; }
-  renderVerifyPanel();
-}
+/* ── 2단계 자동검증 엔진 ─────────────────────────────── */
 
-function renderVerifyPanel() {
-  const content = document.getElementById('admin-content');
-  if (verifyIdx >= verifyQueue.length) {
-    content.innerHTML = `<div class="empty-state"><div class="es-icon">🎉</div><p>모든 장소 검증 완료!</p></div>`;
-    return;
+/* CORS 프록시를 통해 카카오맵 페이지 HTML 가져오기 */
+async function fetchKakaoPagePetSignal(url) {
+  const PROXIES = [
+    u => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
+    u => `https://corsproxy.io/?${encodeURIComponent(u)}`
+  ];
+  for (const proxyFn of PROXIES) {
+    try {
+      const res = await fetch(proxyFn(url), { signal: AbortSignal.timeout(12000) });
+      if (!res.ok) continue;
+      const html = await res.text();
+      // 강한 신호: 실제 반려견 관련 리뷰/후기 키워드
+      const hasReviewKw = PET_REVIEW_KW.some(kw => html.includes(kw));
+      // 약한 신호: 시설 정보에 반려견동반 명시
+      const hasFacilityKw = PET_FACILITY_KW.some(kw => html.includes(kw));
+      if (hasFacilityKw || hasReviewKw) return { found: true, strong: hasReviewKw };
+      return { found: false };
+    } catch (e) { /* try next proxy */ }
   }
-  const p = verifyQueue[verifyIdx];
-  const status = getPlaceStatus(p);
-  const url = p.kakaoUrl || `https://place.map.kakao.com/search/${encodeURIComponent(p.name)}`;
-  content.innerHTML = `
-    <div style="background:#F8F8F8;border-radius:10px;padding:12px 14px;margin-bottom:12px;font-size:12px;color:#888">
-      ${verifyIdx+1} / ${verifyQueue.length} — ${p.area} 지역
-    </div>
-    <div style="background:white;border-radius:12px;border:2px solid #F0F0F0;padding:16px;margin-bottom:12px">
-      <div style="font-size:16px;font-weight:900;margin-bottom:4px">${p.name}</div>
-      <div style="font-size:12px;color:#E04E14;margin-bottom:4px">${p.cat} · ${p.area}</div>
-      <div style="font-size:12px;color:#888">${p.addr}</div>
-      <div style="margin-top:10px;display:flex;gap:6px;flex-wrap:wrap">
-        <div style="font-size:11px;padding:3px 8px;border-radius:20px;background:${STATUS_COLORS[status]};color:white;font-weight:700">${status}</div>
-        ${p.kakaoUrl ? `<a href="${p.kakaoUrl}" target="_blank" style="font-size:11px;padding:3px 8px;border-radius:20px;background:#FEF3E2;color:#E04E14;font-weight:700;text-decoration:none">🗺 카카오맵 열기</a>` : ''}
-      </div>
-    </div>
-    <div style="font-size:13px;font-weight:700;margin-bottom:8px">이 장소의 검증 상태:</div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
-      <button onclick="verifySetStatus('verified')" style="padding:14px;background:#FDEEE8;border:2px solid #E04E14;border-radius:10px;cursor:pointer;font-family:inherit">
-        <div style="font-size:18px">●</div><div style="font-size:12px;font-weight:700;color:#E04E14;margin-top:4px">검증 완료</div>
-        <div style="font-size:10px;color:#888">최근 리뷰 확인됨</div>
-      </button>
-      <button onclick="verifySetStatus('confirmed')" style="padding:14px;background:#FFF3EC;border:2px solid #ED6820;border-radius:10px;cursor:pointer;font-family:inherit">
-        <div style="font-size:18px">●</div><div style="font-size:12px;font-weight:700;color:#ED6820;margin-top:4px">확인 완료</div>
-        <div style="font-size:10px;color:#888">정보에 명시됨</div>
-      </button>
-      <button onclick="verifySetStatus('unverified')" style="padding:14px;background:#F5F5F5;border:2px solid #DDD;border-radius:10px;cursor:pointer;font-family:inherit">
-        <div style="font-size:18px">●</div><div style="font-size:12px;font-weight:700;color:#888;margin-top:4px">확인 필요</div>
-        <div style="font-size:10px;color:#888">확인 안됨</div>
-      </button>
-      <button onclick="verifySetStatus('search')" style="padding:14px;background:#E3F2FD;border:2px solid #90CAF9;border-radius:10px;cursor:pointer;font-family:inherit">
-        <div style="font-size:18px">●</div><div style="font-size:12px;font-weight:700;color:#1976D2;margin-top:4px">검색 결과</div>
-        <div style="font-size:10px;color:#888">변경 없음</div>
-      </button>
-    </div>
-    <button onclick="verifySkip()" style="width:100%;padding:11px;background:#F5F5F5;border:none;border-radius:10px;font-size:13px;color:#888;cursor:pointer;font-family:inherit">건너뛰기 →</button>
-  `;
+  return { found: false, error: true };
 }
 
-async function verifySetStatus(status) {
-  const p = verifyQueue[verifyIdx];
-  await updatePlaceStatus(p.id, status);
-  verifyIdx++;
-  renderVerifyPanel();
+/* Firestore에서 최근 3개월 이내 방문 기록 확인 */
+async function checkRecentMemoryForPlace(placeId) {
+  if (!firebaseReady || !db) return false;
+  try {
+    const cutoff = firebase.firestore.Timestamp.fromDate(new Date(Date.now() - 90*24*60*60*1000));
+    const snap = await db.collection('memories')
+      .where('placeId', '==', placeId)
+      .where('createdAt', '>', cutoff)
+      .limit(1).get();
+    return !snap.empty;
+  } catch(e) { return false; }
 }
 
-function verifySkip() {
-  verifyIdx++;
-  renderVerifyPanel();
+/* 자동검증 UI 업데이트 (탭 재렌더링 없이 패널만 갱신) */
+function refreshAutoVerifyPanel() {
+  const panelEl = document.getElementById('auto-verify-panel');
+  if (!panelEl) { renderVerifyTab(); return; }
+  const html = buildAutoVerifyPanel();
+  panelEl.innerHTML = html || '';
+}
+
+/* 메인 자동검증 함수 */
+async function runAutoStage2Verify() {
+  if (autoV.running) return;
+
+  // 대상: verified 제외한 모든 kakaoUrl 보유 장소
+  const targets = places.filter(p =>
+    p && p.id != null && p.kakaoUrl && getPlaceStatus(p) !== 'verified'
+  );
+  // kakaoUrl 없는 장소도 메모리 체크는 가능
+  const noUrlTargets = places.filter(p =>
+    p && p.id != null && !p.kakaoUrl && getPlaceStatus(p) !== 'verified'
+  );
+
+  const allTargets = [...targets, ...noUrlTargets];
+  if (!allTargets.length) { showToast('검증할 장소가 없어요'); return; }
+
+  autoV = { running: true, stop: false, total: allTargets.length, done: 0, upgraded: 0, cur: '', log: [] };
+  renderVerifyTab();
+
+  for (const p of allTargets) {
+    if (autoV.stop) break;
+
+    autoV.cur = p.name;
+    refreshAutoVerifyPanel();
+
+    const currentStatus = getPlaceStatus(p);
+    let newStatus = null;
+
+    // 1) Firestore 최근 방문 기록 → 검증완료
+    const hasMemory = await checkRecentMemoryForPlace(p.id);
+    if (hasMemory) {
+      newStatus = 'verified';
+    } else if (p.kakaoUrl) {
+      // 2) 카카오맵 페이지 스크래핑
+      const result = await fetchKakaoPagePetSignal(p.kakaoUrl);
+      if (result.found) {
+        // 시설 정보에 반려견동반 명시 → 확인완료 (검증완료보다 한 단계 낮음)
+        // 리뷰에도 있으면 검증완료
+        newStatus = result.strong ? 'verified' : 'confirmed';
+      }
+    }
+
+    // 현재보다 높은 등급으로 올라갈 때만 업데이트
+    const statusRank = { search: 0, unverified: 0, confirmed: 1, verified: 2 };
+    if (newStatus && (statusRank[newStatus] ?? 0) > (statusRank[currentStatus] ?? 0)) {
+      await updatePlaceStatus(p.id, newStatus);
+      autoV.upgraded++;
+      autoV.log.unshift({ name: p.name, status: newStatus, area: p.area || '' });
+      if (autoV.log.length > 50) autoV.log.pop();
+    }
+
+    autoV.done++;
+    refreshAutoVerifyPanel();
+
+    // 요청 간격 (CORS 프록시 과부하 방지)
+    await new Promise(r => setTimeout(r, 400));
+  }
+
+  autoV.running = false;
+  autoV.cur = '';
+  const upgraded = autoV.upgraded;
+  invalidatePlacesCache();
+  renderVerifyTab();
+  showToast(`🤖 2단계 검증 완료 — ${upgraded}개 업그레이드!`, 4000);
 }
 
 // ══════════════════════════════════════════════════════
