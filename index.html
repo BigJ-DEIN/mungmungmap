@@ -18,7 +18,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
   <style>
     *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
-    html, body { height:100%; font-family:'Noto Sans KR',sans-serif; background:#FFF8F0; color:#2D2D2D; overflow:hidden; }
+    html, body { height:100%; font-family:'Noto Sans KR',sans-serif; background:#FFFFFF; color:#2D2D2D; overflow:hidden; }
 
     /* ── VARIABLES ── */
     :root {
@@ -32,7 +32,7 @@
 
     /* ── FIREBASE SETUP NOTICE ── */
     #setup-notice {
-      position:fixed; inset:0; background:linear-gradient(145deg,#1a1a2e,#16213e);
+      position:fixed; inset:0; background:rgba(0,0,0,.6);
       display:flex; align-items:center; justify-content:center; z-index:99999;
     }
     .setup-card {
@@ -44,22 +44,22 @@
     .setup-step { background:#F8F8F8; border-radius:10px; padding:12px 16px; margin-bottom:8px; font-size:12px; color:#333; }
     .setup-step strong { color:#FF6B35; }
     .setup-code { background:#1e1e1e; color:#aef; border-radius:8px; padding:12px; font-size:11px; font-family:monospace; white-space:pre; overflow-x:auto; margin:8px 0; }
-    .btn-dismiss { width:100%; padding:12px; background:linear-gradient(135deg,#FF8C42,#FF6B35); color:#fff; border:none; border-radius:12px; font-size:14px; font-weight:700; font-family:inherit; cursor:pointer; margin-top:8px; }
+    .btn-dismiss { width:100%; padding:12px; background:#FF6B35; color:#fff; border:none; border-radius:12px; font-size:14px; font-weight:700; font-family:inherit; cursor:pointer; margin-top:8px; }
 
     /* ── LOGIN / REGISTER SCREEN ── */
     #login-screen {
       position:fixed; inset:0;
-      background:linear-gradient(145deg,#FF8C42 0%,#FF6B35 55%,#E8531F 100%);
+      background:#FFFFFF;
       display:flex; align-items:center; justify-content:center; z-index:9999;
       overflow-y:auto; padding:16px 0;
     }
-    .login-bg-dots { position:fixed; inset:0; overflow:hidden; pointer-events:none; z-index:0; }
-    .login-bg-dots span { position:absolute; font-size:32px; opacity:.13; animation:float 6s ease-in-out infinite; }
+    .login-bg-dots { display:none; }
     @keyframes float { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-18px)} }
     .login-card {
-      background:white; border-radius:28px; padding:36px 32px;
+      background:white; border-radius:20px; padding:36px 32px;
       width:420px; max-width:92vw;
-      box-shadow:0 24px 80px rgba(0,0,0,.22);
+      border:1.5px solid #F0F0F0;
+      box-shadow:0 4px 32px rgba(0,0,0,.06);
       text-align:center; position:relative; z-index:1;
     }
     .login-logo { font-size:48px; margin-bottom:4px; }
@@ -76,12 +76,12 @@
     .form-group input:focus { border-color:#FF6B35; box-shadow:0 0 0 3px rgba(255,107,53,.1); }
     .btn-login {
       width:100%; padding:14px; margin-top:4px;
-      background:linear-gradient(135deg,#FF8C42,#FF6B35);
+      background:#FF6B35;
       color:white; border:none; border-radius:14px;
       font-size:15px; font-weight:700; font-family:inherit; cursor:pointer;
-      transition:transform .15s, box-shadow .2s;
+      transition:background .15s, box-shadow .2s;
     }
-    .btn-login:hover { transform:translateY(-2px); box-shadow:0 10px 24px rgba(255,107,53,.4); }
+    .btn-login:hover { background:#E85A24; box-shadow:0 6px 18px rgba(255,107,53,.3); }
     .btn-login:disabled { opacity:.6; transform:none; cursor:wait; }
     .auth-toggle { margin-top:16px; font-size:13px; color:#999; }
     .auth-toggle a { color:#FF6B35; font-weight:600; cursor:pointer; text-decoration:none; }
@@ -100,7 +100,7 @@
       display:none;
     }
     .notice-item {
-      background:linear-gradient(135deg,#FF8C42,#FF6B35); color:#fff;
+      background:#FF6B35; color:#fff;
       padding:10px 16px; font-size:13px; font-weight:600;
       display:flex; align-items:center; gap:8px; cursor:pointer;
     }
@@ -139,7 +139,7 @@
     .hdr-btn.admin-btn:hover { background:#1e40af; }
     .user-badge {
       width:32px; height:32px; border-radius:50%;
-      background:linear-gradient(135deg,#FF8C42,#FF6B35);
+      background:#FF6B35;
       display:flex; align-items:center; justify-content:center;
       color:white; font-size:13px; font-weight:700; flex-shrink:0; cursor:pointer;
       position:relative;
@@ -271,7 +271,7 @@
       transition:all .16s;
     }
     .btn-act:hover { transform:translateY(-1px); opacity:.9; }
-    .btn-primary { background:linear-gradient(135deg,#FF8C42,#FF6B35); color:white; }
+    .btn-primary { background:#FF6B35; color:white; }
     .btn-secondary { background:#F5F5F5; color:#555; }
 
     /* ── MAP LEGEND ── */
@@ -289,53 +289,15 @@
     /* ── KAKAO LIVE SEARCH ── */
     #live-search-btn {
       position:absolute; top:14px; right:14px; z-index:600;
-      background:white; border:2px solid #FF6B35; color:#FF6B35;
-      border-radius:22px; padding:7px 14px; font-size:13px; font-weight:700;
-      font-family:inherit; cursor:pointer; box-shadow:0 2px 12px rgba(0,0,0,.12);
-      display:flex; align-items:center; gap:6px; transition:all .2s;
+      background:white; border:1.5px solid #E0E0E0; color:#555;
+      border-radius:22px; padding:7px 14px; font-size:12px; font-weight:600;
+      font-family:inherit; cursor:pointer; box-shadow:0 2px 8px rgba(0,0,0,.08);
+      display:flex; align-items:center; gap:5px; transition:all .2s;
       white-space:nowrap;
     }
-    #live-search-btn:hover { background:#FFF0E8; }
-    #live-search-btn.loading { opacity:.7; pointer-events:none; }
-    #live-search-btn.active { background:#FF6B35; color:white; }
-
-    #live-results-panel {
-      position:absolute; top:58px; right:14px; z-index:600;
-      background:white; border-radius:14px; padding:0;
-      box-shadow:0 4px 24px rgba(0,0,0,.14);
-      width:260px; max-height:340px; display:none; flex-direction:column;
-      overflow:hidden;
-    }
-    #live-results-panel.visible { display:flex; }
-    .lrp-header {
-      padding:10px 14px 8px; border-bottom:1px solid #F0F0F0;
-      font-size:12px; font-weight:700; color:#555;
-      display:flex; align-items:center; justify-content:space-between;
-    }
-    .lrp-count { color:#FF6B35; }
-    .lrp-close { background:none; border:none; font-size:16px; cursor:pointer; color:#999; padding:0; }
-    .lrp-list { overflow-y:auto; max-height:290px; }
-    .lrp-item {
-      padding:10px 14px; border-bottom:1px solid #F7F7F7; cursor:pointer;
-      transition:background .15s;
-    }
-    .lrp-item:hover { background:#FFF8F5; }
-    .lrp-item:last-child { border-bottom:none; }
-    .lrp-name { font-size:13px; font-weight:700; color:#2D2D2D; margin-bottom:2px; }
-    .lrp-cat { font-size:11px; color:#FF6B35; font-weight:600; margin-bottom:2px; }
-    .lrp-addr { font-size:11px; color:#999; line-height:1.4; }
-    .lrp-in-db { font-size:10px; color:#4CAF50; font-weight:700; }
-    .lrp-empty { padding:24px; text-align:center; font-size:13px; color:#AAA; }
-
-    /* Live markers (teal/blue dots) */
-    .live-dot {
-      width:18px; height:18px; border-radius:50%;
-      background:#1976D2; border:2.5px solid white;
-      box-shadow:0 2px 8px rgba(25,118,210,.5);
-      cursor:pointer; transition:transform .15s;
-    }
-    .live-dot:hover { transform:scale(1.3); }
-    .live-dot.in-db { background:#4CAF50; }
+    #live-search-btn:hover { border-color:#FF6B35; color:#FF6B35; }
+    #live-search-btn.loading { opacity:.6; pointer-events:none; }
+    #live-search-btn.active { border-color:#FF6B35; color:#FF6B35; background:#FFF8F5; }
 
     /* ── TOAST ── */
     #toast {
@@ -391,7 +353,7 @@
     .modal-field input:focus, .modal-field textarea:focus { border-color:#FF6B35; }
     .modal-actions { display:flex; gap:10px; }
     .btn-modal-cancel { flex:1; padding:13px; background:#F5F5F5; border:none; border-radius:12px; font-size:14px; font-weight:600; color:#888; font-family:inherit; cursor:pointer; }
-    .btn-modal-submit { flex:2; padding:13px; background:linear-gradient(135deg,#FF8C42,#FF6B35); border:none; border-radius:12px; font-size:14px; font-weight:700; color:#fff; font-family:inherit; cursor:pointer; }
+    .btn-modal-submit { flex:2; padding:13px; background:#FF6B35; border:none; border-radius:12px; font-size:14px; font-weight:700; color:#fff; font-family:inherit; cursor:pointer; }
 
     /* ── ADMIN PANEL ── */
     #admin-panel {
@@ -400,14 +362,15 @@
       overflow:hidden;
     }
     #admin-header {
-      background:linear-gradient(135deg,#1E3A8A,#1e40af);
-      color:#fff; padding:12px 16px;
+      background:#fff;
+      color:#1E3A8A; padding:12px 16px;
+      border-bottom:2px solid #E5E7EB;
       display:flex; align-items:center; gap:12px;
       min-height:54px; flex-shrink:0;
     }
     #admin-header h1 { font-size:16px; font-weight:800; flex:1; }
-    .admin-back { background:rgba(255,255,255,.2); border:none; color:#fff; padding:7px 12px; border-radius:10px; font-size:13px; cursor:pointer; font-family:inherit; font-weight:600; }
-    .admin-back:hover { background:rgba(255,255,255,.3); }
+    .admin-back { background:#F0F0F0; border:none; color:#1E3A8A; padding:7px 12px; border-radius:10px; font-size:13px; cursor:pointer; font-family:inherit; font-weight:600; }
+    .admin-back:hover { background:#E0E0E0; }
 
     #admin-tabs {
       background:#fff; display:flex; overflow-x:auto; gap:0; border-bottom:2px solid #E5E7EB;
@@ -453,7 +416,7 @@
       font-size:13px; font-family:inherit; outline:none; margin-bottom:10px; resize:vertical;
     }
     .notice-form input:focus, .notice-form textarea:focus { border-color:#1E3A8A; }
-    .btn-notice-add { padding:10px 20px; background:linear-gradient(135deg,#1E3A8A,#1e40af); color:#fff; border:none; border-radius:10px; font-size:13px; font-weight:700; cursor:pointer; font-family:inherit; }
+    .btn-notice-add { padding:10px 20px; background:#1E3A8A; color:#fff; border:none; border-radius:10px; font-size:13px; font-weight:700; cursor:pointer; font-family:inherit; }
 
     .notice-list-item { display:flex; align-items:flex-start; gap:10px; padding:12px 0; border-bottom:1px solid #F3F4F6; }
     .notice-list-item:last-child { border-bottom:none; }
@@ -496,7 +459,7 @@
 
       /* No sidebar on mobile - it's a bottom sheet */
       #sidebar {
-        top:auto; bottom:var(--tabs-h); left:0; right:0; width:100%;
+        top:auto; bottom:calc(var(--tabs-h) + env(safe-area-inset-bottom, 0px)); left:0; right:0; width:100%;
         height:50vh; transform:translateY(100%);
         border-radius:20px 20px 0 0;
         box-shadow:0 -4px 30px rgba(0,0,0,.15);
@@ -505,18 +468,18 @@
       #sidebar.mobile-open { transform:translateY(0); }
 
       /* Map fills screen */
-      #map { left:0; top:var(--hdr-h); bottom:var(--tabs-h); right:0; }
+      #map { left:0; top:var(--hdr-h); bottom:calc(var(--tabs-h) + env(safe-area-inset-bottom, 0px)); right:0; }
 
       /* Detail drawer above bottom tabs */
-      #detail-drawer { left:0; bottom:var(--tabs-h); max-height:80vh; }
+      #detail-drawer { left:0; bottom:calc(var(--tabs-h) + env(safe-area-inset-bottom, 0px)); max-height:80vh; }
 
       /* Map legend repositioned */
-      .map-legend { bottom:calc(var(--tabs-h) + 12px); left:10px; }
+      .map-legend { bottom:calc(var(--tabs-h) + env(safe-area-inset-bottom, 0px) + 12px); left:10px; }
 
       .info-grid { grid-template-columns:repeat(2,1fr); }
 
       /* Toast above bottom tabs */
-      #toast { bottom:calc(var(--tabs-h) + 16px); }
+      #toast { bottom:calc(var(--tabs-h) + env(safe-area-inset-bottom, 0px) + 16px); }
 
       /* Admin tabs scrollable */
       #admin-tabs { justify-content:flex-start; }
@@ -525,10 +488,11 @@
     /* ── MOBILE BOTTOM TABS ── */
     #mobile-tabs {
       display:none;
-      position:fixed; bottom:0; left:0; right:0; height:var(--tabs-h);
+      position:fixed; bottom:0; left:0; right:0;
+      height:calc(var(--tabs-h) + env(safe-area-inset-bottom, 0px));
       background:white; box-shadow:0 -1px 0 #F0F0F0, 0 -4px 20px rgba(0,0,0,.06);
       z-index:800;
-      padding-bottom:env(safe-area-inset-bottom,0);
+      padding-bottom:env(safe-area-inset-bottom, 0px);
     }
     .tabs-inner { display:flex; height:var(--tabs-h); }
     .mtab {
@@ -549,7 +513,7 @@
 
     /* ── FAB (Map floating action) ── */
     #fab-list {
-      position:fixed; right:14px; bottom:calc(var(--tabs-h) + 14px);
+      position:fixed; right:14px; bottom:calc(var(--tabs-h) + env(safe-area-inset-bottom, 0px) + 14px);
       z-index:710; display:none; flex-direction:column; gap:8px;
     }
     @media (max-width:767px) { #fab-list { display:flex; } }
@@ -560,7 +524,7 @@
       font-size:17px;
     }
     .fab:hover { transform:scale(1.08); }
-    .fab-primary { background:linear-gradient(135deg,#FF8C42,#FF6B35); color:#fff; }
+    .fab-primary { background:#FF6B35; color:#fff; }
     .fab-secondary { background:#fff; color:#FF6B35; }
   </style>
 </head>
@@ -589,18 +553,11 @@
 
 <!-- ══ LOGIN / REGISTER ══ -->
 <div id="login-screen">
-  <div class="login-bg-dots">
-    <span style="top:7%;left:8%;animation-delay:0s">🍅</span>
-    <span style="top:12%;left:78%;animation-delay:1s">🐾</span>
-    <span style="top:68%;left:6%;animation-delay:2s">🐕</span>
-    <span style="top:82%;left:82%;animation-delay:.5s">🦴</span>
-    <span style="top:40%;left:90%;animation-delay:1.5s">🍅</span>
-    <span style="top:55%;left:2%;animation-delay:2.5s">🐩</span>
-  </div>
+  <div class="login-bg-dots"></div>
   <div class="login-card">
     <div class="login-logo">🍅</div>
     <div class="login-title">홍시의 대동여지도</div>
-    <div class="login-title-sub">🐾 애견동반 카페·식당 지도</div>
+    <div class="login-title-sub">애견동반 카페·식당 지도</div>
     <div class="login-subtitle" id="auth-subtitle">경기도 전 지역에서 강아지와 함께 갈 수 있는<br>카페와 식당을 한눈에 찾아보세요</div>
 
     <div id="auth-err" class="auth-err"></div>
@@ -618,15 +575,15 @@
       <label>비밀번호</label>
       <input type="password" id="auth-pw" placeholder="6자리 이상" autocomplete="current-password"/>
     </div>
-    <button class="btn-login" id="auth-btn" onclick="doAuth()">🐶 로그인하고 시작하기</button>
+    <button class="btn-login" id="auth-btn" onclick="doAuth()">로그인하고 시작하기</button>
     <div class="auth-toggle" id="auth-toggle-row">
       아직 계정이 없으신가요? <a onclick="switchAuthMode(true)">회원가입</a>
     </div>
     <div class="login-features">
-      <div class="lf-item">🗺️ 지도 탐색</div>
-      <div class="lf-item">🔍 조건 필터</div>
-      <div class="lf-item">💰 입장료 분류</div>
-      <div class="lf-item">📝 장소 제보</div>
+      <div class="lf-item">지도 탐색</div>
+      <div class="lf-item">조건 필터</div>
+      <div class="lf-item">입장료 분류</div>
+      <div class="lf-item">장소 제보</div>
     </div>
   </div>
 </div>
@@ -642,15 +599,13 @@
       <input type="text" id="search-input" placeholder="카페, 동네 이름으로 검색..." oninput="onSearch()">
     </div>
     <div id="hdr-share">
-      <button class="hdr-btn" onclick="copyShareLink()"><i class="fa fa-share-nodes"></i> 공유</button>
+      <button class="hdr-btn" onclick="copyShareLink()">공유</button>
     </div>
     <div class="user-badge" id="user-badge" onclick="showUserMenu()">
       <span id="user-initial">?</span>
       <div class="notif-dot" id="notif-dot"></div>
     </div>
-    <button class="hdr-btn admin-btn" id="admin-btn" style="display:none" onclick="openAdminPanel()">
-      <i class="fa fa-shield-halved"></i> 관리자
-    </button>
+    <button class="hdr-btn admin-btn" id="admin-btn" style="display:none" onclick="openAdminPanel()">관리자</button>
     <button class="hdr-btn ghost" onclick="doLogout()" id="logout-btn">로그아웃</button>
   </div>
 
@@ -662,69 +617,64 @@
     <div id="filters">
       <div class="f-label">지역</div>
       <div class="filter-row" id="area-chips">
-        <button class="filter-chip active" data-area="all"    onclick="setAreaFilter(this,'all')">📍 전체</button>
-        <button class="filter-chip"        data-area="분당"   onclick="setAreaFilter(this,'분당')">🏙️ 분당·판교</button>
-        <button class="filter-chip"        data-area="보정동" onclick="setAreaFilter(this,'보정동')">🌿 보정동</button>
-        <button class="filter-chip"        data-area="수원"   onclick="setAreaFilter(this,'수원')">🏰 수원</button>
-        <button class="filter-chip"        data-area="용인"   onclick="setAreaFilter(this,'용인')">🌆 용인</button>
-        <button class="filter-chip"        data-area="화성"   onclick="setAreaFilter(this,'화성')">🌻 화성</button>
-        <button class="filter-chip"        data-area="평택"   onclick="setAreaFilter(this,'평택')">🌾 평택</button>
-        <button class="filter-chip"        data-area="안산"   onclick="setAreaFilter(this,'안산')">🌊 안산</button>
-        <button class="filter-chip"        data-area="시흥"   onclick="setAreaFilter(this,'시흥')">🌿 시흥</button>
-        <button class="filter-chip"        data-area="안양"   onclick="setAreaFilter(this,'안양')">🌸 안양</button>
-        <button class="filter-chip"        data-area="군포"   onclick="setAreaFilter(this,'군포')">🍃 군포</button>
-        <button class="filter-chip"        data-area="부천"   onclick="setAreaFilter(this,'부천')">🏡 부천</button>
-        <button class="filter-chip"        data-area="오산"   onclick="setAreaFilter(this,'오산')">☕ 오산</button>
-        <button class="filter-chip"        data-area="안성"   onclick="setAreaFilter(this,'안성')">🌲 안성</button>
-        <button class="filter-chip"        data-area="고양"   onclick="setAreaFilter(this,'고양')">🌻 고양</button>
-        <button class="filter-chip"        data-area="파주"   onclick="setAreaFilter(this,'파주')">🌸 파주</button>
-        <button class="filter-chip"        data-area="의정부" onclick="setAreaFilter(this,'의정부')">🏙️ 의정부</button>
-        <button class="filter-chip"        data-area="양주"   onclick="setAreaFilter(this,'양주')">🌾 양주</button>
-        <button class="filter-chip"        data-area="동두천" onclick="setAreaFilter(this,'동두천')">🍃 동두천</button>
-        <button class="filter-chip"        data-area="구리"   onclick="setAreaFilter(this,'구리')">🌿 구리</button>
-        <button class="filter-chip"        data-area="남양주" onclick="setAreaFilter(this,'남양주')">🌿 남양주</button>
-        <button class="filter-chip"        data-area="하남"   onclick="setAreaFilter(this,'하남')">🌊 하남</button>
-        <button class="filter-chip"        data-area="광주"   onclick="setAreaFilter(this,'광주')">🏞️ 광주</button>
-        <button class="filter-chip"        data-area="가평"   onclick="setAreaFilter(this,'가평')">⛰️ 가평</button>
-        <button class="filter-chip"        data-area="양평"   onclick="setAreaFilter(this,'양평')">🌊 양평</button>
-        <button class="filter-chip"        data-area="여주"   onclick="setAreaFilter(this,'여주')">🌾 여주</button>
-        <button class="filter-chip"        data-area="포천"   onclick="setAreaFilter(this,'포천')">🍃 포천</button>
+        <button class="filter-chip active" data-area="all"    onclick="setAreaFilter(this,'all')">전체</button>
+        <button class="filter-chip"        data-area="분당"   onclick="setAreaFilter(this,'분당')">분당·판교</button>
+        <button class="filter-chip"        data-area="보정동" onclick="setAreaFilter(this,'보정동')">보정동</button>
+        <button class="filter-chip"        data-area="수원"   onclick="setAreaFilter(this,'수원')">수원</button>
+        <button class="filter-chip"        data-area="용인"   onclick="setAreaFilter(this,'용인')">용인</button>
+        <button class="filter-chip"        data-area="화성"   onclick="setAreaFilter(this,'화성')">화성</button>
+        <button class="filter-chip"        data-area="평택"   onclick="setAreaFilter(this,'평택')">평택</button>
+        <button class="filter-chip"        data-area="안산"   onclick="setAreaFilter(this,'안산')">안산</button>
+        <button class="filter-chip"        data-area="시흥"   onclick="setAreaFilter(this,'시흥')">시흥</button>
+        <button class="filter-chip"        data-area="안양"   onclick="setAreaFilter(this,'안양')">안양</button>
+        <button class="filter-chip"        data-area="군포"   onclick="setAreaFilter(this,'군포')">군포</button>
+        <button class="filter-chip"        data-area="부천"   onclick="setAreaFilter(this,'부천')">부천</button>
+        <button class="filter-chip"        data-area="오산"   onclick="setAreaFilter(this,'오산')">오산</button>
+        <button class="filter-chip"        data-area="안성"   onclick="setAreaFilter(this,'안성')">안성</button>
+        <button class="filter-chip"        data-area="고양"   onclick="setAreaFilter(this,'고양')">고양</button>
+        <button class="filter-chip"        data-area="파주"   onclick="setAreaFilter(this,'파주')">파주</button>
+        <button class="filter-chip"        data-area="의정부" onclick="setAreaFilter(this,'의정부')">의정부</button>
+        <button class="filter-chip"        data-area="양주"   onclick="setAreaFilter(this,'양주')">양주</button>
+        <button class="filter-chip"        data-area="동두천" onclick="setAreaFilter(this,'동두천')">동두천</button>
+        <button class="filter-chip"        data-area="구리"   onclick="setAreaFilter(this,'구리')">구리</button>
+        <button class="filter-chip"        data-area="남양주" onclick="setAreaFilter(this,'남양주')">남양주</button>
+        <button class="filter-chip"        data-area="하남"   onclick="setAreaFilter(this,'하남')">하남</button>
+        <button class="filter-chip"        data-area="광주"   onclick="setAreaFilter(this,'광주')">광주</button>
+        <button class="filter-chip"        data-area="가평"   onclick="setAreaFilter(this,'가평')">가평</button>
+        <button class="filter-chip"        data-area="양평"   onclick="setAreaFilter(this,'양평')">양평</button>
+        <button class="filter-chip"        data-area="여주"   onclick="setAreaFilter(this,'여주')">여주</button>
+        <button class="filter-chip"        data-area="포천"   onclick="setAreaFilter(this,'포천')">포천</button>
       </div>
       <div class="f-label">반려견 조건</div>
       <div class="filter-row">
-        <button class="filter-chip" data-cond="대형견"      onclick="toggleFilter(this,'대형견')">🐕 대형견 OK</button>
-        <button class="filter-chip" data-cond="실내"        onclick="toggleFilter(this,'실내')">🏠 실내 가능</button>
-        <button class="filter-chip" data-cond="케이지불필요" onclick="toggleFilter(this,'케이지불필요')">🆓 케이지 불필요</button>
+        <button class="filter-chip" data-cond="대형견"      onclick="toggleFilter(this,'대형견')">대형견 OK</button>
+        <button class="filter-chip" data-cond="실내"        onclick="toggleFilter(this,'실내')">실내 가능</button>
+        <button class="filter-chip" data-cond="케이지불필요" onclick="toggleFilter(this,'케이지불필요')">케이지 불필요</button>
       </div>
-      <div class="f-label">💰 입장료</div>
+      <div class="f-label">입장료</div>
       <div class="filter-row">
-        <button class="filter-chip fee-chip"   data-cond="입장료있음" onclick="toggleFilter(this,'입장료있음')">💰 입장료 있는 곳</button>
-        <button class="filter-chip nofee-chip" data-cond="입장료없음" onclick="toggleFilter(this,'입장료없음')">✅ 입장료 없는 곳</button>
+        <button class="filter-chip fee-chip"   data-cond="입장료있음" onclick="toggleFilter(this,'입장료있음')">입장료 있는 곳</button>
+        <button class="filter-chip nofee-chip" data-cond="입장료없음" onclick="toggleFilter(this,'입장료없음')">입장료 없는 곳</button>
       </div>
     </div>
     <div id="place-list"></div>
-    <button class="submit-cta" onclick="openSubmitModal()">✏️ 새 장소 제보하기</button>
+    <button class="submit-cta" onclick="openSubmitModal()">새 장소 제보하기</button>
     <div id="place-count">0개의 장소</div>
   </div>
 
   <!-- Map -->
   <div id="map">
     <div class="map-legend">
-      <div class="legend-item"><div class="legend-dot" style="background:#FF6B35"></div><span>🐾 확인 완료</span></div>
-      <div class="legend-item"><div class="legend-dot" style="background:#C8C8C8"></div><span>❓ 확인 필요</span></div>
-      <div class="legend-item"><div class="legend-dot ld-fee" style="background:#FF6B35; border-color:#FFD700"></div><span>💰 입장료 있음</span></div>
-      <div class="legend-item"><div class="legend-dot" style="background:#1976D2"></div><span>🔍 카카오 검색 결과</span></div>
-      <div class="legend-item"><div class="legend-dot" style="background:#4CAF50"></div><span>✅ 이미 등록됨</span></div>
+      <div class="legend-item"><div class="legend-dot" style="background:#FF6B35"></div><span>확인 완료</span></div>
+      <div class="legend-item"><div class="legend-dot" style="background:#C8C8C8"></div><span>확인 필요</span></div>
+      <div class="legend-item"><div class="legend-dot ld-fee" style="background:#FF6B35; border-color:#FFD700"></div><span>입장료 있음</span></div>
+      <div class="legend-item"><div class="legend-dot" style="background:#87CEEB"></div><span>카카오 검색 결과</span></div>
     </div>
     <!-- Kakao Live Search -->
     <button id="live-search-btn" onclick="toggleLiveSearch()">
-      🔍 주변 애견 장소 더 찾기
+      주변 애견 장소 더 찾기
     </button>
-    <div id="live-results-panel">
-      <div class="lrp-header">
-        <span>카카오 검색 결과 <span class="lrp-count" id="lrp-count"></span></span>
-        <button class="lrp-close" onclick="clearLiveSearch()">✕</button>
-      </div>
+    <div id="live-results-panel" style="display:none">
       <div class="lrp-list" id="lrp-list"></div>
     </div>
   </div>
@@ -807,6 +757,7 @@
     <button class="atab" data-tab="views"     onclick="switchAdminTab(this,'views')">📍 방문 기록</button>
     <button class="atab" data-tab="reports"   onclick="switchAdminTab(this,'reports')">📝 장소 제보</button>
     <button class="atab" data-tab="notices"   onclick="switchAdminTab(this,'notices')">📢 공지 관리</button>
+    <button class="atab" data-tab="importer"  onclick="switchAdminTab(this,'importer')">🔍 장소 수집</button>
   </div>
   <div id="admin-content">
     <div class="empty-state"><div class="es-icon">⏳</div><p>데이터 로딩 중...</p></div>
@@ -3332,6 +3283,7 @@ function setMarkerActive(id, active) {
 //  KAKAO LIVE SEARCH  (실시간 주변 애견 장소 검색)
 // ══════════════════════════════════════════════════════
 let liveMarkers = [];
+let liveData = [];   // 카카오 라이브 검색 결과 저장
 let kakaoPS = null;
 let kakaoReady = false;
 
@@ -3389,7 +3341,7 @@ function toggleLiveSearch() {
 function doLiveSearch() {
   const btn = document.getElementById('live-search-btn');
   btn.classList.add('loading');
-  btn.textContent = '⏳ 검색 중...';
+  btn.textContent = '검색 중...';
 
   const center = map.getCenter();
   const bounds = map.getBounds();
@@ -3435,7 +3387,9 @@ function renderLiveResults(rawData) {
 
   if (data.length === 0) {
     showToast('주변에서 추가 장소를 찾지 못했어요');
-    btn.textContent = '🔍 주변 애견 장소 더 찾기';
+    btn.textContent = '주변 애견 장소 더 찾기';
+    liveData = [];
+    filterPlaces();
     return;
   }
 
@@ -3449,42 +3403,34 @@ function renderLiveResults(rawData) {
     );
   }
 
-  let listHtml = '';
-  data.forEach((d, i) => {
+  // Build enriched data with inDB flag
+  liveData = data.map((d, i) => ({
+    ...d,
+    _idx: i,
+    _inDB: dbNames.has(d.place_name.trim()) || coordInDB(parseFloat(d.y), parseFloat(d.x))
+  }));
+
+  // Add sky-blue dots on map
+  liveData.forEach((d, i) => {
     const lat = parseFloat(d.y);
     const lng = parseFloat(d.x);
-    const inDB = dbNames.has(d.place_name.trim()) || coordInDB(lat, lng);
-    const dotClass = inDB ? 'live-dot in-db' : 'live-dot';
-    const dotHtml = `<div class="${dotClass}" data-idx="${i}"></div>`;
-    const icon = L.divIcon({ html: dotHtml, className:'', iconSize:[18,18], iconAnchor:[9,9] });
+    const dotColor = d._inDB ? '#4CAF50' : '#87CEEB';
+    const dotHtml = `<div style="width:14px;height:14px;border-radius:50%;background:${dotColor};border:2px solid white;box-shadow:0 1px 6px rgba(0,0,0,.3);cursor:pointer"></div>`;
+    const icon = L.divIcon({ html: dotHtml, className:'', iconSize:[14,14], iconAnchor:[7,7] });
     const m = L.marker([lat, lng], { icon })
       .addTo(map)
-      .on('click', () => showLivePopup(d, inDB));
+      .on('click', () => showLivePopup(d, d._inDB));
     liveMarkers.push(m);
-
-    const statusBadge = inDB
-      ? `<div class="lrp-in-db">✅ 이미 등록된 장소</div>`
-      : `<div style="font-size:10px;color:#1976D2;font-weight:700;">🔵 미등록 장소</div>`;
-    listHtml += `
-      <div class="lrp-item" onclick="flyToLive(${lat},${lng},${i})">
-        <div class="lrp-name">${d.place_name}</div>
-        <div class="lrp-cat">${d.category_name.split(' > ').pop()}</div>
-        <div class="lrp-addr">${d.road_address_name || d.address_name}</div>
-        ${statusBadge}
-      </div>`;
   });
 
-  document.getElementById('lrp-list').innerHTML = listHtml;
-  document.getElementById('lrp-count').textContent = `${data.length}개`;
-  document.getElementById('live-results-panel').classList.add('visible');
-  btn.classList.add('active');
-  btn.textContent = '✕ 검색 닫기';
+  // Refresh list to show live section
+  filterPlaces();
 
-  const newCount = data.filter(d => {
-    const lat = parseFloat(d.y), lng = parseFloat(d.x);
-    return !dbNames.has(d.place_name.trim()) && !coordInDB(lat, lng);
-  }).length;
-  showToast(`🔍 ${data.length}개 발견 (미등록 ${newCount}개)`);
+  btn.classList.add('active');
+  btn.textContent = '검색 지우기';
+
+  const newCount = liveData.filter(d => !d._inDB).length;
+  showToast(`${data.length}개 발견 (미등록 ${newCount}개)`);
 }
 
 function flyToLive(lat, lng, idx) {
@@ -3511,10 +3457,11 @@ function showLivePopup(d, inDB) {
 
 function clearLiveSearch() {
   clearLiveMarkers();
-  document.getElementById('live-results-panel').classList.remove('visible');
+  liveData = [];
+  filterPlaces();
   const btn = document.getElementById('live-search-btn');
   btn.classList.remove('active','loading');
-  btn.textContent = '🔍 주변 애견 장소 더 찾기';
+  btn.textContent = '주변 애견 장소 더 찾기';
 }
 
 function clearLiveMarkers() {
@@ -3609,23 +3556,64 @@ function renderList(filtered) {
   const cnt  = document.getElementById('place-count');
   cnt.textContent = `${filtered.length}개의 장소`;
 
-  if (!filtered.length) {
+  let html = '';
+
+  // ─── 카카오 라이브 검색 결과 섹션 ───
+  if (liveData.length > 0) {
+    const newPlaces = liveData.filter(d => !d._inDB);
+    const alreadyIn = liveData.filter(d => d._inDB);
+    html += `<div class="list-section-header"><div class="sec-line"></div>&nbsp;카카오 검색 결과 ${liveData.length}개 &nbsp;<button onclick="clearLiveSearch()" style="font-size:10px;padding:2px 8px;border:1px solid #ccc;border-radius:10px;background:white;cursor:pointer;color:#888;font-family:inherit">지우기</button><div class="sec-line"></div></div>`;
+    if (newPlaces.length > 0) {
+      html += `<div style="padding:3px 10px 2px;font-size:11px;font-weight:700;color:#87CEEB">미등록 장소 (${newPlaces.length})</div>`;
+      html += newPlaces.map(liveCardHtml).join('');
+    }
+    if (alreadyIn.length > 0) {
+      html += `<div style="padding:3px 10px 2px;font-size:11px;font-weight:700;color:#4CAF50">이미 등록된 곳 (${alreadyIn.length})</div>`;
+      html += alreadyIn.map(liveCardHtml).join('');
+    }
+    html += `<div style="height:8px"></div>`;
+  }
+
+  if (!filtered.length && !liveData.length) {
     list.innerHTML = `<div class="no-results"><div class="nr-emoji">🔍</div><p>조건에 맞는 장소가 없어요.<br>필터를 바꿔보세요.</p></div>`;
     return;
   }
 
-  const feeList  = filtered.filter(p => p.entryFee);
-  const freelist = filtered.filter(p => !p.entryFee);
-  let html = '';
-  if (feeList.length) {
-    html += `<div class="list-section-header"><div class="sec-line"></div>&nbsp;💰 입장료 있는 곳 (${feeList.length})<div class="sec-line"></div></div>`;
-    html += feeList.map(cardHtml).join('');
+  if (filtered.length) {
+    const feeList  = filtered.filter(p => p.entryFee);
+    const freelist = filtered.filter(p => !p.entryFee);
+    if (feeList.length) {
+      html += `<div class="list-section-header"><div class="sec-line"></div>&nbsp;입장료 있는 곳 (${feeList.length})<div class="sec-line"></div></div>`;
+      html += feeList.map(cardHtml).join('');
+    }
+    if (freelist.length) {
+      html += `<div class="list-section-header"><div class="sec-line"></div>&nbsp;입장료 없는 곳 (${freelist.length})<div class="sec-line"></div></div>`;
+      html += freelist.map(cardHtml).join('');
+    }
   }
-  if (freelist.length) {
-    html += `<div class="list-section-header"><div class="sec-line"></div>&nbsp;✅ 입장료 없는 곳 (${freelist.length})<div class="sec-line"></div></div>`;
-    html += freelist.map(cardHtml).join('');
-  }
+
   list.innerHTML = html;
+}
+
+function liveCardHtml(d) {
+  const lat = parseFloat(d.y), lng = parseFloat(d.x);
+  const cat = d.category_name ? d.category_name.split(' > ').pop() : '';
+  const addr = d.road_address_name || d.address_name || '';
+  const color = d._inDB ? '#4CAF50' : '#87CEEB';
+  return `
+  <div class="place-card" style="border-left:3px solid ${color}" onclick="map.flyTo([${lat},${lng}],17,{duration:0.7});showLivePopup(liveData[${d._idx}],${d._inDB})">
+    <div class="pc-top">
+      <div class="pc-emoji" style="background:#F0F8FF;font-size:14px;color:${color}">●</div>
+      <div class="pc-info">
+        <div class="pc-name">${d.place_name}</div>
+        <div class="pc-meta">${cat}</div>
+      </div>
+    </div>
+    <div class="pc-tags">
+      <span class="tag t-gray">${addr}</span>
+      ${d.phone ? `<span class="tag t-blue">${d.phone}</span>` : ''}
+    </div>
+  </div>`;
 }
 
 function cardHtml(p) {
@@ -3730,7 +3718,8 @@ function openPlace(p) {
     </div>`;
 
   document.getElementById('detail-drawer').classList.add('open');
-  if (isMobile()) setMobileTab('map');
+  // skipCloseDrawer=true: map 탭 전환 시 방금 연 drawer를 닫지 않도록
+  if (isMobile()) setMobileTab('map', true);
 }
 
 function closeDrawer() {
@@ -3842,7 +3831,7 @@ function openNoticeModal(n) {
 // ══════════════════════════════════════════════════════
 function isMobile() { return window.innerWidth < 768; }
 
-function setMobileTab(tab) {
+function setMobileTab(tab, skipCloseDrawer) {
   if (!isMobile()) return;
   mobileTab = tab;
   document.querySelectorAll('.mtab').forEach(t => t.classList.remove('active'));
@@ -3854,15 +3843,20 @@ function setMobileTab(tab) {
   if (tab === 'list') {
     sidebar.classList.add('mobile-open');
     document.getElementById('fab-list').style.display = 'none';
+    // 목록으로 스크롤 (필터 아래)
+    setTimeout(() => {
+      const pl = document.getElementById('place-list');
+      if (pl) pl.scrollIntoView({ behavior:'smooth' });
+    }, 150);
   } else if (tab === 'filter') {
     sidebar.classList.add('mobile-open');
     document.getElementById('fab-list').style.display = 'none';
     // Scroll filter into view
-    setTimeout(() => document.getElementById('filters').scrollIntoView({ behavior:'smooth' }), 100);
+    setTimeout(() => document.getElementById('filters').scrollIntoView({ behavior:'smooth' }), 150);
   } else {
     // map tab
     sidebar.classList.remove('mobile-open');
-    closeDrawer();
+    if (!skipCloseDrawer) closeDrawer();
     document.getElementById('fab-list').style.display = 'flex';
   }
   if (map) setTimeout(() => map.invalidateSize(), 350);
@@ -3893,6 +3887,9 @@ function switchAdminTab(btn, tab) {
 async function loadAdminTab(tab) {
   const content = document.getElementById('admin-content');
 
+  // 장소 수집 탭은 Firebase 없이도 동작
+  if (tab === 'importer') { renderAdminImporter(); return; }
+
   if (!firebaseReady || !db) {
     content.innerHTML = `<div class="empty-state"><div class="es-icon">⚠️</div><p>Firebase가 연결되지 않았어요.<br>설정 후 사용할 수 있어요.</p></div>`;
     return;
@@ -3907,6 +3904,7 @@ async function loadAdminTab(tab) {
     else if (tab === 'views') await renderAdminViews();
     else if (tab === 'reports') await renderAdminReports();
     else if (tab === 'notices') await renderAdminNotices();
+    else if (tab === 'importer') renderAdminImporter();
   } catch(e) {
     content.innerHTML = `<div class="empty-state"><div class="es-icon">❌</div><p>오류가 발생했어요.<br>${e.message}</p></div>`;
   }
@@ -4172,6 +4170,164 @@ async function deleteNotice(id) {
   showToast('🗑️ 공지가 삭제됐어요');
   loadNotices();
   renderAdminNotices();
+}
+
+// ══════════════════════════════════════════════════════
+//  ADMIN: 장소 수집기 (Kakao Importer)
+// ══════════════════════════════════════════════════════
+let imp = { found:{}, running:false, filter:'new' };
+
+const IMP_CONFIRMED_CATS = ['애견카페','펫카페','반려견카페','애견운동장','반려견운동장','애견파크','반려동물카페'];
+const IMP_AREAS = [
+  {n:"분당",y:37.3595,x:127.1050},{n:"판교",y:37.3944,x:127.1112},
+  {n:"수지",y:37.3220,x:127.0465},{n:"기흥",y:37.2750,x:127.1150},
+  {n:"처인구",y:37.2410,x:127.1775},{n:"보정동",y:37.3194,x:127.1085},
+  {n:"수원",y:37.2636,x:127.0286},{n:"영통",y:37.2490,x:127.0565},
+  {n:"고양덕양",y:37.6320,x:126.8320},{n:"일산동",y:37.6760,x:126.7770},
+  {n:"일산서",y:37.6580,x:126.7240},{n:"파주",y:37.7599,x:126.7800},
+  {n:"파주운정",y:37.7080,x:126.7490},{n:"남양주",y:37.6360,x:127.2165},
+  {n:"다산",y:37.5979,x:127.1887},{n:"하남",y:37.5397,x:127.2150},
+  {n:"광주",y:37.4295,x:127.2550},{n:"가평",y:37.8315,x:127.5090},
+  {n:"청평",y:37.7430,x:127.4882},{n:"양평",y:37.4899,x:127.5000},
+  {n:"화성동탄",y:37.2110,x:127.0820},{n:"화성향남",y:37.1570,x:126.9090},
+  {n:"평택",y:37.0000,x:127.1122},{n:"안양",y:37.3943,x:126.9568},
+  {n:"부천",y:37.5035,x:126.7660},{n:"시흥",y:37.3800,x:126.8030},
+  {n:"의정부",y:37.7381,x:127.0337},{n:"구리",y:37.5943,x:127.1296},
+  {n:"안산",y:37.3219,x:126.8309},{n:"군포",y:37.3597,x:126.9352},
+  {n:"오산",y:37.1498,x:127.0773},{n:"안성",y:37.0080,x:127.2797},
+  {n:"여주",y:37.2981,x:127.6375},{n:"양주",y:37.7854,x:127.0457},
+  {n:"동두천",y:37.9036,x:127.0606},{n:"포천",y:37.8945,x:127.2002},
+  {n:"이천",y:37.2724,x:127.4348},{n:"김포",y:37.6155,x:126.7160},
+  {n:"광명",y:37.4784,x:126.8644},{n:"의왕",y:37.3447,x:126.9699},
+  {n:"과천",y:37.4296,x:126.9876},{n:"성남중원",y:37.4250,x:127.1370},
+];
+const IMP_KWS = ["애견동반","반려견동반","애견카페","펫카페","도그카페","애견운동장","반려견카페"];
+
+function impCatConfirmed(cat) { return IMP_CONFIRMED_CATS.some(k=>(cat||'').includes(k)); }
+function impMapCat(c){c=c||'';if(c.includes('애견카페')||c.includes('반려견카페'))return'애견카페';if(c.includes('펫카페'))return'펫카페';if(c.includes('애견운동장')||c.includes('반려견운동장'))return'애견운동장';if(c.includes('카페'))return'카페';if(c.includes('음식점')||c.includes('레스토랑')||c.includes('식당'))return'음식점';if(c.includes('브런치'))return'브런치카페';if(c.includes('디저트'))return'디저트카페';return'카페';}
+function impGuessArea(r,a){const s=r||a||'';const m=[['분당구','분당'],['판교','분당'],['수지구','용인'],['기흥구','용인'],['처인구','용인'],['죽전','보정동'],['보정동','보정동'],['수원','수원'],['파주','파주'],['고양','고양'],['일산','고양'],['남양주','남양주'],['다산동','남양주'],['하남','하남'],['광주시','광주'],['가평','가평'],['양평','양평'],['화성','화성'],['평택','평택'],['안양','안양'],['부천','부천'],['시흥','시흥'],['의정부','의정부'],['구리시','구리'],['안산','안산'],['군포','군포'],['오산','오산'],['안성','안성'],['여주','여주'],['양주','양주'],['동두천','동두천'],['포천','포천'],['이천','이천'],['김포','김포'],['광명','광명'],['의왕','의왕'],['과천','과천'],['성남','분당']];for(const[k,v]of m)if(s.includes(k))return v;return'기타';}
+
+function renderAdminImporter() {
+  const content = document.getElementById('admin-content');
+  const all = Object.values(imp.found);
+  const newOnes = all.filter(p=>!p.inDB);
+  const statsHtml = all.length ? `<div style="background:#E8F5E9;border-radius:8px;padding:8px 12px;font-size:12px;font-weight:700;color:#2E7D32;margin-bottom:10px">📊 총 ${all.length}개 | 🔵 미등록 ${newOnes.length}개 | ✅ 이미 등록 ${all.length-newOnes.length}개</div>` : '';
+
+  const filterBtns = ['all','new','orange','gray'].map((f,i)=>{
+    const labels=['전체','🔵 미등록만','🟠 확인완료만','⚪ 확인필요만'];
+    return `<button style="padding:4px 12px;border:1.5px solid ${imp.filter===f?'#FF6B35':'#DDD'};border-radius:20px;background:${imp.filter===f?'#FFF0E8':'white'};color:${imp.filter===f?'#FF6B35':'#555'};font-size:12px;font-weight:${imp.filter===f?700:400};cursor:pointer;font-family:inherit" onclick="impSetFilter('${f}')">${labels[i]}</button>`;
+  }).join('');
+
+  let items = all;
+  if(imp.filter==='new') items=all.filter(p=>!p.inDB);
+  else if(imp.filter==='orange') items=all.filter(p=>p.confirmed);
+  else if(imp.filter==='gray') items=all.filter(p=>!p.confirmed);
+
+  const listHtml = items.map(p=>{
+    const inDB = p.inDB;
+    const areas=['분당','보정동','용인','수원','고양','파주','남양주','하남','광주','가평','양평','화성','평택','안양','부천','시흥','의정부','구리','안산','군포','오산','안성','여주','양주','동두천','포천','이천','김포','기타'];
+    return `<div style="background:white;border-radius:10px;margin-bottom:6px;border:2px solid ${(!inDB&&!p._skip)?'#FF6B35':'#F0F0F0'};opacity:${inDB?0.45:1};overflow:hidden">
+      <div style="display:flex;gap:8px;padding:10px 12px;align-items:flex-start">
+        <input type="checkbox" style="margin-top:3px;accent-color:#FF6B35" ${(!inDB&&!p._skip)?'checked':''} ${inDB?'disabled':''} onchange="impToggle('${p.id}',this.checked)">
+        <div style="flex:1">
+          <div style="font-size:13px;font-weight:700">${p.place_name}</div>
+          <div style="font-size:11px;color:#FF6B35">${p.category_name||''}</div>
+          <div style="font-size:11px;color:#888;margin-top:1px">${p.road_address_name||p.address_name}${p.phone?` · ${p.phone}`:''}</div>
+        </div>
+      </div>
+      ${!inDB?`<div style="padding:6px 12px 8px;border-top:1px solid #F5F5F5;display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+        <span style="font-size:11px;font-weight:700;color:#1565C0;background:#E3F2FD;padding:2px 7px;border-radius:5px">🔵 미등록</span>
+        ${p.place_url?`<a href="${p.place_url}" target="_blank" style="font-size:11px;color:#1565C0;font-weight:700;padding:2px 8px;border:1px solid #BBDEFB;border-radius:5px;text-decoration:none">🗺 카카오맵</a>`:''}
+        <div style="display:flex;border:1.5px solid #DDD;border-radius:7px;overflow:hidden">
+          <button style="padding:3px 9px;font-size:11px;font-weight:700;border:none;cursor:pointer;background:${p.confirmed?'#FF6B35':'white'};color:${p.confirmed?'white':'#AAA'};font-family:inherit" onclick="impSetCon('${p.id}',true)">🟠 확인완료</button>
+          <button style="padding:3px 9px;font-size:11px;font-weight:700;border:none;cursor:pointer;background:${!p.confirmed?'#C8C8C8':'white'};color:${!p.confirmed?'white':'#AAA'};font-family:inherit" onclick="impSetCon('${p.id}',false)">⚪ 확인필요</button>
+        </div>
+        <select style="padding:3px 7px;font-size:11px;border:1.5px solid #DDD;border-radius:6px;font-family:inherit" onchange="impSetArea('${p.id}',this.value)">
+          ${areas.map(a=>`<option value="${a}"${a===p.area?' selected':''}>${a}</option>`).join('')}
+        </select>
+      </div>`:`<div style="padding:6px 12px 8px;border-top:1px solid #F5F5F5"><span style="font-size:11px;font-weight:700;color:#2E7D32;background:#E8F5E9;padding:2px 7px;border-radius:5px">✅ 이미 등록됨</span></div>`}
+    </div>`;
+  }).join('') || '<div style="text-align:center;padding:40px;color:#AAA;font-size:14px">검색을 시작하면 결과가 표시됩니다</div>';
+
+  content.innerHTML = `
+    <div style="background:#FFF8E1;border-left:4px solid #FFA000;padding:8px 12px;border-radius:6px;font-size:11px;color:#5D4037;line-height:1.6;margin-bottom:10px">
+      <strong>🟠 확인완료</strong> = 카테고리가 애견카페/펫카페/애견운동장 (자동) 또는 카카오맵 직접 확인 후 수동 체크<br>
+      <strong>⚪ 확인필요</strong> = 나머지. 카카오맵 🗺 링크로 직접 확인 후 변경 가능
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+      <button style="padding:9px 16px;background:#FF6B35;color:white;border:none;border-radius:10px;font-size:13px;font-weight:700;font-family:inherit;cursor:pointer" id="imp-btn" onclick="impStartSearch()" ${imp.running?'disabled':''}>
+        ${imp.running?'⏳ 검색 중...': all.length?'🔄 다시 검색':'🔍 경기도 전역 검색 시작'}
+      </button>
+      ${newOnes.filter(p=>!p._skip).length?`<button style="padding:9px 16px;background:#1A237E;color:white;border:none;border-radius:10px;font-size:13px;font-weight:700;font-family:inherit;cursor:pointer" onclick="impShowExport()">📋 선택 장소 코드 생성 (${newOnes.filter(p=>!p._skip).length}개)</button>`:''}
+    </div>
+    ${statsHtml}
+    <div id="imp-status" style="font-size:12px;color:#888;margin-bottom:6px">${imp.running?'검색 중...':''}</div>
+    <div style="height:3px;background:#FFE4D4;border-radius:2px;margin-bottom:8px"><div id="imp-prog" style="height:3px;background:#FF6B35;border-radius:2px;width:${imp.progPct||0}%;transition:width .3s"></div></div>
+    ${all.length?`<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">${filterBtns}</div>`:''}
+    <div id="imp-list">${listHtml}</div>
+  `;
+}
+
+async function impStartSearch() {
+  if(imp.running) return;
+  imp.running=true; imp.found={}; imp.progPct=0;
+  renderAdminImporter();
+  const existingNames = new Set(places.map(p=>p.name));
+  const total = IMP_AREAS.length * IMP_KWS.length;
+  let done=0;
+  for(const area of IMP_AREAS){
+    for(const kw of IMP_KWS){
+      const stEl=document.getElementById('imp-status');
+      if(stEl) stEl.textContent=`"${area.n}" · "${kw}" 검색 중 (${done}/${total})`;
+      try{
+        for(let pg=1;pg<=3;pg++){
+          const url=`https://dapi.kakao.com/v2/local/search/keyword.json?query=${encodeURIComponent(kw)}&x=${area.x}&y=${area.y}&radius=8000&page=${pg}&size=15`;
+          const r=await fetch(url,{headers:{'Authorization':`KakaoAK ${window.KAKAO_JS_KEY||'62285f9df17e0e38d8ad4a6d2752caef'}`}});
+          if(!r.ok) break;
+          const d=await r.json();
+          for(const p of(d.documents||[])){
+            if(p.id&&!imp.found[p.id]){
+              imp.found[p.id]={...p, inDB:existingNames.has(p.place_name), confirmed:impCatConfirmed(p.category_name), area:impGuessArea(p.road_address_name,p.address_name), cat:impMapCat(p.category_name), large:false,indoor:false,cage:false,fee:false,_skip:false};
+            }
+          }
+          if(d.meta?.is_end) break;
+        }
+      }catch(e){}
+      done++;
+      imp.progPct=Math.round(done/total*100);
+      const pg=document.getElementById('imp-prog');
+      if(pg) pg.style.width=imp.progPct+'%';
+      await new Promise(r=>setTimeout(r,110));
+    }
+  }
+  imp.running=false;
+  const all=Object.values(imp.found);
+  const stEl=document.getElementById('imp-status');
+  if(stEl) stEl.textContent=`완료! 총 ${all.length}개 발견, 미등록 ${all.filter(p=>!p.inDB).length}개`;
+  renderAdminImporter();
+}
+
+function impToggle(id,v){ if(imp.found[id]) imp.found[id]._skip=!v; }
+function impSetCon(id,v){ if(imp.found[id]){ imp.found[id].confirmed=v; renderAdminImporter(); } }
+function impSetArea(id,v){ if(imp.found[id]) imp.found[id].area=v; }
+function impSetFilter(f){ imp.filter=f; renderAdminImporter(); }
+
+function impShowExport(){
+  const sel=Object.values(imp.found).filter(p=>!p.inDB&&!p._skip);
+  if(!sel.length){ showToast('선택된 장소가 없어요'); return; }
+  const maxId = Math.max(...places.map(p=>p.id), 194);
+  let id=maxId+1;
+  const lines=sel.map(p=>{
+    const lat=parseFloat(p.y), lng=parseFloat(p.x);
+    const ku=p.place_url?`"${p.place_url}"`:'null';
+    return `  { id:${id++}, name:"${p.place_name.replace(/"/g,"'")}", cat:"${p.cat}", area:"${p.area}", petConfirmed:${p.confirmed},\n    addr:"${(p.road_address_name||p.address_name).replace(/"/g,"'")}", phone:"${p.phone||''}",\n    lat:${lat}, lng:${lng},\n    note:"", large:${p.large}, indoor:${p.indoor}, cage:${p.cage}, entryFee:${p.fee},\n    emoji:"🐾", kakaoUrl:${ku} }`;
+  });
+  const code=`// 새로 추가할 장소 (${sel.length}개)\n// 아래 코드를 Claude에게 붙여넣어 주세요\n[\n${lines.join(',\n')}\n]`;
+  const ta=document.createElement('textarea');
+  ta.value=code; ta.style.cssText='position:fixed;opacity:0';
+  document.body.appendChild(ta); ta.select(); document.execCommand('copy');
+  document.body.removeChild(ta);
+  showToast(`📋 ${sel.length}개 장소 코드가 복사됐어요! Claude에게 붙여넣어 주세요.`, 4000);
 }
 
 // ══════════════════════════════════════════════════════
