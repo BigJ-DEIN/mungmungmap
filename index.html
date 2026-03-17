@@ -3999,15 +3999,18 @@ async function doAuth() {
       }
     }
     const user = credential.user;
-    const userData = { uid: user.uid, email: user.email, displayName: user.displayName || name, isAdmin: isAdmin(user.email) };
+    const userData = {
+      uid: user.uid, email: user.email,
+      displayName: user.displayName || name,
+      isAdmin: isAdmin(user.email),
+      emailVerified: user.emailVerified || false
+    };
 
-    // 회원가입 시 홈화면 추가 체크 여부 확인
+    // 회원가입 시: 이메일 인증 메일 발송 (무료 Firebase 기능)
     if (authMode === 'register') {
+      try { await user.sendEmailVerification(); } catch(e) { console.warn('인증 메일 발송 실패:', e); }
       const wantsHomescreen = document.getElementById('chk-homescreen')?.checked;
-      if (wantsHomescreen) {
-        // 약간의 딜레이 후 실행 (startApp UI 전환 완료 후)
-        setTimeout(() => tryAddToHomescreen(), 800);
-      }
+      if (wantsHomescreen) setTimeout(() => tryAddToHomescreen(), 800);
     }
 
     startApp(userData);
@@ -4452,9 +4455,51 @@ async function renderAdminCorrections() {
     content.innerHTML = `<div class="empty-state"><div class="es-icon">⚠️</div><p>Firebase 필요</p></div>`;
     return;
   }
-  const snap = await db.collection('correctionRequests')
-    .orderBy('createdAt','desc').limit(200).get();
-  if (snap.empty) {
+  // 수정 요청 + 수정 이력 병렬 로드
+  const [reqSnap, histSnap] = await Promise.all([
+    db.collection('correctionRequests').orderBy('createdAt','desc').limit(200).get(),
+    db.collection('editHistory').orderBy('editedAt','desc').limit(100).get()
+  ]);
+
+  // ── 수정 이력 섹션 먼저 렌더 ──
+  const histItems = histSnap.docs.map(d => ({ _id: d.id, ...d.data() }));
+  const cardStyle = 'background:#FAFAFA;border-radius:12px;padding:12px 14px;margin-bottom:8px;border:1.5px solid #F0F0F0';
+  let histHTML = '';
+  if (histItems.length) {
+    histHTML = `<div style="font-size:13px;font-weight:800;color:#1F2937;margin-bottom:10px">📋 수정 이력 (최근 ${histItems.length}건)</div>`;
+    histItems.forEach(item => {
+      const ts = item.editedAt?.toDate ? item.editedAt.toDate().toLocaleString('ko-KR') : '';
+      const meta = FIELD_META[item.field] || {};
+      const fmtVal = (v) => {
+        if (v === true) return `✅ ${meta.trueText||'true'}`;
+        if (v === false) return `❌ ${meta.falseText||'false'}`;
+        if (v === null || v === undefined) return '-';
+        const s = String(v);
+        return s.length > 40 ? s.slice(0,40)+'…' : s;
+      };
+      histHTML += `<div style="${cardStyle}">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:6px">
+          <div>
+            <span style="font-size:13px;font-weight:700;color:#2D2D2D">${item.placeName||''}</span>
+            <span style="font-size:12px;color:#AAA;margin-left:6px">${item.placeArea||''}</span>
+          </div>
+          <div style="font-size:11px;color:#BBB;text-align:right;flex-shrink:0">${ts}</div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:4px">
+          <span style="font-size:11px;background:#EEF;color:#555;padding:2px 7px;border-radius:5px">${meta.label||item.field}</span>
+          <span style="font-size:12px;color:#999">${fmtVal(item.oldValue)}</span>
+          <span style="color:#CCC">→</span>
+          <span style="font-size:12px;color:#2E7D32;font-weight:700">${fmtVal(item.newValue)}</span>
+        </div>
+        <div style="font-size:11px;color:#AAA">👤 ${item.userName||item.userEmail||''}</div>
+      </div>`;
+    });
+  } else {
+    histHTML = `<div style="font-size:12px;color:#CCC;text-align:center;padding:12px">수정 이력이 없어요</div>`;
+  }
+
+  const snap = reqSnap;
+  if (snap.empty && !histItems.length) {
     content.innerHTML = `<div class="empty-state"><div class="es-icon">✅</div><p>수정 요청이 없어요</p></div>`;
     return;
   }
@@ -4523,6 +4568,8 @@ async function renderAdminCorrections() {
       </div>`;
     });
   }
+  // 수정 이력 섹션 덧붙이기
+  html += `<div style="margin-top:24px;padding-top:16px;border-top:2px solid #F5F5F5">${histHTML}</div>`;
   content.innerHTML = html;
 }
 
@@ -4637,6 +4684,13 @@ function startApp(user) {
     document.getElementById('admin-btn').style.display  = 'flex';
     document.getElementById('notif-dot').style.display  = 'block';
     document.getElementById('tab-list-dot').style.display = 'block';
+  }
+
+  // 이메일 미인증 시 인증 유도 배너 표시 (관리자는 제외)
+  if (!user.isAdmin && !user.emailVerified) {
+    setTimeout(() => {
+      showToast('📧 가입 이메일로 인증 메일이 발송됐어요. 인증 후 정보 수정이 가능해요!', 6000);
+    }, 1500);
   }
 
   // load dog profile async (non-blocking)
@@ -5522,7 +5576,11 @@ function openPlace(p) {
     ${feeBanner}
     <div style="display:flex;align-items:center;justify-content:space-between;margin-top:16px;margin-bottom:9px">
       <div class="sec-label" style="margin:0">반려견 정책</div>
-      ${!currentUser?.isAdmin ? `<div style="font-size:10px;color:#CCC">탭해서 오류 신고</div>` : `<div style="font-size:10px;color:#E04E14;font-weight:600">탭해서 바로 수정</div>`}
+      ${currentUser?.isAdmin
+        ? `<div style="font-size:10px;color:#E04E14;font-weight:600">탭해서 바로 수정</div>`
+        : currentUser?.emailVerified
+          ? `<div style="font-size:10px;color:#2E7D32;font-weight:600">탭해서 직접 수정</div>`
+          : `<div style="font-size:10px;color:#CCC">탭해서 오류 신고</div>`}
     </div>
     <div class="info-grid">
       ${icCell(p.id,'large',p.large,'🐕 대형견',p.large?'✅ 가능':'❌ 불가',p.large?'yes':'no')}
@@ -5635,12 +5693,16 @@ function icCell(placeId, field, val, lbl, dispText, valClass) {
   </div>`;
 }
 
-// 클릭 라우터 – 관리자면 직접 수정, 일반 유저면 수정 요청 모달
+// 클릭 라우터 – 관리자: 바로 수정 / 인증 유저: 직접 수정+로그 / 미인증: 수정요청
 function onFieldClick(placeId, field) {
   if (!currentUser) { showToast('로그인 후 이용해주세요'); return; }
   if (currentUser.isAdmin) {
     adminEditField(placeId, field);
+  } else if (currentUser.emailVerified) {
+    // 이메일 인증된 일반 유저 → 직접 수정 (수정 이력 기록)
+    openUserDirectEdit(placeId, field);
   } else {
+    // 미인증 유저 → 인증 요청 안내 후 수정 요청으로 fallback
     openCorrectionModal(placeId, field);
   }
 }
@@ -5740,7 +5802,150 @@ async function submitAdminHoursEdit(placeId) {
   } catch(e) { showToast('❌ ' + e.message); }
 }
 
-/* ── 일반 유저: 수정 요청 모달 ── */
+/* ── 이메일 인증된 유저: 직접 수정 (수정 이력 기록) ── */
+function openUserDirectEdit(placeId, field) {
+  const p = places.find(x => x.id === placeId);
+  if (!p) return;
+  const meta = FIELD_META[field];
+  if (!meta) return;
+  document.getElementById('correction-modal-title').textContent = `✏️ ${meta.label} 수정`;
+
+  if (meta.type === 'bool') {
+    const curVal  = p[field];
+    const newVal  = !curVal;
+    const curText = curVal ? `${meta.trueIcon} ${meta.trueText}` : `${meta.falseIcon} ${meta.falseText}`;
+    const newText = newVal ? `${meta.trueIcon} ${meta.trueText}` : `${meta.falseIcon} ${meta.falseText}`;
+    document.getElementById('correction-modal-body').innerHTML = `
+      <div style="font-size:14px;color:#555;margin-bottom:16px">"${p.name}"</div>
+      <div style="display:grid;grid-template-columns:1fr auto 1fr;gap:8px;align-items:center;margin-bottom:18px">
+        <div style="background:#F5F5F5;border-radius:10px;padding:12px;text-align:center">
+          <div style="font-size:10px;color:#BBB;margin-bottom:4px">현재</div>
+          <div style="font-size:15px;font-weight:700;color:#999">${curText}</div>
+        </div>
+        <div style="font-size:18px;color:#CCC">→</div>
+        <div style="background:#FFF8F5;border:2px solid #E04E14;border-radius:10px;padding:12px;text-align:center">
+          <div style="font-size:10px;color:#E04E14;font-weight:700;margin-bottom:4px">변경</div>
+          <div style="font-size:15px;font-weight:700;color:#E04E14">${newText}</div>
+        </div>
+      </div>
+      <button onclick="applyUserDirectEdit(${placeId},'${field}',${newVal})"
+        style="width:100%;padding:13px;background:#E04E14;color:white;border:none;border-radius:14px;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit">
+        수정 반영하기
+      </button>`;
+  } else if (meta.type === 'text') {
+    document.getElementById('correction-modal-body').innerHTML = `
+      <div style="font-size:14px;color:#555;margin-bottom:12px">"${p.name}"</div>
+      <textarea id="user-edit-textarea" rows="5"
+        style="width:100%;box-sizing:border-box;padding:12px;border:1.5px solid #EEE;border-radius:12px;font-size:14px;font-family:inherit;resize:vertical;outline:none"
+      >${p[field]||''}</textarea>
+      <button onclick="applyUserTextEdit(${placeId},'${field}')"
+        style="width:100%;padding:13px;background:#E04E14;color:white;border:none;border-radius:14px;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit;margin-top:12px">
+        수정 반영하기
+      </button>`;
+  } else if (meta.type === 'hours') {
+    const lines = (p.hours||[]).map(h=>`${h.d}\t${h.t}`).join('\n');
+    document.getElementById('correction-modal-body').innerHTML = `
+      <div style="font-size:14px;color:#555;margin-bottom:12px">"${p.name}"</div>
+      <div style="font-size:12px;color:#AAA;margin-bottom:8px">한 줄에 "요일↹시간" 형식</div>
+      <textarea id="user-hours-textarea" rows="7"
+        style="width:100%;box-sizing:border-box;padding:12px;border:1.5px solid #EEE;border-radius:12px;font-size:13px;font-family:monospace;resize:vertical;outline:none"
+      >${lines}</textarea>
+      <button onclick="applyUserHoursEdit(${placeId})"
+        style="width:100%;padding:13px;background:#E04E14;color:white;border:none;border-radius:14px;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit;margin-top:12px">
+        수정 반영하기
+      </button>`;
+  }
+  openModal('correction-modal');
+}
+
+async function applyUserDirectEdit(placeId, field, newVal) {
+  const p = places.find(x => x.id === placeId);
+  if (!p || !p.firestoreId) { showToast('Firestore ID 없음'); return; }
+  const oldVal = p[field];
+  try {
+    await db.collection('places').doc(p.firestoreId).update({ [field]: newVal });
+    await logPlaceEdit(p, field, oldVal, newVal);
+    p[field] = newVal;
+    invalidatePlacesCache();
+    const meta = FIELD_META[field];
+    const el = document.getElementById(`ic-${placeId}-${field}`);
+    if (el) {
+      el.textContent = newVal ? `${meta.trueIcon} ${meta.trueText}` : `${meta.falseIcon} ${meta.falseText}`;
+      el.className = `ic-val ${newVal ? meta.trueClass : meta.falseClass}`;
+    }
+    showToast(`✅ ${meta?.label} 수정됐어요!`);
+    closeModal('correction-modal');
+  } catch(e) { showToast('❌ 저장 실패: ' + e.message); }
+}
+
+async function applyUserTextEdit(placeId, field) {
+  const p = places.find(x => x.id === placeId);
+  if (!p || !p.firestoreId) return;
+  const newVal = document.getElementById('user-edit-textarea').value.trim();
+  const oldVal = p[field];
+  try {
+    await db.collection('places').doc(p.firestoreId).update({ [field]: newVal });
+    await logPlaceEdit(p, field, oldVal, newVal);
+    p[field] = newVal;
+    invalidatePlacesCache();
+    showToast('✅ 수정됐어요!');
+    closeModal('correction-modal');
+    openPlace(p);
+  } catch(e) { showToast('❌ ' + e.message); }
+}
+
+async function applyUserHoursEdit(placeId) {
+  const p = places.find(x => x.id === placeId);
+  if (!p || !p.firestoreId) return;
+  const raw = document.getElementById('user-hours-textarea').value;
+  const newHours = raw.split('\n').filter(l=>l.trim()).map(l=>{
+    const pt = l.split('\t'); return { d:(pt[0]||'').trim(), t:(pt[1]||'').trim() };
+  }).filter(h=>h.d||h.t);
+  const oldVal = p.hours;
+  try {
+    await db.collection('places').doc(p.firestoreId).update({ hours: newHours });
+    await logPlaceEdit(p, 'hours', JSON.stringify(oldVal), JSON.stringify(newHours));
+    p.hours = newHours;
+    invalidatePlacesCache();
+    showToast('✅ 영업시간 수정됐어요!');
+    closeModal('correction-modal');
+    openPlace(p);
+  } catch(e) { showToast('❌ ' + e.message); }
+}
+
+/* 인증 메일 재발송 */
+async function resendVerificationEmail() {
+  const fbUser = firebase.auth().currentUser;
+  if (!fbUser) return;
+  try {
+    await fbUser.sendEmailVerification();
+    showToast('📧 인증 메일을 다시 보냈어요!');
+  } catch(e) { showToast('❌ ' + (e.code === 'auth/too-many-requests' ? '잠시 후 다시 시도해주세요' : e.message)); }
+}
+
+/* 수정 이력 기록 (editHistory 컬렉션) */
+async function logPlaceEdit(p, field, oldVal, newVal) {
+  if (!firebaseReady || !db || !currentUser) return;
+  const meta = FIELD_META[field] || {};
+  try {
+    await db.collection('editHistory').add({
+      placeId:    p.id,
+      firestoreId: p.firestoreId || '',
+      placeName:  p.name,
+      placeArea:  p.area || '',
+      field,
+      fieldLabel: meta.label || field,
+      oldValue:   oldVal ?? null,
+      newValue:   newVal ?? null,
+      userId:     currentUser.uid,
+      userEmail:  currentUser.email,
+      userName:   currentUser.displayName || currentUser.email,
+      editedAt:   firebase.firestore.FieldValue.serverTimestamp()
+    });
+  } catch(e) { console.warn('editHistory log 실패:', e); }
+}
+
+/* ── 일반 유저: 수정 요청 모달 (미인증 fallback) ── */
 function openCorrectionModal(placeId, field) {
   const p = places.find(x => x.id === placeId);
   if (!p) return;
@@ -5748,7 +5953,15 @@ function openCorrectionModal(placeId, field) {
   if (!meta) return;
   document.getElementById('correction-modal-title').textContent = '🚩 정보 오류 신고';
 
-  let bodyHTML = '';
+  // 미인증 유저에게 이메일 인증 안내
+  const verifyBanner = (!currentUser?.emailVerified && !currentUser?.isAdmin)
+    ? `<div style="background:#FFF8E8;border:1px solid #FFD54F;border-radius:10px;padding:10px 12px;margin-bottom:14px;font-size:12px;color:#7B5800">
+        📧 <strong>이메일 인증</strong> 후에는 정보를 직접 수정할 수 있어요!<br>
+        <span style="color:#AAA">가입 이메일의 인증 링크를 클릭해주세요.</span>
+        <button onclick="resendVerificationEmail()" style="margin-top:6px;display:block;background:#FFA000;color:white;border:none;border-radius:7px;padding:5px 12px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit">📨 인증 메일 재발송</button>
+       </div>` : '';
+
+  let bodyHTML = verifyBanner;
   if (meta.type === 'bool') {
     const curVal  = p[field];
     const curText = curVal ? meta.trueText : meta.falseText;
@@ -5853,18 +6066,31 @@ function copyShareLink(placeId) {
 let memPhotoBlob = null;  // 선택된 사진 (WebP 변환 후)
 
 /* 사진 → WebP 압축 (최대 900px, quality 0.72) */
-async function compressToWebP(file, maxW = 900, quality = 0.72) {
+async function compressToWebP(file, maxW = 400, quality = 0.82) {
   return new Promise(resolve => {
     const img = new Image();
     const url = URL.createObjectURL(file);
     img.onload = () => {
       let w = img.width, h = img.height;
-      if (w > maxW) { h = Math.round(h * maxW / w); w = maxW; }
+      // 긴 쪽 기준 400px로 리사이즈 (가로/세로 모두 적용)
+      const longer = Math.max(w, h);
+      if (longer > maxW) { const r = maxW / longer; w = Math.round(w*r); h = Math.round(h*r); }
       const canvas = document.createElement('canvas');
       canvas.width = w; canvas.height = h;
       canvas.getContext('2d').drawImage(img, 0, 0, w, h);
       URL.revokeObjectURL(url);
-      canvas.toBlob(blob => resolve(blob), 'image/webp', quality);
+      // 1차: WebP 시도
+      canvas.toBlob(webpBlob => {
+        // 구형 iOS/Safari: WebP 미지원 → PNG로 무음 fallback → 파일 급증
+        // 150KB 초과(=PNG fallback 의심)면 JPEG로 재압축
+        if (!webpBlob || webpBlob.size > 150 * 1024) {
+          canvas.toBlob(jpegBlob => {
+            resolve(jpegBlob || webpBlob);
+          }, 'image/jpeg', 0.82);
+        } else {
+          resolve(webpBlob);
+        }
+      }, 'image/webp', quality);
     };
     img.onerror = () => { URL.revokeObjectURL(url); resolve(null); };
     img.src = url;
@@ -5880,24 +6106,49 @@ async function onMemPhotoSelected(e) {
   memPhotoBlob = await compressToWebP(file);
   if (!memPhotoBlob) { hint.textContent = '사진 변환 실패. 다시 시도해주세요'; return; }
   const sizeKB = Math.round(memPhotoBlob.size / 1024);
-  document.getElementById('mem-photo-size').textContent = `${sizeKB}KB (WebP 최적화됨)`;
+  const fmt = memPhotoBlob.type === 'image/jpeg' ? 'JPEG' : 'WebP';
+  document.getElementById('mem-photo-size').textContent = `${sizeKB}KB (${fmt} 최적화됨)`;
   hint.textContent = '사진 변경하기';
   const preview = document.getElementById('mem-photo-preview');
   preview.src = URL.createObjectURL(memPhotoBlob);
   preview.style.display = 'block';
 }
 
-/* Firebase Storage 업로드 */
+/* Firebase Storage 업로드 — 진행률 표시 + 30초 타임아웃 */
 async function uploadMemPhoto(blob) {
   if (!storage || !currentUser) return null;
-  try {
-    const ref = storage.ref(`memories/${currentUser.uid}/${Date.now()}.webp`);
-    await ref.put(blob, { contentType: 'image/webp' });
-    return await ref.getDownloadURL();
-  } catch(e) {
-    console.warn('Storage 업로드 실패:', e);
-    return null;
-  }
+  const btn = document.getElementById('mem-submit-btn');
+  const ext = blob.type === 'image/jpeg' ? 'jpg' : 'webp';
+  const sizeKB = Math.round(blob.size / 1024);
+  console.log(`[memUpload] ${sizeKB}KB ${blob.type}`);
+
+  return new Promise(resolve => {
+    const ref = storage.ref(`memories/${currentUser.uid}/${Date.now()}.${ext}`);
+    const task = ref.put(blob, { contentType: blob.type || 'image/webp' });
+
+    // 30초 후 "시간이 걸리고 있어요" 안내 (업로드는 취소하지 않고 계속 진행)
+    const slowTimer = setTimeout(() => {
+      if (btn) btn.textContent = `⏳ 시간이 걸리고 있어요... 잠시만요`;
+    }, 30000);
+
+    task.on('state_changed',
+      snap => {
+        const pct = snap.totalBytes > 0
+          ? Math.round(snap.bytesTransferred / snap.totalBytes * 100) : 0;
+        if (btn) btn.textContent = `업로드 중 ${pct}%... (${sizeKB}KB)`;
+      },
+      err => {
+        clearTimeout(slowTimer);
+        console.warn('[memUpload] 오류:', err.code, err.message);
+        resolve(null); // 실제 네트워크/권한 오류만 null 반환
+      },
+      async () => {
+        clearTimeout(slowTimer);
+        try { resolve(await task.snapshot.ref.getDownloadURL()); }
+        catch(e) { resolve(null); }
+      }
+    );
+  });
 }
 
 /* 가게 선택 드롭다운 채우기 */
@@ -7652,21 +7903,29 @@ async function nwCollectRegion(region) {
             Math.abs(p.lat - parseFloat(item.y)) < 0.001 &&
             Math.abs(p.lng - parseFloat(item.x)) < 0.001)) continue;
           existingKakaoIds.add(item.id);
+          const _cat = impMapCat(item.category_name);
+          const _confirmed = impCatConfirmed(item.category_name);
           newFound.push({
-            name:        item.place_name,
-            lat:         parseFloat(item.y),
-            lng:         parseFloat(item.x),
-            address:     item.road_address_name || item.address_name,
-            phone:       item.phone || '',
-            kakaoUrl:    item.place_url || '',
-            kakaoId:     item.id,
-            category:    impMapCat(item.category_name),
-            confirmed:   impCatConfirmed(item.category_name),
-            area:        region.name,
-            province:    region.province,
-            status:      impCatConfirmed(item.category_name) ? 'confirmed' : 'unverified',
-            source:      'auto_pipeline',
-            addedAt:     new Date().toISOString(),
+            name:      item.place_name,
+            lat:       parseFloat(item.y),
+            lng:       parseFloat(item.x),
+            addr:      item.road_address_name || item.address_name || '',
+            phone:     item.phone || '',
+            kakaoUrl:  item.place_url || '',
+            kakaoId:   item.id,
+            cat:       _cat,
+            emoji:     impCatEmoji(_cat),
+            area:      region.name,
+            province:  region.province,
+            petStatus: _confirmed ? 'confirmed' : 'unverified',
+            large: false, small: true,
+            indoor: false, outdoor: true,
+            stroller: false, cage: false,
+            note: '',
+            hours: [{ d: '영업시간', t: '카카오맵 확인' }],
+            active:    true,
+            source:    'auto_pipeline',
+            addedAt:   new Date().toISOString(),
           });
         }
         if (j.meta?.is_end) break;
@@ -7680,15 +7939,25 @@ async function nwCollectRegion(region) {
 /* 수집된 장소를 Firestore에 저장 */
 async function nwSavePlacesToFirestore(newPlaces) {
   if (!firebaseReady || !db || !newPlaces.length) return 0;
-  const batch = db.batch();
+  // numeric id: 기존 최대값 + 1 부터 순번 부여
+  let nextId = Math.max(...places.filter(p => p && typeof p.id === 'number').map(p => p.id), 10000) + 1;
+  const CHUNK = 400;
   let count = 0;
-  for (const p of newPlaces) {
-    const ref = db.collection('places').doc();
-    batch.set(ref, { ...p, id: ref.id });
-    count++;
-    if (count % 450 === 0) { await batch.commit(); }
+  for (let i = 0; i < newPlaces.length; i += CHUNK) {
+    const chunk = newPlaces.slice(i, i + CHUNK);
+    const batch = db.batch();
+    for (const p of chunk) {
+      const ref = db.collection('places').doc();
+      const numId = nextId++;
+      const docData = { ...p, id: numId, firestoreId: ref.id, active: true };
+      batch.set(ref, docData);
+      // 로컬 places 배열의 해당 항목에도 id/firestoreId 반영
+      p.id = numId;
+      p.firestoreId = ref.id;
+      count++;
+    }
+    try { await batch.commit(); } catch(e) { console.warn('nwSave batch err', e); }
   }
-  try { await batch.commit(); } catch(e) {}
   return count;
 }
 
@@ -7796,10 +8065,15 @@ async function runNationwidePipeline() {
 
     const newPlaces = await nwCollectRegion(region);
     if (newPlaces.length) {
+      // Firestore 저장 (이 안에서 p.id, p.firestoreId 채워줌)
       await nwSavePlacesToFirestore(newPlaces);
       nwPipeline.stats.collected += newPlaces.length;
-      // places 배열에도 추가
-      places.push(...newPlaces);
+      // places 배열 + 지도 마커 추가
+      newPlaces.forEach(p => {
+        places.push(p);
+        if (map) addMarker(p);
+      });
+      invalidatePlacesCache();
     }
     nwUpdateLog(`  ✅ 수집 ${newPlaces.length}개`);
 
@@ -7872,9 +8146,58 @@ function resetNationwidePipeline() {
   if (nwPipeline.running) return;
   nwPipeline.regionIdx = 0;
   nwPipeline.stats = { collected: 0, v1Done: 0, v2Done: 0, v2Skipped: 0, upgraded: 0 };
+  nwPipeline.regionStatus = {};
   nwPipeline.log = [];
   nwSaveState();
   renderNationwidePipelineUI();
+}
+
+/* 파이프라인 초기화 + Firestore 자동수집 장소 전체 삭제 */
+async function resetAndClearPipeline() {
+  if (nwPipeline.running) { showToast('먼저 파이프라인을 중단해주세요'); return; }
+  if (!confirm('전국 파이프라인을 초기화하고 자동 수집된 모든 장소를 Firestore에서 삭제할까요?\n수동으로 등록한 장소는 유지됩니다.\n\n이 작업은 되돌릴 수 없어요.')) return;
+
+  const btn = document.getElementById('btn-clear-pipeline');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ 삭제 중...'; }
+
+  try {
+    let deleted = 0;
+    if (firebaseReady && db) {
+      // source='auto_pipeline' 인 장소만 삭제
+      const snap = await db.collection('places').where('source','==','auto_pipeline').get();
+      const CHUNK = 400;
+      for (let i = 0; i < snap.docs.length; i += CHUNK) {
+        const batch = db.batch();
+        snap.docs.slice(i, i + CHUNK).forEach(d => batch.delete(d.ref));
+        await batch.commit();
+        deleted += Math.min(CHUNK, snap.docs.length - i);
+        if (btn) btn.textContent = `⏳ ${deleted}/${snap.docs.length} 삭제 중...`;
+      }
+    }
+
+    // 메모리 places 배열에서도 제거
+    const before = places.length;
+    places.splice(0, places.length, ...places.filter(p => p.source !== 'auto_pipeline'));
+    // 마커 재렌더
+    if (window.markerLayer) markerLayer.clearLayers();
+    places.forEach(p => addMarker && addMarker(p));
+
+    // 파이프라인 상태 초기화
+    nwPipeline.regionIdx = 0;
+    nwPipeline.stats = { collected: 0, v1Done: 0, v2Done: 0, v2Skipped: 0, upgraded: 0 };
+    nwPipeline.regionStatus = {};
+    nwPipeline.log = [];
+    nwPipeline.running = false;
+    nwPipeline.stop = false;
+    await nwSaveState();
+    invalidatePlacesCache();
+
+    showToast(`✅ 자동수집 장소 ${deleted}개 삭제 완료. 파이프라인 초기화됐어요.`, 4000);
+    renderNationwidePipelineUI();
+  } catch(e) {
+    showToast('❌ 오류: ' + e.message);
+    if (btn) { btn.disabled = false; btn.textContent = '🗑️ 초기화 + Firestore 정리'; }
+  }
 }
 
 /* 관리자 패널 열릴 때 자동시작 체크 */
@@ -7943,7 +8266,8 @@ function renderNationwidePipelineUI() {
         ? `<button onclick="runNationwidePipeline()" style="padding:9px 18px;background:#F07030;color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">
             ${done > 0 && done < total ? '▶ 이어서 실행' : '▶ 전국 파이프라인 시작'}
            </button>
-           ${done > 0 ? `<button onclick="resetNationwidePipeline()" style="padding:9px 14px;background:#F5F5F5;color:#555;border:none;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">🔄 처음부터</button>` : ''}`
+           ${done > 0 ? `<button onclick="resetNationwidePipeline()" style="padding:9px 14px;background:#F5F5F5;color:#555;border:none;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">🔄 처음부터</button>` : ''}
+           <button id="btn-clear-pipeline" onclick="resetAndClearPipeline()" style="padding:9px 14px;background:#FFF5F5;color:#C62828;border:1.5px solid #FFCDD2;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">🗑️ 초기화 + Firestore 정리</button>`
         : `<button onclick="stopNationwidePipeline()" style="padding:9px 18px;background:#EF4444;color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">⏸ 중단</button>`
       }
     </div>
@@ -8197,7 +8521,12 @@ document.addEventListener('DOMContentLoaded', () => {
   if (firebaseReady && auth) {
     auth.onAuthStateChanged(user => {
       if (user && !currentUser) {
-        const userData = { uid: user.uid, email: user.email, displayName: user.displayName || user.email.split('@')[0], isAdmin: isAdmin(user.email) };
+        const userData = {
+          uid: user.uid, email: user.email,
+          displayName: user.displayName || user.email.split('@')[0],
+          isAdmin: isAdmin(user.email),
+          emailVerified: user.emailVerified || false
+        };
         startApp(userData);
       }
     });
