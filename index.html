@@ -7942,83 +7942,175 @@ async function nwSavePlacesToFirestore(newPlaces) {
   return count;
 }
 
-/* 전국 단계1 검증: kakaoUrl로 장소 확인 */
+/* 파이프라인용 Firestore 배치 flush + 실시간 스탯 갱신 */
+async function nwFlushStatusBatch(batch_arr) {
+  if (!firebaseReady || !db || !batch_arr.length) return;
+  const CHUNK = 400;
+  for (let i = 0; i < batch_arr.length; i += CHUNK) {
+    const batch = db.batch();
+    batch_arr.slice(i, i + CHUNK).forEach(({ firestoreId, status, nowStr }) => {
+      if (firestoreId) batch.update(db.collection('places').doc(firestoreId), { petStatus: status, lastV2At: nowStr });
+    });
+    await batch.commit().catch(e => console.warn('nwFlushBatch err', e));
+  }
+  invalidatePlacesCache();
+  refreshVerifyStats(); // ← 실시간 스탯 갱신
+}
+
+/* 마커 색상 즉시 반영 헬퍼 */
+function nwUpdateMarkerColor(placeId, status) {
+  const info = markers[placeId];
+  if (!info) return;
+  const color = STATUS_COLORS[status] || STATUS_COLORS.unverified;
+  info.color = color;
+  const el = info.marker.getElement();
+  if (info.isHeart) {
+    const h = el?.querySelector('.m-heart'); if (h) h.style.color = color;
+  } else {
+    const d = el?.querySelector('.m-dot'); if (d) d.style.background = color;
+  }
+}
+
+/* ── 단계1 검증: 로컬 키워드(즉시) → 카카오 API 확인 ── */
 async function nwVerifyStage1Region(regionName) {
+  // kakaoUrl 없어도 로컬 키워드 체크는 가능
   const targets = places.filter(p =>
     (p.province === regionName || p.area === regionName) &&
-    getPlaceStatus(p) === 'unverified' && p.kakaoUrl
+    getPlaceStatus(p) === 'unverified'
   );
   let upgraded = 0;
+  const pendingBatch = [];
+
+  const flush = async () => {
+    if (!pendingBatch.length) return;
+    await nwFlushStatusBatch([...pendingBatch]);
+    pendingBatch.length = 0;
+  };
+
   for (const p of targets) {
     if (nwPipeline.stop) break;
-    try {
-      const r = await fetch(`https://dapi.kakao.com/v2/local/search/keyword.json?query=${encodeURIComponent(p.name)}&x=${p.lng}&y=${p.lat}&radius=500&size=5`,
-        { headers: { 'Authorization': `KakaoAK ${KAKAO_REST_KEY}` } });
-      if (r.ok) {
-        const j = await r.json();
-        if (j.documents?.some(d => d.id === p.kakaoId || d.place_name === p.name)) {
-          await updatePlaceStatus(p.id, 'confirmed');
-          upgraded++;
+
+    // ── 빠른 경로: 로컬 이름/카테고리 키워드 (네트워크 없음) ──
+    const localText = ((p.name||'') + ' ' + (p.cat||'')).toLowerCase();
+    if (PET_KW_STAGE1.some(kw => localText.includes(kw.toLowerCase()))) {
+      const nowStr = new Date().toISOString();
+      p.petStatus = 'confirmed'; p.lastV2At = nowStr;
+      nwUpdateMarkerColor(p.id, 'confirmed');
+      pendingBatch.push({ firestoreId: p.firestoreId, status: 'confirmed', nowStr });
+      upgraded++;
+      if (pendingBatch.length >= 50) await flush();
+      continue; // API 호출 스킵
+    }
+
+    // ── 느린 경로: 카카오 REST API 확인 (kakaoUrl 있는 곳만) ──
+    if (p.kakaoUrl) {
+      try {
+        const r = await fetch(
+          `https://dapi.kakao.com/v2/local/search/keyword.json?query=${encodeURIComponent(p.name)}&x=${p.lng}&y=${p.lat}&radius=500&size=5`,
+          { headers: { 'Authorization': `KakaoAK ${KAKAO_REST_KEY}` } }
+        );
+        if (r.ok) {
+          const j = await r.json();
+          if (j.documents?.some(d => d.id === p.kakaoId || d.place_name === p.name)) {
+            const nowStr = new Date().toISOString();
+            p.petStatus = 'confirmed'; p.lastV2At = nowStr;
+            nwUpdateMarkerColor(p.id, 'confirmed');
+            pendingBatch.push({ firestoreId: p.firestoreId, status: 'confirmed', nowStr });
+            upgraded++;
+            if (pendingBatch.length >= 50) await flush();
+          }
         }
-      }
-    } catch(e) {}
-    await new Promise(r => setTimeout(r, 250));
+      } catch(e) {}
+      await new Promise(r => setTimeout(r, 150)); // 250→150ms
+    }
   }
+  await flush();
   return upgraded;
 }
 
-/* 전국 단계2 검증: 30일 내 완료된 곳은 스킵 */
+/* ── 단계2 검증: 5채널 병렬 + 3-worker 동시 처리 (30일 스킵) ── */
 async function nwVerifyStage2Region(regionName) {
   const THIRTY_DAYS = 30 * 24 * 60 * 60 * 1000;
   const now = Date.now();
+  const statusRank = { search: 0, unverified: 0, confirmed: 1, verified: 2 };
+  const pickBetter = (a, b) => (statusRank[b]??-1) > (statusRank[a]??-1) ? b : a;
 
-  // 이 지역의 장소 중 verified 아닌 것만, 단 30일 내 v2 완료된 곳 스킵
-  const regionKey = regionName;
-  const regionSt  = nwPipeline.regionStatus[regionKey] || {};
-  const lastV2    = regionSt.lastV2 ? new Date(regionSt.lastV2).getTime() : 0;
-
-  let targets = places.filter(p =>
-    (p.province === regionName || p.area === regionName) &&
-    getPlaceStatus(p) !== 'verified' &&
-    p.kakaoUrl
-  );
-
-  // 장소별 lastVerifiedAt 체크 (Firestore에 저장된 경우)
-  let upgraded = 0, skipped = 0;
-  for (const p of targets) {
-    if (nwPipeline.stop) break;
-
-    // 장소별 30일 스킵 체크
+  // kakaoUrl 없는 장소도 포함 (메모리·카카오SDK 체크 가능)
+  const allTargets = places.filter(p => {
+    if (!p || p.id == null) return false;
+    if (p.province !== regionName && p.area !== regionName) return false;
+    if (getPlaceStatus(p) === 'verified') return false;
     const placeV2At = p.lastV2At ? new Date(p.lastV2At).getTime() : 0;
-    if (now - placeV2At < THIRTY_DAYS) { skipped++; continue; }
+    return (now - placeV2At >= THIRTY_DAYS);
+  });
 
-    // 최근 방문 기록 체크
-    const hasMemory = await checkRecentMemoryForPlace(p.id);
-    if (hasMemory) {
-      await updatePlaceStatus(p.id, 'verified');
-      upgraded++;
-    } else if (p.kakaoUrl) {
-      const result = await fetchKakaoPagePetSignal(p.kakaoUrl);
-      if (result.found) {
-        const newStatus = result.strong ? 'verified' : 'confirmed';
-        const currentStatus = getPlaceStatus(p);
-        const rank = { unverified: 0, confirmed: 1, verified: 2 };
-        if ((rank[newStatus] ?? 0) > (rank[currentStatus] ?? 0)) {
-          await updatePlaceStatus(p.id, newStatus);
-          upgraded++;
-        }
-      }
-      // lastV2At 업데이트
-      if (firebaseReady && db) {
-        db.collection('places').doc(String(p.id))
-          .update({ lastV2At: new Date().toISOString() }).catch(()=>{});
-      }
+  let upgraded = 0;
+  const pendingBatch = [];
+
+  const flush = async () => {
+    if (!pendingBatch.length) return;
+    await nwFlushStatusBatch([...pendingBatch]);
+    pendingBatch.length = 0;
+  };
+
+  async function processOne(p) {
+    if (nwPipeline.stop) return;
+    const currentStatus = getPlaceStatus(p);
+    let newStatus = null;
+
+    // ── 채널1: 로컬 이름/카테고리 키워드 (즉시, 네트워크 없음) ──
+    const localText = ((p.name||'') + ' ' + (p.cat||'')).toLowerCase();
+    if (PET_KW_LOCAL.some(kw => localText.includes(kw.toLowerCase()))) {
+      newStatus = 'confirmed';
     }
+
+    // ── 채널2~5: 네트워크 병렬 실행 ──
+    if (newStatus !== 'verified') {
+      const [memRes, sdkRes, naverRes, kakaoPageRes] = await Promise.all([
+        checkRecentMemoryForPlace(p.id),
+        fetchKakaoCategorySignal(p.name, p.lat, p.lng),
+        fetchNaverBlogSignal(p.name),
+        p.kakaoUrl ? fetchKakaoPagePetSignal(p.kakaoUrl) : Promise.resolve({ found: false })
+      ]);
+      if (memRes)              newStatus = pickBetter(newStatus, 'verified');
+      if (sdkRes?.found)       newStatus = pickBetter(newStatus, 'confirmed');
+      if (naverRes?.found)     newStatus = pickBetter(newStatus, naverRes.strong ? 'verified' : 'confirmed');
+      if (kakaoPageRes?.found) newStatus = pickBetter(newStatus, kakaoPageRes.strong ? 'verified' : 'confirmed');
+    }
+
+    const nowStr = new Date().toISOString();
+    p.lastV2At = nowStr; // 결과 무관하게 항상 업데이트 (다음 30일 스킵 기준)
+
+    if (newStatus && (statusRank[newStatus]??0) > (statusRank[currentStatus]??0)) {
+      p.petStatus = newStatus;
+      nwUpdateMarkerColor(p.id, newStatus);
+      pendingBatch.push({ firestoreId: p.firestoreId, status: newStatus, nowStr });
+      upgraded++;
+      nwUpdateLog(`  ↑ ${p.name} → ${newStatus}`);
+    } else if (p.firestoreId && firebaseReady && db) {
+      // lastV2At 만 업데이트 (비동기, await 불필요)
+      db.collection('places').doc(p.firestoreId).update({ lastV2At: nowStr }).catch(()=>{});
+    }
+
     nwPipeline.stats.v2Done++;
-    await new Promise(r => setTimeout(r, 400));
+    if (pendingBatch.length >= 50) await flush();
   }
-  nwPipeline.stats.v2Skipped += skipped;
-  return { upgraded, skipped };
+
+  /* 3-worker 병렬 처리 */
+  const _workQueue = [...allTargets];
+  const CONCURRENT = 3;
+  async function _worker() {
+    while (!nwPipeline.stop) {
+      const p = _workQueue.shift();
+      if (!p) break;
+      await processOne(p);
+      await new Promise(r => setTimeout(r, 300)); // rate limiting
+    }
+  }
+  await Promise.all(Array.from({ length: CONCURRENT }, _worker));
+
+  await flush();
+  return { upgraded, skipped: 0 };
 }
 
 /* 전체 파이프라인 실행 */
