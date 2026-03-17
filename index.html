@@ -3820,6 +3820,7 @@ const STATUS_COLORS = {
   confirmed:  '#A8D86E',
   unverified: '#C8C8C8',
   search:     '#87CEEB',
+  rejected:   '#EEEEEE', // 카테고리 수집 후 펫 비적합 판정 — 앱 노출 제외
 };
 const COLOR_CONFIRMED = STATUS_COLORS.confirmed;
 const COLOR_UNCERTAIN = STATUS_COLORS.unverified;
@@ -5085,6 +5086,7 @@ function getTypeLabel(p) {
 
 function addMarker(p) {
   if (!clusterGroup) return; // 지도 초기화 전이면 skip
+  if (getPlaceStatus(p) === 'rejected') return; // 펫 비적합 판정 장소는 지도에 표시 안 함
   // 폐업 장소는 회색 마커
   const color = p.isClosed ? '#AAAAAA' : (STATUS_COLORS[getPlaceStatus(p)] || STATUS_COLORS.unverified);
   const sz = map ? getMarkerSizeForZoom(map.getZoom()) : 20;
@@ -5380,6 +5382,7 @@ function setCatFilter(btn, catKey) {
 function getFiltered() {
   return places.filter(p => {
     if (!p || p.id == null || !p.name) return false; // null 안전
+    if (getPlaceStatus(p) === 'rejected') return false; // 펫 비적합 판정 제외
     if (activeFilters.area !== 'all' && p.area !== activeFilters.area) return false;
     if (activeFilters.largeDog && !p.large) return false;
     if (activeFilters.indoor  && !p.indoor) return false;
@@ -7926,6 +7929,57 @@ async function nwCollectRegion(region) {
       } catch(e) { break; }
     }
   }
+
+  // ── 2단계: 카테고리 검색 (CE7=카페, FD6=음식점) ─────────────────────────
+  // 키워드 검색에서 잡히지 않는 일반 카페/식당 중 반려동물 동반 가능한 곳 발굴
+  // stage2에서 Kakao 페이지 스크래핑으로 '반려동물 동반' 태그 여부 확인 후
+  // 없으면 petStatus='rejected'로 처리하여 재검사 제외
+  const CAT_GROUP_CODES = ['CE7', 'FD6']; // 카페, 음식점
+  for (const code of CAT_GROUP_CODES) {
+    for (let pg = 1; pg <= 3; pg++) {
+      if (nwPipeline.stop) return newFound;
+      try {
+        const url = `https://dapi.kakao.com/v2/local/search/category.json?category_group_code=${code}&x=${region.x}&y=${region.y}&radius=8000&page=${pg}&size=15&sort=distance`;
+        const r = await fetch(url, { headers: { 'Authorization': `KakaoAK ${KAKAO_REST_KEY}` } });
+        if (!r.ok) break;
+        const j = await r.json();
+        if (!j.documents?.length) break;
+        for (const item of j.documents) {
+          if (existingKakaoIds.has(item.id)) continue;
+          if (places.some(p => p.name === item.place_name &&
+            Math.abs(p.lat - parseFloat(item.y)) < 0.001 &&
+            Math.abs(p.lng - parseFloat(item.x)) < 0.001)) continue;
+          existingKakaoIds.add(item.id);
+          const _cat = impMapCat(item.category_name);
+          newFound.push({
+            name:      item.place_name,
+            lat:       parseFloat(item.y),
+            lng:       parseFloat(item.x),
+            addr:      item.road_address_name || item.address_name || '',
+            phone:     item.phone || '',
+            kakaoUrl:  item.place_url || '',
+            kakaoId:   item.id,
+            cat:       _cat,
+            emoji:     impCatEmoji(_cat),
+            area:      region.name,
+            province:  region.province,
+            petStatus: 'unverified', // stage2 Kakao 페이지 스크래핑으로 최종 판단
+            large: false, small: true,
+            indoor: false, outdoor: true,
+            stroller: false, cage: false,
+            note: '',
+            hours: [{ d: '영업시간', t: '카카오맵 확인' }],
+            active:    true,
+            source:    'auto_pipeline_cat', // 카테고리 수집 표시 (rejected 판정 기준)
+            addedAt:   new Date().toISOString(),
+          });
+        }
+        if (j.meta?.is_end) break;
+        await new Promise(r => setTimeout(r, 200));
+      } catch(e) { break; }
+    }
+  }
+
   return newFound;
 }
 
@@ -8054,7 +8108,9 @@ async function nwVerifyStage2Region(regionName) {
   const allTargets = places.filter(p => {
     if (!p || p.id == null) return false;
     if (p.province !== regionName && p.area !== regionName) return false;
-    if (getPlaceStatus(p) === 'verified') return false;
+    const st = getPlaceStatus(p);
+    if (st === 'verified') return false;  // 이미 검증완료
+    if (st === 'rejected') return false;  // 펫 비적합 판정 — 재검사 제외
     const placeV2At = p.lastV2At ? new Date(p.lastV2At).getTime() : 0;
     return (now - placeV2At >= THIRTY_DAYS);
   });
@@ -8096,12 +8152,24 @@ async function nwVerifyStage2Region(regionName) {
     const nowStr = new Date().toISOString();
     p.lastV2At = nowStr; // 결과 무관하게 항상 업데이트 (다음 30일 스킵 기준)
 
-    if (newStatus && (statusRank[newStatus]??0) > (statusRank[currentStatus]??0)) {
+    // ── 카테고리 수집 장소 (auto_pipeline_cat): 모든 채널 실패 시 rejected 처리 ──
+    // 단, 프록시 오류로 Kakao 페이지를 못 가져온 경우는 rejected 하지 않음
+    if (!newStatus && p.source === 'auto_pipeline_cat') {
+      const kakaoPageChecked = kakaoPageRes && !kakaoPageRes.error; // 프록시 성공 여부
+      const naverChecked = naverRes && !naverRes.error;
+      if (kakaoPageChecked || naverChecked) {
+        // 최소 1개 채널은 정상 응답했는데 펫 신호 없음 → rejected
+        newStatus = 'rejected';
+      }
+      // 모든 채널이 프록시 오류 → 재시도를 위해 unverified 유지
+    }
+
+    if (newStatus && newStatus !== currentStatus) {
       p.petStatus = newStatus;
-      nwUpdateMarkerColor(p.id, newStatus);
+      if (newStatus !== 'rejected') nwUpdateMarkerColor(p.id, newStatus);
       pendingBatch.push({ firestoreId: p.firestoreId, status: newStatus, nowStr });
-      upgraded++;
-      nwUpdateLog(`  ↑ ${p.name} → ${newStatus}`);
+      if (newStatus !== 'rejected') upgraded++;
+      nwUpdateLog(`  ${newStatus === 'rejected' ? '✗' : '↑'} ${p.name} → ${newStatus}`);
     } else if (p.firestoreId && firebaseReady && db) {
       // lastV2At 만 업데이트 (비동기, await 불필요)
       db.collection('places').doc(p.firestoreId).update({ lastV2At: nowStr }).catch(()=>{});
