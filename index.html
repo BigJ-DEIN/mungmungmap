@@ -7632,7 +7632,8 @@ const _proxyQueue = {
 async function fetchKakaoPagePetSignal(url) {
   const PROXIES = [
     u => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
-    u => `https://corsproxy.io/?${encodeURIComponent(u)}`
+    u => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`,
+    u => `https://thingproxy.freeboard.io/fetch/${encodeURIComponent(u)}`
   ];
   const cutoff3mo = Date.now() - 90 * 24 * 60 * 60 * 1000;
 
@@ -7753,7 +7754,8 @@ async function fetchKakaoCategorySignal(placeName, lat, lng) {
 async function fetchNaverBlogSignal(placeName) {
   const PROXIES = [
     u => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
-    u => `https://corsproxy.io/?${encodeURIComponent(u)}`
+    u => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`,
+    u => `https://thingproxy.freeboard.io/fetch/${encodeURIComponent(u)}`
   ];
   // 6개월 이내 최신 블로그 글 검색
   const query = encodeURIComponent(`${placeName} 반려견`);
