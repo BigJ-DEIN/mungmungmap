@@ -241,6 +241,25 @@
     }
     .m-dot.active { transform:scale(1.5) !important; box-shadow:0 3px 12px rgba(0,0,0,.35); }
     .m-dot.fee-marker { border-color:#FFD700; box-shadow:0 2px 8px rgba(212,160,23,.4); }
+    /* 하트 마커 — 사용자가 추억을 남긴 곳 */
+    .m-heart {
+      font-size:20px; line-height:1; user-select:none; cursor:pointer;
+      filter:drop-shadow(0 1px 3px rgba(0,0,0,.28));
+      transition:font-size .2s, margin .2s, transform .2s;
+      display:block;
+    }
+    .m-heart.active { transform:scale(1.5) !important; }
+    /* 추억 탭 내부 서브탭 */
+    .mem-subtab-row {
+      display:flex; border-bottom:2px solid #F5F5F5; flex-shrink:0;
+    }
+    .mem-subtab {
+      flex:1; padding:9px 0; font-size:13px; font-weight:600; color:#AAA;
+      background:none; border:none; cursor:pointer; font-family:inherit;
+      border-bottom:2.5px solid transparent; margin-bottom:-2px;
+      transition:color .15s, border-color .15s;
+    }
+    .mem-subtab.active { color:#E04E14; border-bottom-color:#E04E14; font-weight:800; }
 
     /* ── DETAIL DRAWER ── */
     #detail-drawer {
@@ -842,8 +861,11 @@
   <!-- Map -->
   <div id="map">
     <div class="map-legend">
-      <div class="legend-item"><div class="legend-dot" style="background:#E04E14"></div><span>검증 완료</span></div>
-      <div class="legend-item"><div class="legend-dot" style="background:#ED6820"></div><span>확인 완료</span></div>
+      <div style="font-size:10px;font-weight:800;color:#E04E14;letter-spacing:.4px;margin-bottom:6px">우리 추억</div>
+      <div class="legend-item"><span style="font-size:14px;line-height:1;filter:drop-shadow(0 1px 2px rgba(0,0,0,.2))">♥</span><span>다녀온 곳</span></div>
+      <div style="height:1px;background:#F0F0F0;margin:5px 0"></div>
+      <div class="legend-item"><div class="legend-dot" style="background:#F07030"></div><span>검증 완료</span></div>
+      <div class="legend-item"><div class="legend-dot" style="background:#A8D86E"></div><span>확인 완료</span></div>
       <div class="legend-item"><div class="legend-dot" style="background:#C8C8C8"></div><span>확인 필요</span></div>
       <div class="legend-item"><div class="legend-dot" style="background:#87CEEB"></div><span>검색 결과</span></div>
     </div>
@@ -878,8 +900,12 @@
 <div id="memories-panel">
   <div class="d-handle" style="margin-top:10px"></div>
   <div class="mem-panel-header">
-    <h3>추억</h3>
+    <h3>우리 추억</h3>
     <button class="btn-write-mem" onclick="openWriteMemory(null)">✏️ 오늘 기록하기</button>
+  </div>
+  <div class="mem-subtab-row">
+    <button class="mem-subtab active" id="subtab-mine" onclick="switchMemTab('mine')">♥ 나의 추억</button>
+    <button class="mem-subtab" id="subtab-all" onclick="switchMemTab('all')">🐾 모두의 추억</button>
   </div>
   <div class="mem-feed" id="mem-feed">
     <div class="mem-loading">기억 꺼내는 중... 🐾</div>
@@ -3316,14 +3342,14 @@ const places = [
 
 // ═════════════════════════════════
 // PET STATUS — 4단계 색상 시스템
-// verified   = 검증 완료 (2단계) → 짙은 주황
-// confirmed  = 확인 완료 (1단계) → 밝은 주황
+// verified   = 검증 완료 (2단계) → 홍시 주황빨강
+// confirmed  = 확인 완료 (1단계) → 연두색
 // unverified = 확인 필요         → 옅은 회색
 // search     = 검색 결과         → 하늘색
 // ═════════════════════════════════
 const STATUS_COLORS = {
-  verified:   '#E04E14',
-  confirmed:  '#ED6820',
+  verified:   '#F07030',
+  confirmed:  '#A8D86E',
   unverified: '#C8C8C8',
   search:     '#87CEEB',
 };
@@ -3347,10 +3373,16 @@ async function updatePlaceStatus(placeId, status) {
     invalidatePlacesCache();
   }
   const info = markers[placeId]; if (!info) return;
-  const dot = info.marker.getElement()?.querySelector('.m-dot');
   const color = STATUS_COLORS[status] || STATUS_COLORS.unverified;
-  if (dot) dot.style.background = color;
   info.color = color;
+  const el = info.marker.getElement();
+  if (info.isHeart) {
+    const heart = el?.querySelector('.m-heart');
+    if (heart) heart.style.color = color;
+  } else {
+    const dot = el?.querySelector('.m-dot');
+    if (dot) dot.style.background = color;
+  }
 }
 const AREA_BADGE = {
   '분당':   {bg:'#FDEEE8', clr:'#E04E14'},
@@ -3579,6 +3611,8 @@ function startApp(user) {
 
   // load dog profile async (non-blocking)
   loadUserDogProfile(user.uid).catch(() => {});
+  // load visited places → heart markers (non-blocking, runs after map init)
+  setTimeout(() => loadUserVisitedPlaces(user.uid).catch(() => {}), 800);
 
   requestAnimationFrame(() => setTimeout(initApp, 80));
 }
@@ -3716,10 +3750,17 @@ function updateAllMarkerSizes() {
     dot.style.marginLeft = (-sz/2) + 'px';
     dot.style.marginTop  = (-sz/2) + 'px';
   });
+  const hs = Math.round(sz * 1.6);
+  document.querySelectorAll('.m-heart').forEach(h => {
+    h.style.fontSize   = hs + 'px';
+    h.style.marginLeft = (-hs/2) + 'px';
+    h.style.marginTop  = (-hs*0.9) + 'px';
+  });
   // sync iconAnchor via marker pane offset trick: done via CSS margin above
 }
 
 function initMap() {
+  // 기본 위치: 경기도 중심 (줌 9) — 위치 권한 거부 시 폴백
   map = L.map('map', { zoomControl:false }).setView([37.55, 127.1], 9);
   L.control.zoom({ position:'bottomright' }).addTo(map);
   L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
@@ -3730,28 +3771,90 @@ function initMap() {
   places.forEach(addMarker);
   map.on('click', () => { if (activePlace) closeDrawer(); });
   map.on('zoomend', updateAllMarkerSizes);
-  // apply initial size
   setTimeout(updateAllMarkerSizes, 200);
+
+  // 현재 위치로 이동 (구 단위 줌 = 13)
+  if (navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(
+      pos => {
+        map.setView([pos.coords.latitude, pos.coords.longitude], 13, { animate: true });
+      },
+      () => { /* 권한 거부 시 기본 뷰 유지 */ },
+      { timeout: 6000, maximumAge: 60000 }
+    );
+  }
+}
+
+// 사용자가 추억을 남긴 장소 ID 집합
+const userVisitedPlaceIds = new Set();
+
+/* 사용자의 방문 기록 로드 → 하트 마커로 변환 */
+async function loadUserVisitedPlaces(uid) {
+  if (!firebaseReady || !db || !uid) return;
+  try {
+    const snap = await db.collection('memories').where('userId', '==', uid).get();
+    snap.docs.forEach(doc => {
+      const pid = doc.data().placeId;
+      if (pid != null) userVisitedPlaceIds.add(pid);
+    });
+    // 로드 후 기존 dot 마커를 하트로 교체
+    userVisitedPlaceIds.forEach(pid => upgradeToHeartMarker(pid));
+  } catch(e) { console.warn('loadUserVisitedPlaces error', e); }
+}
+
+/* dot 마커 → 하트 마커로 교체 */
+function upgradeToHeartMarker(placeId) {
+  const info = markers[placeId];
+  if (!info || info.isHeart) return;
+  const place = places.find(p => p.id === placeId);
+  if (!place) return;
+  info.marker.remove();
+  const sz = map ? getMarkerSizeForZoom(map.getZoom()) : 20;
+  const hs = Math.round(sz * 1.6);
+  const color = info.color || STATUS_COLORS[getPlaceStatus(place)] || STATUS_COLORS.unverified;
+  const html = `<div class="m-heart" style="color:${color};font-size:${hs}px;margin-left:${-hs/2}px;margin-top:${-hs*0.9}px" data-id="${placeId}">♥</div>`;
+  const icon = L.divIcon({ html, className:'', iconSize:[hs,hs], iconAnchor:[hs/2,hs*0.9] });
+  const m = L.marker([place.lat, place.lng], { icon })
+    .addTo(map)
+    .on('click', e => { L.DomEvent.stopPropagation(e); openPlace(place); });
+  markers[placeId] = { marker: m, color, isHeart: true };
 }
 
 function addMarker(p) {
   const color = STATUS_COLORS[getPlaceStatus(p)] || STATUS_COLORS.unverified;
   const feeClass = p.entryFee ? 'fee-marker' : '';
   const sz = map ? getMarkerSizeForZoom(map.getZoom()) : 20;
-  const html = `<div class="m-dot ${feeClass}" style="background:${color};width:${sz}px;height:${sz}px;margin-left:${-sz/2}px;margin-top:${-sz/2}px" data-id="${p.id}"></div>`;
-  const icon = L.divIcon({ html, className:'', iconSize:[sz,sz], iconAnchor:[sz/2,sz/2] });
-  const m = L.marker([p.lat, p.lng], { icon })
-    .addTo(map)
-    .on('click', e => { L.DomEvent.stopPropagation(e); openPlace(p); });
-  markers[p.id] = { marker:m, color };
+  // 이미 방문한 곳이면 바로 하트로
+  if (userVisitedPlaceIds.has(p.id)) {
+    const hs = Math.round(sz * 1.6);
+    const html = `<div class="m-heart ${feeClass}" style="color:${color};font-size:${hs}px;margin-left:${-hs/2}px;margin-top:${-hs*0.9}px" data-id="${p.id}">♥</div>`;
+    const icon = L.divIcon({ html, className:'', iconSize:[hs,hs], iconAnchor:[hs/2,hs*0.9] });
+    const m = L.marker([p.lat, p.lng], { icon })
+      .addTo(map)
+      .on('click', e => { L.DomEvent.stopPropagation(e); openPlace(p); });
+    markers[p.id] = { marker:m, color, isHeart: true };
+  } else {
+    const html = `<div class="m-dot ${feeClass}" style="background:${color};width:${sz}px;height:${sz}px;margin-left:${-sz/2}px;margin-top:${-sz/2}px" data-id="${p.id}"></div>`;
+    const icon = L.divIcon({ html, className:'', iconSize:[sz,sz], iconAnchor:[sz/2,sz/2] });
+    const m = L.marker([p.lat, p.lng], { icon })
+      .addTo(map)
+      .on('click', e => { L.DomEvent.stopPropagation(e); openPlace(p); });
+    markers[p.id] = { marker:m, color };
+  }
 }
 
 function setMarkerActive(id, active) {
   const m = markers[id]; if (!m) return;
   const el = m.marker.getElement(); if (!el) return;
-  const dot = el.querySelector('.m-dot'); if (!dot) return;
-  dot.style.background = active ? '#D32F2F' : m.color;
-  if (active) dot.classList.add('active'); else dot.classList.remove('active');
+  if (m.isHeart) {
+    const heart = el.querySelector('.m-heart'); if (!heart) return;
+    heart.style.color = active ? '#D32F2F' : m.color;
+    if (active) heart.classList.add('active'); else heart.classList.remove('active');
+  } else {
+    const dot = el.querySelector('.m-dot'); if (!dot) return;
+    dot.style.background = active ? '#D32F2F' : m.color;
+    if (active) dot.classList.add('active'); else dot.classList.remove('active');
+  }
 }
 
 // ══════════════════════════════════════════════════════
@@ -4528,6 +4631,10 @@ async function submitMemory() {
   showToast('오늘 기록 남겼어요 🐾');
   memPhotoBlob = null;
 
+  // 하트 마커로 전환
+  userVisitedPlaceIds.add(placeId);
+  upgradeToHeartMarker(placeId);
+
   // 열려있는 패널/drawer 새로고침
   if (document.getElementById('memories-panel').classList.contains('mobile-open')) loadMemoriesFeed();
   if (activePlace?.id === placeId) refreshDrawerMemories(placeId);
@@ -4568,28 +4675,49 @@ function renderMemoryCard(m, showPlace = true) {
   </div>`;
 }
 
+/* 추억 서브탭 전환 */
+let currentMemTab = 'mine';
+function switchMemTab(tab) {
+  currentMemTab = tab;
+  document.getElementById('subtab-mine').classList.toggle('active', tab === 'mine');
+  document.getElementById('subtab-all').classList.toggle('active', tab === 'all');
+  loadMemoriesFeed();
+}
+
 /* 전체 피드 로드 (추억 탭) */
 async function loadMemoriesFeed() {
   const feed = document.getElementById('mem-feed');
   if (!feed) return;
-  feed.innerHTML = '<div class="mem-loading">기억 꺼내는 중...</div>';
+  feed.innerHTML = '<div class="mem-loading">기억 꺼내는 중... 🐾</div>';
 
+  const isMine = currentMemTab === 'mine';
   let mems = [];
+
   if (firebaseReady && db) {
     try {
-      const snap = await db.collection('memories').orderBy('createdAt','desc').limit(50).get();
+      let query = db.collection('memories').orderBy('createdAt','desc');
+      if (isMine && currentUser?.uid) {
+        query = query.where('userId', '==', currentUser.uid);
+      }
+      const snap = await query.limit(50).get();
       mems = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     } catch(e) { console.warn('memories load error:', e); }
   }
-  // 로컬 저장된 것도 병합
-  const local = JSON.parse(localStorage.getItem('mem_local') || '[]');
-  mems = [...local, ...mems].slice(0, 60);
+
+  // 로컬 저장된 것도 병합 (나의 추억 탭에서만)
+  if (isMine) {
+    const local = JSON.parse(localStorage.getItem('mem_local') || '[]');
+    mems = [...local, ...mems].slice(0, 60);
+  }
 
   if (!mems.length) {
-    feed.innerHTML = `<div class="mem-empty">아직 기록이 없어요 🐾<br>홍시와 다녀온 곳의 기억을 남겨봐요!</div>`;
+    const emptyMsg = isMine
+      ? `<div class="mem-empty">아직 기록이 없어요 🐾<br>홍시와 다녀온 곳의 기억을 남겨봐요!</div>`
+      : `<div class="mem-empty">아직 아무도 기록을 남기지 않았어요 🐾</div>`;
+    feed.innerHTML = emptyMsg;
     return;
   }
-  feed.innerHTML = mems.map(m => renderMemoryCard(m, true)).join('');
+  feed.innerHTML = mems.map(m => renderMemoryCard(m, isMine)).join('');
 }
 
 /* 특정 가게 추억 로드 (detail drawer) */
@@ -5387,12 +5515,12 @@ function renderVerifyTab() {
   content.innerHTML = `
     <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:16px">
       <div style="background:#FDEEE8;border-radius:10px;padding:12px;text-align:center">
-        <div style="font-size:22px;font-weight:900;color:#E04E14">${counts.verified}</div>
-        <div style="font-size:11px;color:#888;margin-top:2px">● 검증 완료</div>
+        <div style="font-size:22px;font-weight:900;color:#F07030">${counts.verified}</div>
+        <div style="font-size:11px;color:#888;margin-top:2px"><span style="color:#F07030">●</span> 검증 완료</div>
       </div>
-      <div style="background:#FFF3EC;border-radius:10px;padding:12px;text-align:center">
-        <div style="font-size:22px;font-weight:900;color:#ED6820">${counts.confirmed}</div>
-        <div style="font-size:11px;color:#888;margin-top:2px">● 확인 완료</div>
+      <div style="background:#F1F8E9;border-radius:10px;padding:12px;text-align:center">
+        <div style="font-size:22px;font-weight:900;color:#A8D86E">${counts.confirmed}</div>
+        <div style="font-size:11px;color:#888;margin-top:2px"><span style="color:#A8D86E">●</span> 확인 완료</div>
       </div>
       <div style="background:#F5F5F5;border-radius:10px;padding:12px;text-align:center">
         <div style="font-size:22px;font-weight:900;color:#888">${counts.unverified}</div>
@@ -5406,10 +5534,10 @@ function renderVerifyTab() {
     <div style="font-size:12px;color:#888;margin-bottom:12px">총 ${total}개 장소 · 검증 완료율 ${Math.round((counts.verified+counts.confirmed)/total*100)}%</div>
 
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
-      <button id="btn-stage1-auto" onclick="stage1BatchAutoVerify()" style="padding:9px 16px;background:#ED6820;color:white;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">
+      <button id="btn-stage1-auto" onclick="stage1BatchAutoVerify()" style="padding:9px 16px;background:#A8D86E;color:white;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">
         🔍 1단계 자동검증
       </button>
-      <button id="btn-stage2-auto" onclick="runAutoStage2Verify()" ${autoV.running?'disabled':''} style="padding:9px 16px;background:#E04E14;color:white;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;${autoV.running?'opacity:.6':''}">
+      <button id="btn-stage2-auto" onclick="runAutoStage2Verify()" ${autoV.running?'disabled':''} style="padding:9px 16px;background:#F07030;color:white;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;${autoV.running?'opacity:.6':''}">
         🤖 2단계 자동검증 (카카오맵)
       </button>
       <button onclick="stage1FirestoreSync()" style="padding:9px 16px;background:#F5F5F5;color:#555;border:none;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">
@@ -5432,24 +5560,24 @@ function buildAutoVerifyPanel() {
   const logHtml = autoV.log.slice(0,10).map(l =>
     `<div style="display:flex;align-items:center;gap:6px;padding:3px 0;font-size:11px;border-bottom:1px solid #F5F5F5">
       <span style="width:10px;height:10px;border-radius:50%;background:${STATUS_COLORS[l.status]||'#CCC'};flex-shrink:0;display:inline-block"></span>
-      <span style="font-weight:700;color:${l.status==='verified'?'#E04E14':l.status==='confirmed'?'#ED6820':'#888'}">${l.status==='verified'?'검증완료':'확인완료'}</span>
+      <span style="font-weight:700;color:${l.status==='verified'?'#F07030':l.status==='confirmed'?'#A8D86E':'#888'}">${l.status==='verified'?'검증완료':'확인완료'}</span>
       <span style="color:#555;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${l.name}</span>
     </div>`
   ).join('');
   return `
     <div style="background:white;border-radius:12px;border:2px solid #FDEEE8;padding:14px;margin-bottom:14px">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-        <span style="font-size:13px;font-weight:800;color:#E04E14">🤖 2단계 자동검증 ${autoV.running?'진행 중':'완료'}</span>
+        <span style="font-size:13px;font-weight:800;color:#F07030">🤖 2단계 자동검증 ${autoV.running?'진행 중':'완료'}</span>
         ${autoV.running
-          ? `<button onclick="autoV.stop=true" style="padding:3px 10px;background:#E04E14;color:white;border:none;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit">중지</button>`
+          ? `<button onclick="autoV.stop=true" style="padding:3px 10px;background:#F07030;color:white;border:none;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit">중지</button>`
           : `<span style="font-size:11px;color:#888">완료 ✓</span>`}
       </div>
       <div style="background:#F5F5F5;border-radius:6px;height:8px;margin-bottom:6px;overflow:hidden">
-        <div style="background:linear-gradient(90deg,#E04E14,#ED6820);height:100%;width:${pct}%;transition:width .3s;border-radius:6px"></div>
+        <div style="background:linear-gradient(90deg,#F07030,#A8D86E);height:100%;width:${pct}%;transition:width .3s;border-radius:6px"></div>
       </div>
       <div style="display:flex;justify-content:space-between;font-size:11px;color:#888;margin-bottom:8px">
         <span>${autoV.done} / ${autoV.total} 확인</span>
-        <span style="color:#E04E14;font-weight:700">↑ ${autoV.upgraded}개 업그레이드</span>
+        <span style="color:#CC3300;font-weight:700">↑ ${autoV.upgraded}개 업그레이드</span>
       </div>
       ${autoV.running && autoV.cur ? `<div style="font-size:11px;color:#AAA;margin-bottom:8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">🔍 ${autoV.cur} 확인 중...</div>` : ''}
       ${logHtml ? `<div style="max-height:120px;overflow-y:auto">${logHtml}</div>` : ''}
@@ -5494,8 +5622,13 @@ async function stage1BatchAutoVerify() {
   // 마커 색상 새로고침
   toVerify.forEach(p => {
     const info = markers[p.id]; if (!info) return;
-    const dot = info.marker.getElement()?.querySelector('.m-dot');
-    if (dot) { dot.style.background = STATUS_COLORS.confirmed; info.color = STATUS_COLORS.confirmed; }
+    const el = info.marker.getElement();
+    info.color = STATUS_COLORS.confirmed;
+    if (info.isHeart) {
+      const h = el?.querySelector('.m-heart'); if (h) h.style.color = STATUS_COLORS.confirmed;
+    } else {
+      const dot = el?.querySelector('.m-dot'); if (dot) dot.style.background = STATUS_COLORS.confirmed;
+    }
   });
 
   invalidatePlacesCache();
@@ -5534,16 +5667,48 @@ async function fetchKakaoPagePetSignal(url) {
     u => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
     u => `https://corsproxy.io/?${encodeURIComponent(u)}`
   ];
+  const cutoff3mo = Date.now() - 90 * 24 * 60 * 60 * 1000;
+
   for (const proxyFn of PROXIES) {
     try {
       const res = await fetch(proxyFn(url), { signal: AbortSignal.timeout(12000) });
       if (!res.ok) continue;
       const html = await res.text();
-      // 강한 신호: 실제 반려견 관련 리뷰/후기 키워드
-      const hasReviewKw = PET_REVIEW_KW.some(kw => html.includes(kw));
-      // 약한 신호: 시설 정보에 반려견동반 명시
+
+      // ── 1) __NEXT_DATA__ JSON 파싱 → 날짜 포함 리뷰 데이터 ──
+      let recentPetReview = false;
+      const ndMatch = html.match(/<script id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/);
+      if (ndMatch) {
+        try {
+          const nd = JSON.parse(ndMatch[1]);
+          // 카카오맵 내부 구조: props.pageProps 안 어딘가에 댓글/후기 배열이 있음
+          const json = JSON.stringify(nd);
+          // 날짜 패턴 (yyyy-MM-dd 또는 epoch ms) 근처의 펫 키워드 검사
+          // 간단 접근: JSON 전체에서 최근 날짜 문자열 추출 후 그 주변 텍스트에 펫 키워드 있는지
+          const datePattern = /\d{4}-\d{2}-\d{2}/g;
+          let m;
+          while ((m = datePattern.exec(json)) !== null) {
+            const d = new Date(m[0]).getTime();
+            if (isNaN(d) || d < cutoff3mo) continue;
+            // 날짜 앞뒤 500자 슬라이스에서 펫 키워드 검색
+            const snippet = json.slice(Math.max(0, m.index - 300), m.index + 300);
+            if (PET_REVIEW_KW.some(kw => snippet.includes(kw))) {
+              recentPetReview = true;
+              break;
+            }
+          }
+        } catch(e) { /* JSON 파싱 실패 무시 */ }
+      }
+
+      // ── 2) 시설 정보 키워드 (날짜 무관 — 업장이 등록한 정보) ──
       const hasFacilityKw = PET_FACILITY_KW.some(kw => html.includes(kw));
-      if (hasFacilityKw || hasReviewKw) return { found: true, strong: hasReviewKw };
+
+      // ── 3) 폴백: 날짜 파싱 없이 키워드만 (NEXT_DATA 없는 경우) ──
+      const hasAnyReviewKw = !ndMatch && PET_REVIEW_KW.some(kw => html.includes(kw));
+
+      if (recentPetReview) return { found: true, strong: true };      // 최근 3개월 리뷰 → 검증완료
+      if (hasFacilityKw)   return { found: true, strong: false };     // 시설 명시 → 확인완료
+      if (hasAnyReviewKw)  return { found: true, strong: false };     // 날짜 불명 리뷰 → 확인완료
       return { found: false };
     } catch (e) { /* try next proxy */ }
   }
