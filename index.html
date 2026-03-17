@@ -344,7 +344,16 @@
     .ic-lbl { font-size:10px; color:#BBB; font-weight:500; margin-bottom:4px; }
     .ic-val { font-size:13px; font-weight:700; }
     .ic-val.yes{color:#2E7D32} .ic-val.no{color:#C62828} .ic-val.warn{color:#BF360C}
+    /* 수정 가능 셀 – 일반 유저: 수정 요청 / 관리자: 바로 수정 */
+    .ic.editable { cursor:pointer; border:1.5px solid transparent; transition:border-color .15s,background .15s; }
+    .ic.editable:hover { border-color:#E8C8BC; background:#FFF8F5; }
+    .ic.editable:active { background:#FDEEE8; }
+    .ic-edit-hint { font-size:9px; color:#DDD; margin-top:4px; }
+    .ic.editable:hover .ic-edit-hint { color:#E04E14; }
     .hours-grid { display:flex; flex-direction:column; gap:3px; }
+    .hours-grid.editable, .notes-box.editable { cursor:pointer; transition:border-color .15s,background .15s; }
+    .hours-grid.editable:hover { outline:1.5px solid #E8C8BC; border-radius:11px; background:#FFF8F5; }
+    .notes-box.editable:hover { border-color:#E04E14; }
     .hours-row { display:flex; align-items:center; gap:10px; padding:5px 11px; background:#FAFAFA; border-radius:7px; }
     .h-day { font-size:11px; color:#999; width:62px; flex-shrink:0; }
     .h-time { font-size:13px; font-weight:600; color:#2D2D2D; }
@@ -1437,6 +1446,17 @@
   </div>
 </div>
 
+<!-- ══ CORRECTION REQUEST MODAL ══ -->
+<div class="modal-overlay" id="correction-modal" onclick="modalOverlayClick(event,'correction-modal')">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-content">
+      <div class="modal-title" id="correction-modal-title">🚩 정보 수정 요청</div>
+      <div id="correction-modal-body"></div>
+    </div>
+  </div>
+</div>
+
 <!-- ══ NOTICE DETAIL MODAL ══ -->
 <div class="modal-overlay" id="notice-modal" onclick="modalOverlayClick(event,'notice-modal')">
   <div class="modal-sheet">
@@ -1462,6 +1482,7 @@
     <button class="atab" data-tab="importer"  onclick="switchAdminTab(this,'importer')">🔍 장소 수집</button>
     <button class="atab" data-tab="verify"    onclick="switchAdminTab(this,'verify')">✅ 검증 관리</button>
     <button class="atab" data-tab="feedback"  onclick="switchAdminTab(this,'feedback')">🐛 피드백</button>
+    <button class="atab" data-tab="corrections" onclick="switchAdminTab(this,'corrections')">🔧 수정 요청</button>
   </div>
   <div id="admin-content">
     <div class="empty-state"><div class="es-icon">⏳</div><p>데이터 로딩 중...</p></div>
@@ -4424,6 +4445,117 @@ async function markFbDone(id) {
   renderAdminFeedback();
 }
 
+// ── 관리자: 수정 요청 탭 렌더 ──
+async function renderAdminCorrections() {
+  const content = document.getElementById('admin-content');
+  if (!firebaseReady || !db) {
+    content.innerHTML = `<div class="empty-state"><div class="es-icon">⚠️</div><p>Firebase 필요</p></div>`;
+    return;
+  }
+  const snap = await db.collection('correctionRequests')
+    .orderBy('createdAt','desc').limit(200).get();
+  if (snap.empty) {
+    content.innerHTML = `<div class="empty-state"><div class="es-icon">✅</div><p>수정 요청이 없어요</p></div>`;
+    return;
+  }
+  const items = snap.docs.map(d => ({ _id: d.id, ...d.data() }));
+  const pending = items.filter(i => i.status === 'pending');
+  const done    = items.filter(i => i.status !== 'pending');
+
+  const cardStyle = 'background:#FAFAFA;border-radius:12px;padding:14px;margin-bottom:10px;border:1.5px solid #F0F0F0';
+  const btnApply = (item) => {
+    if (item.suggestedValue === null || item.suggestedValue === undefined) return '';
+    return `<button onclick="applyCorrectionRequest('${item._id}',${item.placeId},'${item.field}',${JSON.stringify(item.suggestedValue)})"
+      style="padding:7px 14px;background:#2E7D32;color:white;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">
+      ✅ 수정 반영
+    </button>`;
+  };
+  const btnReject = (item) =>
+    `<button onclick="rejectCorrectionRequest('${item._id}')"
+      style="padding:7px 14px;background:#F5F5F5;color:#999;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">
+      ✖ 반려
+    </button>`;
+
+  let html = `<div style="font-size:14px;font-weight:800;color:#1F2937;margin-bottom:14px">
+    수정 요청 <span style="color:#9CA3AF;font-weight:400">(미처리 ${pending.length}건 / 총 ${items.length}건)</span>
+  </div>`;
+
+  if (pending.length) {
+    html += `<div style="font-size:12px;font-weight:700;color:#E04E14;margin-bottom:8px">🔔 미처리</div>`;
+    pending.forEach(item => {
+      const ts = item.createdAt?.toDate ? item.createdAt.toDate().toLocaleString('ko-KR') : '';
+      const meta = FIELD_META[item.field] || {};
+      const curDisp = item.currentValue === true ? '✅ ' + (meta.trueText||'true')
+        : item.currentValue === false ? '❌ ' + (meta.falseText||'false')
+        : String(item.currentValue ?? '-');
+      const sugDisp = item.suggestedValue === true ? '✅ ' + (meta.trueText||'true')
+        : item.suggestedValue === false ? '❌ ' + (meta.falseText||'false')
+        : item.suggestedValue != null ? String(item.suggestedValue) : '(텍스트 확인 요청)';
+      html += `<div style="${cardStyle}">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:8px">
+          <div>
+            <div style="font-size:13px;font-weight:700;color:#2D2D2D">${item.placeName || ''}</div>
+            <div style="font-size:12px;color:#888;margin-top:2px">${meta.label||item.field}</div>
+          </div>
+          <div style="font-size:11px;color:#BBB;text-align:right;flex-shrink:0">${ts}<br>${item.userEmail||''}</div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:${item.comment?'8px':'10px'}">
+          <span style="background:#F5F5F5;padding:4px 10px;border-radius:7px;font-size:12px;color:#999">${curDisp}</span>
+          <span style="color:#CCC">→</span>
+          <span style="background:#FFF8F5;border:1.5px solid #E04E14;padding:4px 10px;border-radius:7px;font-size:12px;color:#E04E14;font-weight:700">${sugDisp}</span>
+        </div>
+        ${item.comment ? `<div style="font-size:12px;color:#666;background:#FFF;border-radius:8px;padding:8px 10px;margin-bottom:10px;border:1px solid #EEE">"${escHtml(item.comment)}"</div>` : ''}
+        <div style="display:flex;gap:8px">${btnApply(item)}${btnReject(item)}</div>
+      </div>`;
+    });
+  }
+  if (done.length) {
+    html += `<div style="font-size:12px;font-weight:700;color:#BBB;margin:16px 0 8px">처리 완료</div>`;
+    done.slice(0,20).forEach(item => {
+      const ts = item.createdAt?.toDate ? item.createdAt.toDate().toLocaleString('ko-KR') : '';
+      const meta = FIELD_META[item.field] || {};
+      html += `<div style="${cardStyle};opacity:.6">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div style="font-size:13px;font-weight:600;color:#888">${item.placeName} · ${meta.label||item.field}</div>
+          <div style="font-size:11px;color:#BBB">${item.status==='approved'?'✅ 반영':'✖ 반려'} · ${ts}</div>
+        </div>
+        ${item.comment ? `<div style="font-size:12px;color:#AAA;margin-top:4px">"${escHtml(item.comment)}"</div>` : ''}
+      </div>`;
+    });
+  }
+  content.innerHTML = html;
+}
+
+async function applyCorrectionRequest(docId, placeId, field, suggestedValue) {
+  const p = places.find(x => x.id === placeId);
+  if (!p || !p.firestoreId) { showToast('장소 ID 없음'); return; }
+  if (!confirm(`"${p.name}" - ${FIELD_META[field]?.label||field} 수정을 반영할까요?`)) return;
+  try {
+    const batch = db.batch();
+    batch.update(db.collection('places').doc(p.firestoreId), { [field]: suggestedValue });
+    batch.update(db.collection('correctionRequests').doc(docId), {
+      status: 'approved',
+      reviewedAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    await batch.commit();
+    p[field] = suggestedValue;
+    invalidatePlacesCache();
+    showToast('✅ 반영 완료');
+    renderAdminCorrections();
+  } catch(e) { showToast('❌ ' + e.message); }
+}
+
+async function rejectCorrectionRequest(docId) {
+  try {
+    await db.collection('correctionRequests').doc(docId).update({
+      status: 'rejected',
+      reviewedAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    showToast('반려 처리됐어요');
+    renderAdminCorrections();
+  } catch(e) { showToast('❌ ' + e.message); }
+}
+
 //  PWA 홈화면 추가
 // ══════════════════════════════════════════════════════
 function tryAddToHomescreen() {
@@ -5388,20 +5520,29 @@ function openPlace(p) {
     </div>
     ${closedBanner}
     ${feeBanner}
-    <div class="sec-label">반려견 정책</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-top:16px;margin-bottom:9px">
+      <div class="sec-label" style="margin:0">반려견 정책</div>
+      ${!currentUser?.isAdmin ? `<div style="font-size:10px;color:#CCC">탭해서 오류 신고</div>` : `<div style="font-size:10px;color:#E04E14;font-weight:600">탭해서 바로 수정</div>`}
+    </div>
     <div class="info-grid">
-      <div class="ic"><div class="ic-lbl">🐕 대형견</div><div class="ic-val ${p.large?'yes':'no'}">${p.large?'✅ 가능':'❌ 불가'}</div></div>
-      <div class="ic"><div class="ic-lbl">🐩 소형견</div><div class="ic-val ${p.small?'yes':'no'}">${p.small?'✅ 가능':'❌ 불가'}</div></div>
-      <div class="ic"><div class="ic-lbl">🏠 실내 입장</div><div class="ic-val ${p.indoor?'yes':'warn'}">${p.indoor?'✅ 가능':'⚠️ 불가'}</div></div>
-      <div class="ic"><div class="ic-lbl">🌿 야외·테라스</div><div class="ic-val ${p.outdoor?'yes':'no'}">${p.outdoor?'✅ 가능':'❌ 없음'}</div></div>
-      <div class="ic"><div class="ic-lbl">🛒 개모차 필수</div><div class="ic-val ${p.stroller?'warn':'yes'}">${p.stroller?'⚠️ 필수':'✅ 불필요'}</div></div>
-      <div class="ic"><div class="ic-lbl">📦 케이지 필수</div><div class="ic-val ${p.cage?'warn':'yes'}">${p.cage?'⚠️ 필수':'✅ 불필요'}</div></div>
+      ${icCell(p.id,'large',p.large,'🐕 대형견',p.large?'✅ 가능':'❌ 불가',p.large?'yes':'no')}
+      ${icCell(p.id,'small',p.small,'🐩 소형견',p.small?'✅ 가능':'❌ 불가',p.small?'yes':'no')}
+      ${icCell(p.id,'indoor',p.indoor,'🏠 실내 입장',p.indoor?'✅ 가능':'⚠️ 불가',p.indoor?'yes':'warn')}
+      ${icCell(p.id,'outdoor',p.outdoor,'🌿 야외·테라스',p.outdoor?'✅ 있음':'❌ 없음',p.outdoor?'yes':'no')}
+      ${icCell(p.id,'stroller',p.stroller,'🛒 개모차',p.stroller?'⚠️ 필수':'✅ 불필요',p.stroller?'warn':'yes')}
+      ${icCell(p.id,'cage',p.cage,'📦 케이지',p.cage?'⚠️ 필수':'✅ 불필요',p.cage?'warn':'yes')}
     </div>
     <div class="sec-label">영업시간</div>
-    <div class="hours-grid">${hoursHtml}</div>
+    <div class="hours-grid editable" onclick="onFieldClick(${p.id},'hours')" title="${currentUser?.isAdmin?'클릭해서 수정':'오류 신고'}">
+      ${hoursHtml}
+      <div class="ic-edit-hint" style="text-align:right;padding:2px 4px 0">${currentUser?.isAdmin?'✏️ 수정':'🚩 오류 신고'}</div>
+    </div>
     <div class="divider"></div>
     <div class="sec-label">상세 정보</div>
-    <div class="notes-box">${p.note || ''}</div>
+    <div class="notes-box editable" onclick="onFieldClick(${p.id},'note')" title="${currentUser?.isAdmin?'클릭해서 수정':'오류 신고'}">
+      ${p.note || ''}
+      <div class="ic-edit-hint" style="margin-top:6px;text-align:right">${currentUser?.isAdmin?'✏️ 수정':'🚩 오류 신고'}</div>
+    </div>
     <div class="warn-note">⚠️ 방문 전 전화로 최신 정보 확인을 권장합니다</div>
     <button class="btn-write-mem-drawer" onclick="openWriteMemory(${p.id})" style="margin-bottom:10px">✏️ 추억 남기기</button>
     <div class="action-row">
@@ -5467,6 +5608,230 @@ function openKakaoMap(id) {
   const p = places.find(x => x.id === id); if (!p) return;
   const url = p.kakaoUrl ? p.kakaoUrl : p.googleUrl ? p.googleUrl : `https://map.kakao.com/?q=${encodeURIComponent(p.name)}`;
   window.open(url, '_blank');
+}
+
+// ══════════════════════════════════════════════════════
+//  🔧 정보 수정 요청 / 관리자 직접 수정
+// ══════════════════════════════════════════════════════
+
+const FIELD_META = {
+  large:    { label:'🐕 대형견 입장',    type:'bool', trueText:'가능',   falseText:'불가',   trueClass:'yes', falseClass:'no',   trueIcon:'✅', falseIcon:'❌' },
+  small:    { label:'🐩 소형견 입장',    type:'bool', trueText:'가능',   falseText:'불가',   trueClass:'yes', falseClass:'no',   trueIcon:'✅', falseIcon:'❌' },
+  indoor:   { label:'🏠 실내 입장',      type:'bool', trueText:'가능',   falseText:'불가',   trueClass:'yes', falseClass:'warn',  trueIcon:'✅', falseIcon:'⚠️' },
+  outdoor:  { label:'🌿 야외·테라스',    type:'bool', trueText:'있음',   falseText:'없음',   trueClass:'yes', falseClass:'no',   trueIcon:'✅', falseIcon:'❌' },
+  stroller: { label:'🛒 개모차 필수',    type:'bool', trueText:'필수',   falseText:'불필요', trueClass:'warn', falseClass:'yes',  trueIcon:'⚠️', falseIcon:'✅' },
+  cage:     { label:'📦 케이지 필수',    type:'bool', trueText:'필수',   falseText:'불필요', trueClass:'warn', falseClass:'yes',  trueIcon:'⚠️', falseIcon:'✅' },
+  note:     { label:'📝 상세 정보',      type:'text' },
+  hours:    { label:'🕐 영업시간',       type:'hours' },
+};
+
+// 정책 셀 HTML 생성 헬퍼
+function icCell(placeId, field, val, lbl, dispText, valClass) {
+  const hint = currentUser?.isAdmin ? '✏️ 수정' : '🚩 오류 신고';
+  return `<div class="ic editable" onclick="onFieldClick(${placeId},'${field}')">
+    <div class="ic-lbl">${lbl}</div>
+    <div class="ic-val ${valClass}" id="ic-${placeId}-${field}">${dispText}</div>
+    <div class="ic-edit-hint">${hint}</div>
+  </div>`;
+}
+
+// 클릭 라우터 – 관리자면 직접 수정, 일반 유저면 수정 요청 모달
+function onFieldClick(placeId, field) {
+  if (!currentUser) { showToast('로그인 후 이용해주세요'); return; }
+  if (currentUser.isAdmin) {
+    adminEditField(placeId, field);
+  } else {
+    openCorrectionModal(placeId, field);
+  }
+}
+
+/* ── 관리자: 불리언 즉시 토글 / 텍스트 인라인 편집 ── */
+async function adminEditField(placeId, field) {
+  const p = places.find(x => x.id === placeId);
+  if (!p || !p.firestoreId) { showToast('Firestore ID 없음'); return; }
+  const meta = FIELD_META[field];
+  if (!meta) return;
+
+  if (meta.type === 'bool') {
+    const newVal = !p[field];
+    try {
+      await db.collection('places').doc(p.firestoreId).update({ [field]: newVal });
+      p[field] = newVal; // 로컬 반영
+      invalidatePlacesCache();
+      // 셀 UI 즉시 갱신
+      const el = document.getElementById(`ic-${placeId}-${field}`);
+      if (el) {
+        const dispText = newVal
+          ? `${meta.trueIcon} ${meta.trueText}`
+          : `${meta.falseIcon} ${meta.falseText}`;
+        el.textContent = dispText;
+        el.className = `ic-val ${newVal ? meta.trueClass : meta.falseClass}`;
+      }
+      showToast(`✅ ${meta.label} → ${newVal ? meta.trueText : meta.falseText}`);
+    } catch(e) { showToast('❌ 저장 실패: ' + e.message); }
+
+  } else if (meta.type === 'text') {
+    openAdminTextEdit(placeId, field, p[field] || '');
+  } else if (meta.type === 'hours') {
+    openAdminHoursEdit(placeId, p.hours || []);
+  }
+}
+
+function openAdminTextEdit(placeId, field, currentVal) {
+  const meta = FIELD_META[field];
+  document.getElementById('correction-modal-title').textContent = `✏️ ${meta.label} 수정`;
+  document.getElementById('correction-modal-body').innerHTML = `
+    <textarea id="admin-edit-textarea" rows="5"
+      style="width:100%;box-sizing:border-box;padding:12px;border:1.5px solid #EEE;border-radius:12px;font-size:14px;font-family:inherit;resize:vertical;outline:none"
+    >${currentVal}</textarea>
+    <button onclick="submitAdminTextEdit(${placeId},'${field}')"
+      style="width:100%;padding:13px;background:#E04E14;color:white;border:none;border-radius:14px;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit;margin-top:12px">
+      저장
+    </button>`;
+  openModal('correction-modal');
+}
+
+async function submitAdminTextEdit(placeId, field) {
+  const p = places.find(x => x.id === placeId);
+  if (!p || !p.firestoreId) return;
+  const newVal = document.getElementById('admin-edit-textarea').value.trim();
+  try {
+    await db.collection('places').doc(p.firestoreId).update({ [field]: newVal });
+    p[field] = newVal;
+    invalidatePlacesCache();
+    showToast('✅ 저장됐어요');
+    closeModal('correction-modal');
+    openPlace(p); // 드로어 새로고침
+  } catch(e) { showToast('❌ ' + e.message); }
+}
+
+function openAdminHoursEdit(placeId, hours) {
+  // hours: [{d:'월~금', t:'11:00-22:00'}, ...]
+  // 편집 편의상 "요일 시간" 형식으로 한 줄씩
+  const lines = hours.map(h => `${h.d}\t${h.t}`).join('\n');
+  document.getElementById('correction-modal-title').textContent = '✏️ 영업시간 수정';
+  document.getElementById('correction-modal-body').innerHTML = `
+    <div style="font-size:12px;color:#AAA;margin-bottom:8px">한 줄에 "요일↹시간" 형식. 탭(→)으로 구분해주세요.</div>
+    <textarea id="admin-hours-textarea" rows="8"
+      style="width:100%;box-sizing:border-box;padding:12px;border:1.5px solid #EEE;border-radius:12px;font-size:13px;font-family:monospace;resize:vertical;outline:none"
+    >${lines}</textarea>
+    <button onclick="submitAdminHoursEdit(${placeId})"
+      style="width:100%;padding:13px;background:#E04E14;color:white;border:none;border-radius:14px;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit;margin-top:12px">
+      저장
+    </button>`;
+  openModal('correction-modal');
+}
+
+async function submitAdminHoursEdit(placeId) {
+  const p = places.find(x => x.id === placeId);
+  if (!p || !p.firestoreId) return;
+  const raw = document.getElementById('admin-hours-textarea').value;
+  const newHours = raw.split('\n').filter(l => l.trim()).map(l => {
+    const parts = l.split('\t');
+    return { d: (parts[0]||'').trim(), t: (parts[1]||'').trim() };
+  }).filter(h => h.d || h.t);
+  try {
+    await db.collection('places').doc(p.firestoreId).update({ hours: newHours });
+    p.hours = newHours;
+    invalidatePlacesCache();
+    showToast('✅ 영업시간 저장됐어요');
+    closeModal('correction-modal');
+    openPlace(p);
+  } catch(e) { showToast('❌ ' + e.message); }
+}
+
+/* ── 일반 유저: 수정 요청 모달 ── */
+function openCorrectionModal(placeId, field) {
+  const p = places.find(x => x.id === placeId);
+  if (!p) return;
+  const meta = FIELD_META[field];
+  if (!meta) return;
+  document.getElementById('correction-modal-title').textContent = '🚩 정보 오류 신고';
+
+  let bodyHTML = '';
+  if (meta.type === 'bool') {
+    const curVal  = p[field];
+    const curText = curVal ? meta.trueText : meta.falseText;
+    const sugVal  = !curVal;
+    const sugText = sugVal ? meta.trueText : meta.falseText;
+    bodyHTML = `
+      <div style="margin-bottom:16px">
+        <div style="font-size:13px;color:#888;margin-bottom:8px">항목</div>
+        <div style="font-size:16px;font-weight:700;color:#2D2D2D">${meta.label}</div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:18px">
+        <div style="background:#F5F5F5;border-radius:12px;padding:14px;text-align:center">
+          <div style="font-size:10px;color:#BBB;margin-bottom:4px">현재 정보</div>
+          <div style="font-size:18px;margin-bottom:2px">${curVal?meta.trueIcon:meta.falseIcon}</div>
+          <div style="font-size:14px;font-weight:700;color:#999">${curText}</div>
+        </div>
+        <div style="background:#FFF8F5;border:2px solid #E04E14;border-radius:12px;padding:14px;text-align:center">
+          <div style="font-size:10px;color:#E04E14;font-weight:700;margin-bottom:4px">올바른 정보</div>
+          <div style="font-size:18px;margin-bottom:2px">${sugVal?meta.trueIcon:meta.falseIcon}</div>
+          <div style="font-size:14px;font-weight:700;color:#E04E14">${sugText}</div>
+        </div>
+      </div>
+      <textarea id="correction-comment" rows="2" placeholder="추가 설명 (선택)"
+        style="width:100%;box-sizing:border-box;padding:10px 12px;border:1.5px solid #EEE;border-radius:10px;font-size:14px;font-family:inherit;outline:none;resize:none;margin-bottom:12px"></textarea>
+      <input type="hidden" id="correction-field" value="${field}">
+      <input type="hidden" id="correction-place-id" value="${placeId}">
+      <input type="hidden" id="correction-suggested" value="${sugVal}">
+      <button onclick="submitCorrectionRequest()"
+        style="width:100%;padding:13px;background:#E04E14;color:white;border:none;border-radius:14px;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit">
+        수정 요청 보내기
+      </button>`;
+  } else {
+    bodyHTML = `
+      <div style="margin-bottom:14px">
+        <div style="font-size:16px;font-weight:700;color:#2D2D2D">${meta.label}</div>
+        <div style="font-size:12px;color:#AAA;margin-top:4px">"${p.name}"의 정보가 잘못됐나요?</div>
+      </div>
+      <textarea id="correction-comment" rows="4" placeholder="어떻게 다른지 알려주세요 (예: 영업시간이 11시~21시예요)"
+        style="width:100%;box-sizing:border-box;padding:10px 12px;border:1.5px solid #EEE;border-radius:10px;font-size:14px;font-family:inherit;outline:none;resize:vertical;margin-bottom:12px"></textarea>
+      <input type="hidden" id="correction-field" value="${field}">
+      <input type="hidden" id="correction-place-id" value="${placeId}">
+      <input type="hidden" id="correction-suggested" value="">
+      <button onclick="submitCorrectionRequest()"
+        style="width:100%;padding:13px;background:#E04E14;color:white;border:none;border-radius:14px;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit">
+        수정 요청 보내기
+      </button>`;
+  }
+  document.getElementById('correction-modal-body').innerHTML = bodyHTML;
+  openModal('correction-modal');
+}
+
+async function submitCorrectionRequest() {
+  if (!currentUser || !db) return;
+  const field     = document.getElementById('correction-field')?.value;
+  const placeId   = parseInt(document.getElementById('correction-place-id')?.value);
+  const suggested = document.getElementById('correction-suggested')?.value;
+  const comment   = (document.getElementById('correction-comment')?.value || '').trim();
+  const p = places.find(x => x.id === placeId);
+  if (!p || !field) return;
+
+  const meta = FIELD_META[field];
+  let suggestedVal = suggested === '' ? null : (suggested === 'true' ? true : suggested === 'false' ? false : suggested);
+
+  try {
+    await db.collection('correctionRequests').add({
+      placeId,
+      firestoreId: p.firestoreId || '',
+      placeName: p.name,
+      field,
+      fieldLabel: meta?.label || field,
+      currentValue: p[field] ?? null,
+      suggestedValue: suggestedVal,
+      comment,
+      userId: currentUser.uid,
+      userEmail: currentUser.email,
+      status: 'pending',
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    showToast('🙏 수정 요청을 보냈어요! 검토 후 반영될 거예요.');
+    closeModal('correction-modal');
+  } catch(e) {
+    showToast('❌ 전송 실패: ' + e.message);
+  }
 }
 function copyShareLink(placeId) {
   const base = location.href.split('?')[0].split('#')[0];
@@ -5898,8 +6263,11 @@ async function refreshDrawerMemories(placeId) {
 function openSubmitModal() {
   document.getElementById('submit-modal').classList.add('open');
 }
+function openModal(id) {
+  document.getElementById(id)?.classList.add('open');
+}
 function closeModal(id) {
-  document.getElementById(id).classList.remove('open');
+  document.getElementById(id)?.classList.remove('open');
   if (id === 'memory-modal') exitMapPickMode();
 }
 function modalOverlayClick(e, id) {
@@ -6055,6 +6423,7 @@ async function loadAdminTab(tab) {
     else if (tab === 'importer') renderAdminImporter();
     else if (tab === 'verify') renderVerifyTab();
     else if (tab === 'feedback') await renderAdminFeedback();
+    else if (tab === 'corrections') await renderAdminCorrections();
   } catch(e) {
     content.innerHTML = `<div class="empty-state"><div class="es-icon">❌</div><p>오류가 발생했어요.<br>${e.message}</p></div>`;
   }
