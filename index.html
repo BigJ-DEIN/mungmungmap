@@ -4320,6 +4320,11 @@ function getValidPlaces() {
   return [...places].filter(p => p && p.id != null && p.name);
 }
 
+function selectPlaceById(id) {
+  const p = getValidPlaces().find(x => x.id == id);
+  if (p) setPickedPlace(p);
+}
+
 function setPickedPlace(p) {
   if (!p) return;
   document.getElementById('mem-place-select').value = p.id;
@@ -4349,7 +4354,7 @@ function onPlacePickerInput(q) {
     dropdown.innerHTML = `<div class="place-picker-empty">검색 결과가 없어요</div>`;
   } else {
     dropdown.innerHTML = matches.map(p =>
-      `<div class="place-picker-item" onmousedown="setPickedPlace({id:${p.id},name:'${p.name.replace(/'/g,'\\'')}',area:'${(p.area||'').replace(/'/g,'\\'')}'})" >
+      `<div class="place-picker-item" onmousedown="selectPlaceById(${p.id})" >
         <span class="pi-name">${p.name}</span>
         <span class="pi-area">${p.area || ''}</span>
       </div>`
