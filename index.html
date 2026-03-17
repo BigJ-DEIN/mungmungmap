@@ -672,7 +672,7 @@
     .area-toggle-btn .arrow { font-size:9px; transition:transform .25s; }
     .area-toggle-btn.open .arrow { transform:rotate(180deg); }
     .area-chips-wrap { overflow:hidden; max-height:0; transition:max-height .3s ease; }
-    .area-chips-wrap.open { max-height:180px; }
+    .area-chips-wrap.open { max-height:120px; }
     .area-chips-inner { padding:4px 0 8px; display:flex; flex-wrap:wrap; gap:4px; }
 
     /* ── MEMORIES PANEL ── */
@@ -1172,33 +1172,24 @@
       <!-- 접을 수 있는 지역 칩 -->
       <div class="area-chips-wrap" id="area-chips-wrap">
         <div class="area-chips-inner" id="area-chips">
-          <button class="filter-chip active" data-area="all"    onclick="setAreaFilter(this,'all')">전체</button>
-          <button class="filter-chip" data-area="분당"   onclick="setAreaFilter(this,'분당')">분당·판교</button>
-          <button class="filter-chip" data-area="보정동" onclick="setAreaFilter(this,'보정동')">보정동</button>
-          <button class="filter-chip" data-area="수원"   onclick="setAreaFilter(this,'수원')">수원</button>
-          <button class="filter-chip" data-area="용인"   onclick="setAreaFilter(this,'용인')">용인</button>
-          <button class="filter-chip" data-area="화성"   onclick="setAreaFilter(this,'화성')">화성</button>
-          <button class="filter-chip" data-area="평택"   onclick="setAreaFilter(this,'평택')">평택</button>
-          <button class="filter-chip" data-area="안산"   onclick="setAreaFilter(this,'안산')">안산</button>
-          <button class="filter-chip" data-area="시흥"   onclick="setAreaFilter(this,'시흥')">시흥</button>
-          <button class="filter-chip" data-area="안양"   onclick="setAreaFilter(this,'안양')">안양</button>
-          <button class="filter-chip" data-area="군포"   onclick="setAreaFilter(this,'군포')">군포</button>
-          <button class="filter-chip" data-area="부천"   onclick="setAreaFilter(this,'부천')">부천</button>
-          <button class="filter-chip" data-area="오산"   onclick="setAreaFilter(this,'오산')">오산</button>
-          <button class="filter-chip" data-area="안성"   onclick="setAreaFilter(this,'안성')">안성</button>
-          <button class="filter-chip" data-area="고양"   onclick="setAreaFilter(this,'고양')">고양</button>
-          <button class="filter-chip" data-area="파주"   onclick="setAreaFilter(this,'파주')">파주</button>
-          <button class="filter-chip" data-area="의정부" onclick="setAreaFilter(this,'의정부')">의정부</button>
-          <button class="filter-chip" data-area="양주"   onclick="setAreaFilter(this,'양주')">양주</button>
-          <button class="filter-chip" data-area="동두천" onclick="setAreaFilter(this,'동두천')">동두천</button>
-          <button class="filter-chip" data-area="구리"   onclick="setAreaFilter(this,'구리')">구리</button>
-          <button class="filter-chip" data-area="남양주" onclick="setAreaFilter(this,'남양주')">남양주</button>
-          <button class="filter-chip" data-area="하남"   onclick="setAreaFilter(this,'하남')">하남</button>
-          <button class="filter-chip" data-area="광주"   onclick="setAreaFilter(this,'광주')">광주</button>
-          <button class="filter-chip" data-area="가평"   onclick="setAreaFilter(this,'가평')">가평</button>
-          <button class="filter-chip" data-area="양평"   onclick="setAreaFilter(this,'양평')">양평</button>
-          <button class="filter-chip" data-area="여주"   onclick="setAreaFilter(this,'여주')">여주</button>
-          <button class="filter-chip" data-area="포천"   onclick="setAreaFilter(this,'포천')">포천</button>
+          <button class="filter-chip active" data-area="all"  onclick="setAreaFilter(this,'all')">전체</button>
+          <button class="filter-chip" data-area="서울"  onclick="setAreaFilter(this,'서울')">서울</button>
+          <button class="filter-chip" data-area="경기"  onclick="setAreaFilter(this,'경기')">경기</button>
+          <button class="filter-chip" data-area="인천"  onclick="setAreaFilter(this,'인천')">인천</button>
+          <button class="filter-chip" data-area="강원"  onclick="setAreaFilter(this,'강원')">강원</button>
+          <button class="filter-chip" data-area="충북"  onclick="setAreaFilter(this,'충북')">충북</button>
+          <button class="filter-chip" data-area="충남"  onclick="setAreaFilter(this,'충남')">충남</button>
+          <button class="filter-chip" data-area="세종"  onclick="setAreaFilter(this,'세종')">세종</button>
+          <button class="filter-chip" data-area="대전"  onclick="setAreaFilter(this,'대전')">대전</button>
+          <button class="filter-chip" data-area="전북"  onclick="setAreaFilter(this,'전북')">전북</button>
+          <button class="filter-chip" data-area="전남"  onclick="setAreaFilter(this,'전남')">전남</button>
+          <button class="filter-chip" data-area="광주"  onclick="setAreaFilter(this,'광주')">광주</button>
+          <button class="filter-chip" data-area="경북"  onclick="setAreaFilter(this,'경북')">경북</button>
+          <button class="filter-chip" data-area="경남"  onclick="setAreaFilter(this,'경남')">경남</button>
+          <button class="filter-chip" data-area="대구"  onclick="setAreaFilter(this,'대구')">대구</button>
+          <button class="filter-chip" data-area="울산"  onclick="setAreaFilter(this,'울산')">울산</button>
+          <button class="filter-chip" data-area="부산"  onclick="setAreaFilter(this,'부산')">부산</button>
+          <button class="filter-chip" data-area="제주"  onclick="setAreaFilter(this,'제주')">제주</button>
         </div>
       </div>
     </div>
@@ -5485,7 +5476,7 @@ function getFiltered() {
   return places.filter(p => {
     if (!p || p.id == null || !p.name) return false; // null 안전
     if (getPlaceStatus(p) === 'rejected') return false; // 펫 비적합 판정 제외
-    if (activeFilters.area !== 'all' && p.area !== activeFilters.area) return false;
+    if (activeFilters.area !== 'all' && p.province !== activeFilters.area) return false;
     if (activeFilters.largeDog && p.large !== true) return false;  // null(미확인) 포함 제외
     if (activeFilters.indoor  && p.indoor !== true) return false;  // null(미확인) 포함 제외
     if (activeFilters.noCage  && p.cage === true) return false;    // null(미확인)은 케이지 불필요 필터에서 제외 안 함
@@ -8034,7 +8025,8 @@ async function nwCollectRegion(region) {
   // 지역 중심점 1개 → 반경 8km 45개 한계 극복:
   // 중심점 기준 3×3=9개 격자점 × 반경 4km × 45개 = 최대 405개/카테고리
   // 격자 간격 0.025°(≈2.8km), 중복은 existingKakaoIds로 자동 제거
-  const CAT_GROUP_CODES = ['CE7', 'FD6'];
+  const CAT_GROUP_CODES = ['CE7', 'FD6', 'AD5', 'AT4'];
+  // CE7=카페, FD6=음식점, AD5=숙박(펜션/호텔), AT4=관광명소(공원/수목원)
   const CAT_GRID_STEP   = 0.025; // ≈2.8km
   const CAT_GRID_OFFSETS = [
     [-1,-1],[-1,0],[-1,1],
