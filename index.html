@@ -4507,7 +4507,7 @@ async function renderAdminCorrections() {
   const pending = items.filter(i => i.status === 'pending');
   const done    = items.filter(i => i.status !== 'pending');
 
-  const cardStyle = 'background:#FAFAFA;border-radius:12px;padding:14px;margin-bottom:10px;border:1.5px solid #F0F0F0';
+  const reqCardStyle = 'background:#FAFAFA;border-radius:12px;padding:14px;margin-bottom:10px;border:1.5px solid #F0F0F0';
   const btnApply = (item) => {
     if (item.suggestedValue === null || item.suggestedValue === undefined) return '';
     return `<button onclick="applyCorrectionRequest('${item._id}',${item.placeId},'${item.field}',${JSON.stringify(item.suggestedValue)})"
@@ -4536,7 +4536,7 @@ async function renderAdminCorrections() {
       const sugDisp = item.suggestedValue === true ? '✅ ' + (meta.trueText||'true')
         : item.suggestedValue === false ? '❌ ' + (meta.falseText||'false')
         : item.suggestedValue != null ? String(item.suggestedValue) : '(텍스트 확인 요청)';
-      html += `<div style="${cardStyle}">
+      html += `<div style="${reqCardStyle}">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:8px">
           <div>
             <div style="font-size:13px;font-weight:700;color:#2D2D2D">${item.placeName || ''}</div>
@@ -4559,7 +4559,7 @@ async function renderAdminCorrections() {
     done.slice(0,20).forEach(item => {
       const ts = item.createdAt?.toDate ? item.createdAt.toDate().toLocaleString('ko-KR') : '';
       const meta = FIELD_META[item.field] || {};
-      html += `<div style="${cardStyle};opacity:.6">
+      html += `<div style="${reqCardStyle};opacity:.6">
         <div style="display:flex;justify-content:space-between;align-items:center">
           <div style="font-size:13px;font-weight:600;color:#888">${item.placeName} · ${meta.label||item.field}</div>
           <div style="font-size:11px;color:#BBB">${item.status==='approved'?'✅ 반영':'✖ 반려'} · ${ts}</div>
