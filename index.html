@@ -7620,7 +7620,7 @@ async function stage1FirestoreSync() {
    두 파이프라인(전국 + 2단계 자동검증)이 동시에 실행될 때
    프록시 요청을 최대 2개로 제한해 서로 자동 조율합니다. */
 const _proxyQueue = {
-  maxConcurrent: 3, running: 0, queue: [],
+  maxConcurrent: 5, running: 0, queue: [],
   async acquire() {
     if (this.running < this.maxConcurrent) { this.running++; return; }
     return new Promise(r => this.queue.push(r));
@@ -8179,15 +8179,15 @@ async function nwVerifyStage2Region(regionName) {
     if (pendingBatch.length >= 50) await flush();
   }
 
-  /* 3-worker 병렬 처리 */
+  /* 5-worker 병렬 처리 */
   const _workQueue = [...allTargets];
-  const CONCURRENT = 3;
+  const CONCURRENT = 5;
   async function _worker() {
     while (!nwPipeline.stop) {
       const p = _workQueue.shift();
       if (!p) break;
       await processOne(p);
-      await new Promise(r => setTimeout(r, 300)); // rate limiting
+      await new Promise(r => setTimeout(r, 200)); // rate limiting (3→5 워커 증가로 200ms로 단축)
     }
   }
   await Promise.all(Array.from({ length: CONCURRENT }, _worker));
@@ -8594,8 +8594,8 @@ async function runAutoStage2Verify() {
     refreshAutoVerifyPanel();
   }
 
-  /* 3개 워커가 공유 큐에서 장소를 꺼내 동시에 처리 */
-  const CONCURRENT_PLACES = 3;
+  /* 5개 워커가 공유 큐에서 장소를 꺼내 동시에 처리 */
+  const CONCURRENT_PLACES = 5;
   async function _worker() {
     while (!autoV.stop) {
       const p = _workQueue.shift();
