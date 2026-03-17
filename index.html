@@ -8032,56 +8032,69 @@ async function nwCollectRegion(region) {
     }
   }
 
-  // ── 2단계: 카테고리 검색 (CE7=카페, FD6=음식점) ─────────────────────────
-  // 키워드 검색에서 잡히지 않는 일반 카페/식당 중 반려동물 동반 가능한 곳 발굴
-  // stage2에서 Kakao 페이지 스크래핑으로 '반려동물 동반' 태그 여부 확인 후
-  // 없으면 petStatus='rejected'로 처리하여 재검사 제외
-  const CAT_GROUP_CODES = ['CE7', 'FD6']; // 카페, 음식점
+  // ── 2단계: 카테고리 검색 (CE7=카페, FD6=음식점) — 3×3 그리드 ──────────────
+  // 지역 중심점 1개 → 반경 8km 45개 한계 극복:
+  // 중심점 기준 3×3=9개 격자점 × 반경 4km × 45개 = 최대 405개/카테고리
+  // 격자 간격 0.025°(≈2.8km), 중복은 existingKakaoIds로 자동 제거
+  const CAT_GROUP_CODES = ['CE7', 'FD6'];
+  const CAT_GRID_STEP   = 0.025; // ≈2.8km
+  const CAT_GRID_OFFSETS = [
+    [-1,-1],[-1,0],[-1,1],
+    [ 0,-1],[ 0,0],[ 0,1],
+    [ 1,-1],[ 1,0],[ 1,1],
+  ]; // 3×3 = 9개 격자점
+
   for (const code of CAT_GROUP_CODES) {
-    for (let pg = 1; pg <= 3; pg++) {
+    for (const [dy, dx] of CAT_GRID_OFFSETS) {
       if (nwPipeline.stop) return newFound;
-      try {
-        const url = `https://dapi.kakao.com/v2/local/search/category.json?category_group_code=${code}&x=${region.x}&y=${region.y}&radius=8000&page=${pg}&size=15&sort=distance`;
-        const r = await fetch(url, { headers: { 'Authorization': `KakaoAK ${KAKAO_REST_KEY}` } });
-        if (!r.ok) break;
-        const j = await r.json();
-        if (!j.documents?.length) break;
-        for (const item of j.documents) {
-          if (existingKakaoIds.has(item.id)) continue;
-          if (places.some(p => p.name === item.place_name &&
-            Math.abs(p.lat - parseFloat(item.y)) < 0.001 &&
-            Math.abs(p.lng - parseFloat(item.x)) < 0.001)) continue;
-          // 방어적 필터: 카테고리 코드가 맞아도 서브카테고리에 비관련 항목 혼입 방지
-          const _excCatCheck = item.category_name || '';
-          if (['동물병원','수의','반려동물 용품','반려동물용품','애견용품','애견미용','펫샵'].some(x => _excCatCheck.includes(x))) continue;
-          existingKakaoIds.add(item.id);
-          const _cat = impMapCat(item.category_name);
-          newFound.push({
-            name:      item.place_name,
-            lat:       parseFloat(item.y),
-            lng:       parseFloat(item.x),
-            addr:      item.road_address_name || item.address_name || '',
-            phone:     item.phone || '',
-            kakaoUrl:  item.place_url || '',
-            kakaoId:   item.id,
-            cat:       _cat,
-            emoji:     impCatEmoji(_cat),
-            area:      region.name,
-            province:  region.province,
-            petStatus: 'unverified', // stage2 Kakao 페이지 스크래핑으로 최종 판단
-            large: null, small: true,   // null = 미확인
-            indoor: null, outdoor: true,
-            stroller: null, cage: null,
-            note: '',
-            hours: [{ d: '영업시간', t: '카카오맵 확인' }],
-            active:    true,
-            source:    'auto_pipeline_cat', // 카테고리 수집 표시 (rejected 판정 기준)
-            addedAt:   new Date().toISOString(),
-          });
-        }
-        if (j.meta?.is_end) break;
-        await new Promise(r => setTimeout(r, 200));
-      } catch(e) { break; }
+      const gx = region.x + dx * CAT_GRID_STEP;
+      const gy = region.y + dy * CAT_GRID_STEP;
+
+      for (let pg = 1; pg <= 3; pg++) {
+        if (nwPipeline.stop) return newFound;
+        try {
+          const url = `https://dapi.kakao.com/v2/local/search/category.json?category_group_code=${code}&x=${gx}&y=${gy}&radius=4000&page=${pg}&size=15&sort=distance`;
+          const r = await fetch(url, { headers: { 'Authorization': `KakaoAK ${KAKAO_REST_KEY}` } });
+          if (!r.ok) break;
+          const j = await r.json();
+          if (!j.documents?.length) break;
+          for (const item of j.documents) {
+            if (existingKakaoIds.has(item.id)) continue;
+            if (places.some(p => p.name === item.place_name &&
+              Math.abs(p.lat - parseFloat(item.y)) < 0.001 &&
+              Math.abs(p.lng - parseFloat(item.x)) < 0.001)) continue;
+            const _excCatCheck = item.category_name || '';
+            if (['동물병원','수의','반려동물 용품','반려동물용품','애견용품','애견미용','펫샵'].some(x => _excCatCheck.includes(x))) continue;
+            existingKakaoIds.add(item.id);
+            const _cat = impMapCat(item.category_name);
+            newFound.push({
+              name:      item.place_name,
+              lat:       parseFloat(item.y),
+              lng:       parseFloat(item.x),
+              addr:      item.road_address_name || item.address_name || '',
+              phone:     item.phone || '',
+              kakaoUrl:  item.place_url || '',
+              kakaoId:   item.id,
+              cat:       _cat,
+              emoji:     impCatEmoji(_cat),
+              area:      region.name,
+              province:  region.province,
+              petStatus: 'unverified',
+              large: null, small: true,
+              indoor: null, outdoor: true,
+              stroller: null, cage: null,
+              note: '',
+              hours: [{ d: '영업시간', t: '카카오맵 확인' }],
+              active:    true,
+              source:    'auto_pipeline_cat',
+              addedAt:   new Date().toISOString(),
+            });
+          }
+          if (j.meta?.is_end) break;
+          await new Promise(r => setTimeout(r, 150));
+        } catch(e) { break; }
+      }
+      await new Promise(r => setTimeout(r, 100)); // 격자점 간 딜레이
     }
   }
 
