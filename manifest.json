@@ -1,12 +1,12 @@
 {
-  "name": "홍시의 대동여지도",
-  "short_name": "홍시지도",
-  "description": "홍시와 함께하는 경기도 반려견 동반 장소 지도",
+  "name": "홍대지",
+  "short_name": "홍대지",
+  "description": "홍시와 함께하는 반려견 동반 장소 지도",
   "start_url": "./index.html",
   "display": "standalone",
   "orientation": "portrait",
   "background_color": "#FFFFFF",
-  "theme_color": "#E04E14",
+  "theme_color": "#F07030",
   "lang": "ko",
   "icons": [
     {

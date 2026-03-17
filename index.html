@@ -8,7 +8,7 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
-  <meta name="apple-mobile-web-app-title" content="홍시지도">
+  <meta name="apple-mobile-web-app-title" content="홍대지">
   <meta name="theme-color" content="#E04E14">
   <link rel="apple-touch-icon" href="apple-touch-icon.png">
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700;900&display=swap" rel="stylesheet">
@@ -256,18 +256,29 @@
       transition:width .2s, height .2s, transform .2s, margin .2s;
     }
     .m-dot.active { transform:scale(1.5) !important; box-shadow:0 3px 12px rgba(0,0,0,.35); }
-    .m-dot.fee-marker { border-color:#FFD700; box-shadow:0 2px 8px rgba(212,160,23,.4); }
+    /* 마커 유형 레이블 */
+    .m-wrap { display:flex; flex-direction:column; align-items:center; position:relative; }
+    .m-type-label {
+      display:none; /* 기본 숨김, zoom 14+ 에서 표시 */
+      margin-top:2px;
+      font-size:9px; font-weight:700; color:#fff;
+      background:rgba(40,40,40,.72); backdrop-filter:blur(3px);
+      border-radius:8px; padding:1px 5px;
+      white-space:nowrap; pointer-events:none;
+      letter-spacing:.2px;
+    }
+    .map-zoom-14 .m-type-label { display:block; }
     /* 클러스터 버블 */
     .cluster-bubble {
-      background:#E04E14; color:white;
+      background:#F07030; color:white;
       border:2.5px solid white; border-radius:50%;
       display:flex; align-items:center; justify-content:center;
       font-size:12px; font-weight:800; font-family:'Noto Sans KR',sans-serif;
-      box-shadow:0 2px 10px rgba(224,78,20,.45);
+      box-shadow:0 2px 10px rgba(240,112,48,.45);
       width:100%; height:100%;
     }
-    .cluster-bubble.mid  { background:#c02800; font-size:11px; }
-    .cluster-bubble.big  { background:#9a1f00; font-size:10px; }
+    .cluster-bubble.mid  { background:#e05a1a; font-size:11px; }
+    .cluster-bubble.big  { background:#c44810; font-size:10px; }
     /* Leaflet 기본 클러스터 아이콘 숨기기 */
     .marker-cluster { background:transparent !important; }
     .marker-cluster div { background:transparent !important; }
@@ -355,6 +366,48 @@
     .legend-item:last-child { margin-bottom:0; }
     .legend-dot { width:11px; height:11px; border-radius:50%; border:2px solid white; box-shadow:0 1px 4px rgba(0,0,0,.15); }
     .ld-fee { border:2px solid #FFD700; }
+    /* 범례 도움말 */
+    .legend-help-btn {
+      width:15px; height:15px; border-radius:50%;
+      background:#E5E7EB; border:none; cursor:pointer;
+      font-size:10px; font-weight:800; color:#6B7280;
+      display:flex; align-items:center; justify-content:center;
+      line-height:1; flex-shrink:0; padding:0;
+      transition:background .15s;
+    }
+    .legend-help-btn:hover { background:#D1D5DB; color:#374151; }
+    .legend-help-overlay {
+      display:none; position:fixed; inset:0; z-index:9900;
+      background:rgba(0,0,0,.45); align-items:flex-end; justify-content:center;
+    }
+    .legend-help-overlay.open { display:flex; }
+    .legend-help-box {
+      background:#fff; border-radius:20px 20px 0 0;
+      padding:24px 20px calc(28px + env(safe-area-inset-bottom,0px));
+      width:100%; max-width:480px;
+      box-shadow:0 -4px 24px rgba(0,0,0,.15);
+    }
+    .legend-help-box h3 {
+      font-size:16px; font-weight:800; color:#1F2937;
+      margin-bottom:16px; display:flex; align-items:center; gap:8px;
+    }
+    .lh-row {
+      display:flex; align-items:flex-start; gap:12px;
+      padding:12px 0; border-bottom:1px solid #F3F4F6;
+    }
+    .lh-row:last-of-type { border-bottom:none; }
+    .lh-dot {
+      width:14px; height:14px; border-radius:50%; flex-shrink:0;
+      border:2px solid white; box-shadow:0 1px 4px rgba(0,0,0,.15);
+      margin-top:3px;
+    }
+    .lh-title { font-size:14px; font-weight:700; color:#1F2937; margin-bottom:3px; }
+    .lh-desc { font-size:12px; color:#6B7280; line-height:1.6; }
+    .lh-close {
+      width:100%; margin-top:16px; padding:13px;
+      background:#F07030; color:#fff; border:none; border-radius:14px;
+      font-size:15px; font-weight:700; cursor:pointer; font-family:inherit;
+    }
 
     /* ── KAKAO LIVE SEARCH ── */
     #live-search-btn {
@@ -689,9 +742,9 @@
     .place-picker-empty { padding:14px; font-size:13px; color:#BBB; text-align:center; }
     /* 지도에서 직접 고르기 — 플로팅 힌트 바 */
     #map-pick-bar {
-      display:none; position:fixed; bottom:100px; left:50%;
+      display:none; position:fixed; bottom:76px; left:50%;
       transform:translateX(-50%);
-      z-index:9500; background:rgba(30,30,30,.88);
+      z-index:9600; background:rgba(30,30,30,.88);
       color:white; border-radius:28px; padding:11px 18px 11px 20px;
       font-size:13px; font-weight:600; white-space:nowrap;
       align-items:center; gap:12px;
@@ -956,7 +1009,7 @@
       <label style="display:flex; align-items:center; gap:8px; font-size:13px; color:#666; cursor:pointer; user-select:none">
         <input type="checkbox" id="chk-homescreen" checked
           style="width:16px;height:16px;accent-color:#F07030;cursor:pointer;">
-        <span>📲 홍시지도를 홈화면에 추가할게요</span>
+        <span>📲 홍시의 대동여지도를 홈화면에 추가할게요</span>
       </label>
     </div>
     <button class="btn-login" id="auth-btn" onclick="doAuth()">로그인하고 시작하기</button>
@@ -1076,13 +1129,66 @@
 
   <div id="map">
     <div class="map-legend">
-      <div style="font-size:10px;font-weight:800;color:#E04E14;letter-spacing:.4px;margin-bottom:6px">우리 추억</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+        <div style="font-size:10px;font-weight:800;color:#E04E14;letter-spacing:.4px">우리 추억</div>
+        <button class="legend-help-btn" onclick="document.getElementById('legend-help-overlay').classList.add('open')" title="범례 도움말">?</button>
+      </div>
       <div class="legend-item"><span style="font-size:14px;line-height:1;filter:drop-shadow(0 1px 2px rgba(0,0,0,.2))">♥</span><span>다녀온 곳</span></div>
       <div style="height:1px;background:#F0F0F0;margin:5px 0"></div>
       <div class="legend-item"><div class="legend-dot" style="background:#F07030"></div><span>검증 완료</span></div>
       <div class="legend-item"><div class="legend-dot" style="background:#A8D86E"></div><span>확인 완료</span></div>
       <div class="legend-item"><div class="legend-dot" style="background:#C8C8C8"></div><span>확인 필요</span></div>
       <div class="legend-item"><div class="legend-dot" style="background:#87CEEB"></div><span>검색 결과</span></div>
+    </div>
+
+    <!-- 범례 도움말 오버레이 -->
+    <div id="legend-help-overlay" class="legend-help-overlay"
+         onclick="if(event.target===this) this.classList.remove('open')">
+      <div class="legend-help-box">
+        <h3>🗺 마커 색상 안내</h3>
+
+        <div class="lh-row">
+          <span style="font-size:20px;line-height:1;filter:drop-shadow(0 1px 2px rgba(0,0,0,.2));flex-shrink:0;margin-top:1px">♥</span>
+          <div>
+            <div class="lh-title">다녀온 곳</div>
+            <div class="lh-desc">내가 홍시와 함께 방문하고 추억을 남긴 장소예요. 동그라미 대신 하트로 표시돼요.</div>
+          </div>
+        </div>
+
+        <div class="lh-row">
+          <div class="lh-dot" style="background:#F07030"></div>
+          <div>
+            <div class="lh-title">검증 완료</div>
+            <div class="lh-desc">앱 사용자가 실제 방문 후 추억을 남겼거나, 카카오맵에 최근 3개월 내 반려견 관련 리뷰가 확인된 곳이에요.</div>
+          </div>
+        </div>
+
+        <div class="lh-row">
+          <div class="lh-dot" style="background:#A8D86E"></div>
+          <div>
+            <div class="lh-title">확인 완료</div>
+            <div class="lh-desc">애견카페·펫카페 등 반려견 동반 가능 카테고리이거나, 카카오맵 시설 정보에 반려동물 관련 안내가 있는 곳이에요.</div>
+          </div>
+        </div>
+
+        <div class="lh-row">
+          <div class="lh-dot" style="background:#C8C8C8"></div>
+          <div>
+            <div class="lh-title">확인 필요</div>
+            <div class="lh-desc">아직 검증 전인 곳이에요. 방문 전 전화로 반려견 동반 가능 여부를 꼭 확인해 주세요.</div>
+          </div>
+        </div>
+
+        <div class="lh-row">
+          <div class="lh-dot" style="background:#87CEEB"></div>
+          <div>
+            <div class="lh-title">검색 결과</div>
+            <div class="lh-desc">"주변에서 더 찾기"로 발견된 임시 결과예요. 앱에 아직 등록되지 않은 장소예요.</div>
+          </div>
+        </div>
+
+        <button class="lh-close" onclick="document.getElementById('legend-help-overlay').classList.remove('open')">알겠어요!</button>
+      </div>
     </div>
     <!-- Kakao Live Search -->
     <button id="live-search-btn" onclick="toggleLiveSearch()">
@@ -1104,9 +1210,7 @@
     <button class="fab fab-secondary" onclick="toggleMobileSidebar()" title="목록 보기">
       <i class="fa fa-list"></i>
     </button>
-    <button class="fab fab-secondary" onclick="copyShareLink()" title="공유">
-      <i class="fa fa-share-nodes"></i>
-    </button>
+
   </div>
 
 </div>
@@ -3585,8 +3689,11 @@ async function updatePlaceStatus(placeId, status) {
   const place = places.find(p => p.id === placeId);
   if (!place) return;
   place.petStatus = status;
+  // 2단계 검증 시 lastV2At 기록
+  const now = new Date().toISOString();
+  place.lastV2At = now;
   if (firebaseReady && db && place.firestoreId) {
-    await db.collection('places').doc(place.firestoreId).update({ petStatus: status });
+    await db.collection('places').doc(place.firestoreId).update({ petStatus: status, lastV2At: now });
     invalidatePlacesCache();
   }
   const info = markers[placeId]; if (!info) return;
@@ -4276,16 +4383,14 @@ function updateAllMarkerSizes() {
   document.querySelectorAll('.m-dot').forEach(dot => {
     dot.style.width  = sz + 'px';
     dot.style.height = sz + 'px';
-    dot.style.marginLeft = (-sz/2) + 'px';
-    dot.style.marginTop  = (-sz/2) + 'px';
   });
   const hs = Math.round(sz * 1.6);
   document.querySelectorAll('.m-heart').forEach(h => {
-    h.style.fontSize   = hs + 'px';
-    h.style.marginLeft = (-hs/2) + 'px';
-    h.style.marginTop  = (-hs*0.9) + 'px';
+    h.style.fontSize = hs + 'px';
   });
-  // sync iconAnchor via marker pane offset trick: done via CSS margin above
+  // 줌 14 이상이면 유형 레이블 표시 (map 컨테이너에 클래스 토글)
+  const mapEl = document.getElementById('map');
+  if (mapEl) mapEl.classList.toggle('map-zoom-14', z >= 14);
 }
 
 function initMap() {
@@ -4369,22 +4474,39 @@ function upgradeToHeartMarker(placeId) {
   markers[placeId] = { marker: m, color, isHeart: true };
 }
 
+/* 장소 유형 → 레이블 */
+function getTypeLabel(p) {
+  const cat = (p.category || p.type || '').toLowerCase();
+  const name = (p.name || '').toLowerCase();
+  if (cat.includes('애견카페')||cat.includes('펫카페')||cat.includes('반려견카페')||cat.includes('도그카페')) return '🐾 카페';
+  if (cat.includes('애견운동장')||cat.includes('반려견운동장')||cat.includes('파크')||name.includes('운동장')||name.includes('파크')) return '🏃 운동장';
+  if (cat.includes('동물병원')||cat.includes('수의')||name.includes('동물병원')||name.includes('동물의료')) return '🏥 동물병원';
+  if (cat.includes('훈련')||name.includes('훈련소')||name.includes('훈련센터')||name.includes('아카데미')) return '🎓 훈련소';
+  if (cat.includes('펜션')||cat.includes('호텔')||name.includes('펜션')||name.includes('호텔')||name.includes('리조트')) return '🏨 숙소';
+  if (cat.includes('미용')||cat.includes('그루밍')||name.includes('미용')||name.includes('그루밍')) return '✂️ 미용';
+  if (cat.includes('카페')||name.includes('카페')||name.includes('coffee')||name.includes('커피')) return '☕ 카페';
+  if (cat.includes('음식점')||cat.includes('식당')||cat.includes('레스토랑')||cat.includes('브런치')) return '🍽 식당';
+  if (cat.includes('빵')||cat.includes('베이커리')||name.includes('베이커리')||name.includes('빵집')) return '🥐 베이커리';
+  return '';
+}
+
 function addMarker(p) {
   if (!clusterGroup) return; // 지도 초기화 전이면 skip
   const color = STATUS_COLORS[getPlaceStatus(p)] || STATUS_COLORS.unverified;
-  const feeClass = p.entryFee ? 'fee-marker' : '';
   const sz = map ? getMarkerSizeForZoom(map.getZoom()) : 20;
   if (userVisitedPlaceIds.has(p.id)) {
     const hs = Math.round(sz * 1.6);
-    const html = `<div class="m-heart ${feeClass}" style="color:${color};font-size:${hs}px;margin-left:${-hs/2}px;margin-top:${-hs*0.9}px" data-id="${p.id}">♥</div>`;
-    const icon = L.divIcon({ html, className:'', iconSize:[hs,hs], iconAnchor:[hs/2,hs*0.9] });
+    const typeLabel = getTypeLabel(p);
+    const html = `<div class="m-wrap"><div class="m-heart" style="color:${color};font-size:${hs}px" data-id="${p.id}">♥</div>${typeLabel?`<div class="m-type-label">${typeLabel}</div>`:''}</div>`;
+    const icon = L.divIcon({ html, className:'', iconSize:[hs+40, hs+16], iconAnchor:[hs/2+20, hs*0.9] });
     const m = L.marker([p.lat, p.lng], { icon })
       .on('click', e => { L.DomEvent.stopPropagation(e); if (mapPickMode) { setPickedPlace(p); showToast(`"${p.name}" 선택됐어요 🐾`); exitMapPickMode(); } else { openPlace(p); } });
     clusterGroup.addLayer(m);
     markers[p.id] = { marker:m, color, isHeart: true };
   } else {
-    const html = `<div class="m-dot ${feeClass}" style="background:${color};width:${sz}px;height:${sz}px;margin-left:${-sz/2}px;margin-top:${-sz/2}px" data-id="${p.id}"></div>`;
-    const icon = L.divIcon({ html, className:'', iconSize:[sz,sz], iconAnchor:[sz/2,sz/2] });
+    const typeLabel2 = getTypeLabel(p);
+    const html = `<div class="m-wrap"><div class="m-dot" style="background:${color};width:${sz}px;height:${sz}px" data-id="${p.id}"></div>${typeLabel2?`<div class="m-type-label">${typeLabel2}</div>`:''}</div>`;
+    const icon = L.divIcon({ html, className:'', iconSize:[sz+40, sz+16], iconAnchor:[sz/2+20, sz/2] });
     const m = L.marker([p.lat, p.lng], { icon })
       .on('click', e => { L.DomEvent.stopPropagation(e); if (mapPickMode) { setPickedPlace(p); showToast(`"${p.name}" 선택됐어요 🐾`); exitMapPickMode(); } else { openPlace(p); } });
     clusterGroup.addLayer(m);
@@ -4731,16 +4853,7 @@ function renderList(filtered) {
   }
 
   if (filtered.length) {
-    const feeList  = filtered.filter(p => p.entryFee);
-    const freelist = filtered.filter(p => !p.entryFee);
-    if (feeList.length) {
-      html += `<div class="list-section-header"><div class="sec-line"></div>&nbsp;입장료 있는 곳 (${feeList.length})<div class="sec-line"></div></div>`;
-      html += feeList.map(cardHtml).join('');
-    }
-    if (freelist.length) {
-      html += `<div class="list-section-header"><div class="sec-line"></div>&nbsp;입장료 없는 곳 (${freelist.length})<div class="sec-line"></div></div>`;
-      html += freelist.map(cardHtml).join('');
-    }
+    html += filtered.map(cardHtml).join('');
   }
 
   list.innerHTML = html;
@@ -4859,23 +4972,23 @@ function openPlace(p) {
     <div class="sec-label">상세 정보</div>
     <div class="notes-box">${p.note || ''}</div>
     <div class="warn-note">⚠️ 방문 전 전화로 최신 정보 확인을 권장합니다</div>
+    <button class="btn-write-mem-drawer" onclick="openWriteMemory(${p.id})" style="margin-bottom:10px">✏️ 추억 남기기</button>
     <div class="action-row">
       <button class="btn-act btn-primary" onclick="openKakaoMap(${p.id})">
-        <i class="fa fa-location-dot"></i> 지도 보기
+        <i class="fa fa-location-dot"></i> 상세 보기
       </button>
       <button class="btn-act btn-secondary" onclick="copyShareLink(${p.id})">
         <i class="fa fa-share-nodes"></i> 공유
       </button>
     </div>
-    ${currentUser?.isAdmin ? `<button onclick="adminDeletePlace(${p.id})" style="width:100%;margin-top:8px;padding:9px;background:#FFF5F5;color:#C62828;border:1.5px solid #FFCDD2;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">🗑️ 폐업·오등록 삭제</button>` : ''}
     <div class="drawer-mem-section" id="drawer-mem-section">
       <div class="divider"></div>
       <div class="sec-label">추억</div>
       <div class="drawer-mem-feed" id="drawer-mem-list">
         <div style="font-size:13px;color:#DDD;text-align:center;padding:12px 0">기억 꺼내는 중...</div>
       </div>
-      <button class="btn-write-mem-drawer" onclick="openWriteMemory(${p.id})">✏️ 여기서의 기억 남기기</button>
-    </div>`;
+    </div>
+    ${currentUser?.isAdmin ? `<button onclick="adminDeletePlace(${p.id})" style="width:100%;margin-top:12px;padding:9px;background:#FFF5F5;color:#C62828;border:1.5px solid #FFCDD2;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">🗑️ 폐업·오등록 삭제</button>` : ''}`;
 
   document.getElementById('detail-drawer').classList.add('open');
   // 추억 비동기 로드
@@ -5045,24 +5158,14 @@ function toggleMapPickMode() {
   // 플로팅 힌트 바 표시
   document.getElementById('map-pick-bar').classList.add('visible');
 
-  // 마커 클릭으로 선택 (각 marker의 click 이벤트가 처리)
-  // + 지도 빈 곳 클릭 시 가장 가까운 장소 찾기
+  // 마커 클릭만 허용 (map 자체 클릭 이벤트 없음)
+  // → 각 marker .on('click') 이벤트에서 mapPickMode 체크해서 처리
   map.off('click');
-  map.on('click', (e) => {
-    const latlng = e.latlng;
-    let nearest = null, minDist = Infinity;
-    getValidPlaces().forEach(p => {
-      const d = map.distance(latlng, L.latLng(p.lat, p.lng));
-      if (d < minDist) { minDist = d; nearest = p; }
-    });
-    if (nearest && minDist < 400) {
-      setPickedPlace(nearest);
-      showToast(`"${nearest.name}" 선택됐어요 🐾`);
-    } else {
-      showToast('마커를 직접 눌러주세요');
-    }
-    exitMapPickMode();
-  });
+  map.on('click', () => { /* 빈 지도 클릭 무시 */ });
+
+  // 피드백 FAB 숨기기 (맵픽 모드 중 간섭 방지)
+  const fab = document.getElementById('feedback-fab');
+  if (fab) fab.style.display = 'none';
 }
 
 function exitMapPickMode() {
@@ -5071,6 +5174,14 @@ function exitMapPickMode() {
   // 힌트 바 숨기기
   document.getElementById('map-pick-bar').classList.remove('visible');
 
+  // 피드백 FAB 복원
+  const fab = document.getElementById('feedback-fab');
+  if (fab) fab.style.display = '';
+
+  // 지도 클릭 핸들러 복원 (모달 복원 전에 먼저)
+  map.off('click');
+  map.on('click', () => { if (activePlace) closeDrawer(); });
+
   // 모달 복원
   const modal = document.getElementById('memory-modal');
   if (modal) {
@@ -5078,10 +5189,6 @@ function exitMapPickMode() {
     modal.style.opacity = '';
     modal.classList.add('open');
   }
-
-  // 지도 클릭 핸들러 복원
-  map.off('click');
-  map.on('click', () => { if (activePlace) closeDrawer(); });
 }
 
 function populateMemPlaceSelect(selectedId = null) {
@@ -5418,6 +5525,8 @@ function toggleMobileSidebar() {
 function openAdminPanel() {
   document.getElementById('admin-panel').style.display = 'flex';
   loadAdminTab('dashboard');
+  // 전국 파이프라인 미완료 지역 있으면 재개 배너 표시
+  setTimeout(() => nwCheckAutoStart(), 800);
 }
 function closeAdminPanel() {
   document.getElementById('admin-panel').style.display = 'none';
@@ -5750,6 +5859,168 @@ const IMP_AREAS = [
 ];
 const IMP_KWS = ["애견동반","반려견동반","애견카페","펫카페","도그카페","애견운동장","반려견카페"];
 
+// ── 전국 시/군/구 지역 데이터 (자동 파이프라인용) ──────────────────────
+const NATIONWIDE_REGIONS = [
+  // 서울
+  {province:"서울",name:"강남구",y:37.5172,x:127.0473},{province:"서울",name:"강동구",y:37.5301,x:127.1238},
+  {province:"서울",name:"강북구",y:37.6396,x:127.0257},{province:"서울",name:"강서구",y:37.5509,x:126.8495},
+  {province:"서울",name:"관악구",y:37.4784,x:126.9516},{province:"서울",name:"광진구",y:37.5385,x:127.0823},
+  {province:"서울",name:"구로구",y:37.4954,x:126.8877},{province:"서울",name:"금천구",y:37.4601,x:126.9003},
+  {province:"서울",name:"노원구",y:37.6540,x:127.0570},{province:"서울",name:"도봉구",y:37.6688,x:127.0471},
+  {province:"서울",name:"동대문구",y:37.5744,x:127.0396},{province:"서울",name:"동작구",y:37.5124,x:126.9393},
+  {province:"서울",name:"마포구",y:37.5638,x:126.9084},{province:"서울",name:"서대문구",y:37.5794,x:126.9368},
+  {province:"서울",name:"서초구",y:37.4837,x:127.0324},{province:"서울",name:"성동구",y:37.5634,x:127.0370},
+  {province:"서울",name:"성북구",y:37.5894,x:127.0167},{province:"서울",name:"송파구",y:37.5145,x:127.1059},
+  {province:"서울",name:"양천구",y:37.5170,x:126.8667},{province:"서울",name:"영등포구",y:37.5264,x:126.8963},
+  {province:"서울",name:"용산구",y:37.5384,x:126.9654},{province:"서울",name:"은평구",y:37.6027,x:126.9291},
+  {province:"서울",name:"종로구",y:37.5729,x:126.9794},{province:"서울",name:"중구",y:37.5640,x:126.9975},
+  {province:"서울",name:"중랑구",y:37.6063,x:127.0927},
+  // 부산
+  {province:"부산",name:"강서구",y:35.2121,x:128.9802},{province:"부산",name:"금정구",y:35.2427,x:129.0926},
+  {province:"부산",name:"기장군",y:35.2445,x:129.2226},{province:"부산",name:"남구",y:35.1369,x:129.0846},
+  {province:"부산",name:"동구",y:35.1296,x:129.0443},{province:"부산",name:"동래구",y:35.2042,x:129.0861},
+  {province:"부산",name:"부산진구",y:35.1596,x:129.0538},{province:"부산",name:"북구",y:35.1971,x:128.9908},
+  {province:"부산",name:"사상구",y:35.1517,x:128.9923},{province:"부산",name:"사하구",y:35.1046,x:128.9748},
+  {province:"부산",name:"서구",y:35.0975,x:129.0244},{province:"부산",name:"수영구",y:35.1456,x:129.1133},
+  {province:"부산",name:"연제구",y:35.1766,x:129.0809},{province:"부산",name:"영도구",y:35.0912,x:129.0680},
+  {province:"부산",name:"중구",y:35.1031,x:129.0328},{province:"부산",name:"해운대구",y:35.1631,x:129.1636},
+  // 대구
+  {province:"대구",name:"남구",y:35.8457,x:128.5974},{province:"대구",name:"달서구",y:35.8299,x:128.5326},
+  {province:"대구",name:"달성군",y:35.7747,x:128.4314},{province:"대구",name:"동구",y:35.8866,x:128.6353},
+  {province:"대구",name:"북구",y:35.8853,x:128.5826},{province:"대구",name:"서구",y:35.8716,x:128.5593},
+  {province:"대구",name:"수성구",y:35.8582,x:128.6306},{province:"대구",name:"중구",y:35.8714,x:128.6014},
+  // 인천
+  {province:"인천",name:"강화군",y:37.7472,x:126.4878},{province:"인천",name:"계양구",y:37.5373,x:126.7378},
+  {province:"인천",name:"남동구",y:37.4469,x:126.7314},{province:"인천",name:"동구",y:37.4739,x:126.6432},
+  {province:"인천",name:"미추홀구",y:37.4637,x:126.6503},{province:"인천",name:"부평구",y:37.5072,x:126.7219},
+  {province:"인천",name:"서구",y:37.5454,x:126.6759},{province:"인천",name:"연수구",y:37.4102,x:126.6780},
+  {province:"인천",name:"옹진군",y:37.4469,x:126.6368},{province:"인천",name:"중구",y:37.4737,x:126.6218},
+  // 광주
+  {province:"광주",name:"광산구",y:35.1396,x:126.7934},{province:"광주",name:"남구",y:35.1337,x:126.9025},
+  {province:"광주",name:"동구",y:35.1456,x:126.9231},{province:"광주",name:"북구",y:35.1738,x:126.9119},
+  {province:"광주",name:"서구",y:35.1519,x:126.8896},
+  // 대전
+  {province:"대전",name:"대덕구",y:36.3459,x:127.4151},{province:"대전",name:"동구",y:36.3121,x:127.4548},
+  {province:"대전",name:"서구",y:36.3551,x:127.3834},{province:"대전",name:"유성구",y:36.3622,x:127.3558},
+  {province:"대전",name:"중구",y:36.3250,x:127.4213},
+  // 울산
+  {province:"울산",name:"남구",y:35.5384,x:129.3114},{province:"울산",name:"동구",y:35.5050,x:129.4163},
+  {province:"울산",name:"북구",y:35.5826,x:129.3613},{province:"울산",name:"울주군",y:35.5230,x:129.2406},
+  {province:"울산",name:"중구",y:35.5694,x:129.3323},
+  // 세종
+  {province:"세종",name:"세종시",y:36.4801,x:127.2890},
+  // 경기 (기존 + 추가)
+  {province:"경기",name:"수원장안구",y:37.3043,x:127.0020},{province:"경기",name:"수원권선구",y:37.2580,x:126.9919},
+  {province:"경기",name:"수원팔달구",y:37.2784,x:127.0137},{province:"경기",name:"수원영통구",y:37.2490,x:127.0565},
+  {province:"경기",name:"성남분당구",y:37.3845,x:127.1233},{province:"경기",name:"성남수정구",y:37.4449,x:127.1378},
+  {province:"경기",name:"성남중원구",y:37.4250,x:127.1370},{province:"경기",name:"고양덕양구",y:37.6320,x:126.8320},
+  {province:"경기",name:"고양일산동구",y:37.6760,x:126.7770},{province:"경기",name:"고양일산서구",y:37.6580,x:126.7240},
+  {province:"경기",name:"용인처인구",y:37.2410,x:127.1775},{province:"경기",name:"용인기흥구",y:37.2750,x:127.1150},
+  {province:"경기",name:"용인수지구",y:37.3220,x:127.0465},{province:"경기",name:"부천원미구",y:37.5035,x:126.7660},
+  {province:"경기",name:"안산단원구",y:37.3219,x:126.8309},{province:"경기",name:"안산상록구",y:37.3000,x:126.8200},
+  {province:"경기",name:"안양만안구",y:37.3943,x:126.9568},{province:"경기",name:"안양동안구",y:37.3910,x:126.9490},
+  {province:"경기",name:"남양주",y:37.6360,x:127.2165},{province:"경기",name:"화성",y:37.2110,x:127.0820},
+  {province:"경기",name:"평택",y:37.0000,x:127.1122},{province:"경기",name:"파주",y:37.7599,x:126.7800},
+  {province:"경기",name:"시흥",y:37.3800,x:126.8030},{province:"경기",name:"김포",y:37.6155,x:126.7160},
+  {province:"경기",name:"광주",y:37.4295,x:127.2550},{province:"경기",name:"하남",y:37.5397,x:127.2150},
+  {province:"경기",name:"의정부",y:37.7381,x:127.0337},{province:"경기",name:"구리",y:37.5943,x:127.1296},
+  {province:"경기",name:"군포",y:37.3597,x:126.9352},{province:"경기",name:"오산",y:37.1498,x:127.0773},
+  {province:"경기",name:"이천",y:37.2724,x:127.4348},{province:"경기",name:"안성",y:37.0080,x:127.2797},
+  {province:"경기",name:"여주",y:37.2981,x:127.6375},{province:"경기",name:"양주",y:37.7854,x:127.0457},
+  {province:"경기",name:"동두천",y:37.9036,x:127.0606},{province:"경기",name:"가평",y:37.8315,x:127.5090},
+  {province:"경기",name:"포천",y:37.8945,x:127.2002},{province:"경기",name:"양평",y:37.4899,x:127.5000},
+  {province:"경기",name:"광명",y:37.4784,x:126.8644},{province:"경기",name:"의왕",y:37.3447,x:126.9699},
+  {province:"경기",name:"과천",y:37.4296,x:126.9876},{province:"경기",name:"연천군",y:38.0965,x:127.0749},
+  // 강원
+  {province:"강원",name:"강릉시",y:37.7519,x:128.8761},{province:"강원",name:"고성군",y:38.3802,x:128.4679},
+  {province:"강원",name:"동해시",y:37.5247,x:129.1144},{province:"강원",name:"삼척시",y:37.4496,x:129.1658},
+  {province:"강원",name:"속초시",y:38.2070,x:128.5918},{province:"강원",name:"양구군",y:38.1056,x:127.9898},
+  {province:"강원",name:"양양군",y:38.0757,x:128.6191},{province:"강원",name:"영월군",y:37.1838,x:128.4614},
+  {province:"강원",name:"원주시",y:37.3422,x:127.9202},{province:"강원",name:"인제군",y:38.0706,x:128.1716},
+  {province:"강원",name:"정선군",y:37.3801,x:128.6604},{province:"강원",name:"철원군",y:38.1464,x:127.3137},
+  {province:"강원",name:"춘천시",y:37.8813,x:127.7298},{province:"강원",name:"태백시",y:37.1641,x:128.9856},
+  {province:"강원",name:"평창군",y:37.3706,x:128.3904},{province:"강원",name:"홍천군",y:37.6972,x:127.8893},
+  {province:"강원",name:"화천군",y:38.1066,x:127.7079},{province:"강원",name:"횡성군",y:37.4916,x:127.9847},
+  // 충북
+  {province:"충북",name:"괴산군",y:36.8155,x:127.7868},{province:"충북",name:"단양군",y:36.9847,x:128.3650},
+  {province:"충북",name:"보은군",y:36.4897,x:127.7298},{province:"충북",name:"영동군",y:36.1750,x:127.7762},
+  {province:"충북",name:"옥천군",y:36.3063,x:127.5706},{province:"충북",name:"음성군",y:36.9401,x:127.6907},
+  {province:"충북",name:"제천시",y:37.1326,x:128.1908},{province:"충북",name:"증평군",y:36.7855,x:127.5823},
+  {province:"충북",name:"진천군",y:36.8554,x:127.4349},{province:"충북",name:"청주상당구",y:36.6419,x:127.4890},
+  {province:"충북",name:"청주서원구",y:36.6372,x:127.4471},{province:"충북",name:"청주흥덕구",y:36.6195,x:127.4265},
+  {province:"충북",name:"청주청원구",y:36.6757,x:127.4985},{province:"충북",name:"충주시",y:36.9910,x:127.9259},
+  // 충남
+  {province:"충남",name:"공주시",y:36.4465,x:127.1190},{province:"충남",name:"금산군",y:36.1092,x:127.4882},
+  {province:"충남",name:"논산시",y:36.1872,x:127.0990},{province:"충남",name:"당진시",y:36.8895,x:126.6455},
+  {province:"충남",name:"보령시",y:36.3331,x:126.6124},{province:"충남",name:"부여군",y:36.2756,x:126.9097},
+  {province:"충남",name:"서산시",y:36.7849,x:126.4503},{province:"충남",name:"서천군",y:36.0798,x:126.6919},
+  {province:"충남",name:"아산시",y:36.7898,x:127.0020},{province:"충남",name:"예산군",y:36.6804,x:126.8487},
+  {province:"충남",name:"천안동남구",y:36.8151,x:127.1138},{province:"충남",name:"천안서북구",y:36.8507,x:127.0556},
+  {province:"충남",name:"청양군",y:36.4592,x:126.8026},{province:"충남",name:"태안군",y:36.7455,x:126.2978},
+  {province:"충남",name:"홍성군",y:36.6011,x:126.6603},
+  // 전북
+  {province:"전북",name:"고창군",y:35.4357,x:126.7019},{province:"전북",name:"군산시",y:35.9674,x:126.7368},
+  {province:"전북",name:"김제시",y:35.8032,x:126.8802},{province:"전북",name:"남원시",y:35.4164,x:127.3902},
+  {province:"전북",name:"무주군",y:35.9076,x:127.6612},{province:"전북",name:"부안군",y:35.7318,x:126.7330},
+  {province:"전북",name:"순창군",y:35.3743,x:127.1377},{province:"전북",name:"완주군",y:35.9049,x:127.1618},
+  {province:"전북",name:"익산시",y:35.9483,x:126.9576},{province:"전북",name:"임실군",y:35.6177,x:127.2892},
+  {province:"전북",name:"장수군",y:35.6474,x:127.5210},{province:"전북",name:"전주덕진구",y:35.8572,x:127.1296},
+  {province:"전북",name:"전주완산구",y:35.8203,x:127.1088},{province:"전북",name:"정읍시",y:35.5699,x:126.8560},
+  {province:"전북",name:"진안군",y:35.7916,x:127.4245},
+  // 전남
+  {province:"전남",name:"강진군",y:34.6418,x:126.7676},{province:"전남",name:"고흥군",y:34.6046,x:127.2799},
+  {province:"전남",name:"곡성군",y:35.2820,x:127.2920},{province:"전남",name:"광양시",y:34.9407,x:127.6962},
+  {province:"전남",name:"구례군",y:35.2028,x:127.4627},{province:"전남",name:"나주시",y:35.0160,x:126.7109},
+  {province:"전남",name:"담양군",y:35.3214,x:126.9877},{province:"전남",name:"목포시",y:34.8118,x:126.3922},
+  {province:"전남",name:"무안군",y:34.9902,x:126.4809},{province:"전남",name:"보성군",y:34.7714,x:127.0800},
+  {province:"전남",name:"순천시",y:34.9507,x:127.4870},{province:"전남",name:"신안군",y:34.8303,x:126.1075},
+  {province:"전남",name:"여수시",y:34.7604,x:127.6622},{province:"전남",name:"영광군",y:35.2773,x:126.5120},
+  {province:"전남",name:"영암군",y:34.8003,x:126.6965},{province:"전남",name:"완도군",y:34.3105,x:126.7546},
+  {province:"전남",name:"장성군",y:35.3019,x:126.7859},{province:"전남",name:"장흥군",y:34.6818,x:126.9073},
+  {province:"전남",name:"진도군",y:34.4868,x:126.2637},{province:"전남",name:"함평군",y:35.0652,x:126.5162},
+  {province:"전남",name:"해남군",y:34.5738,x:126.5992},{province:"전남",name:"화순군",y:35.0646,x:126.9868},
+  // 경북
+  {province:"경북",name:"경산시",y:35.8248,x:128.7413},{province:"경북",name:"경주시",y:35.8562,x:129.2247},
+  {province:"경북",name:"고령군",y:35.7275,x:128.2635},{province:"경북",name:"구미시",y:36.1195,x:128.3446},
+  {province:"경북",name:"군위군",y:36.2402,x:128.5710},{province:"경북",name:"김천시",y:36.1397,x:128.1135},
+  {province:"경북",name:"문경시",y:36.5865,x:128.1879},{province:"경북",name:"봉화군",y:36.8933,x:128.7327},
+  {province:"경북",name:"상주시",y:36.4107,x:128.1590},{province:"경북",name:"성주군",y:35.9195,x:128.2835},
+  {province:"경북",name:"안동시",y:36.5684,x:128.7294},{province:"경북",name:"영덕군",y:36.4150,x:129.3655},
+  {province:"경북",name:"영양군",y:36.6669,x:129.1127},{province:"경북",name:"영주시",y:36.8057,x:128.6237},
+  {province:"경북",name:"영천시",y:35.9736,x:128.9383},{province:"경북",name:"예천군",y:36.6574,x:128.3530},
+  {province:"경북",name:"울릉군",y:37.4845,x:130.9057},{province:"경북",name:"울진군",y:36.9932,x:129.4006},
+  {province:"경북",name:"의성군",y:36.3526,x:128.6972},{province:"경북",name:"청도군",y:35.6476,x:128.7344},
+  {province:"경북",name:"청송군",y:36.4357,x:129.0573},{province:"경북",name:"칠곡군",y:35.9959,x:128.4013},
+  {province:"경북",name:"포항남구",y:35.9789,x:129.3318},{province:"경북",name:"포항북구",y:36.0320,x:129.3650},
+  // 경남
+  {province:"경남",name:"거제시",y:34.8804,x:128.6212},{province:"경남",name:"거창군",y:35.6868,x:127.9097},
+  {province:"경남",name:"고성군",y:34.9731,x:128.3227},{province:"경남",name:"김해시",y:35.2285,x:128.8888},
+  {province:"경남",name:"남해군",y:34.8375,x:127.8920},{province:"경남",name:"밀양시",y:35.5037,x:128.7462},
+  {province:"경남",name:"사천시",y:35.0037,x:128.0644},{province:"경남",name:"산청군",y:35.4157,x:127.8736},
+  {province:"경남",name:"양산시",y:35.3349,x:129.0363},{province:"경남",name:"의령군",y:35.3224,x:128.2621},
+  {province:"경남",name:"진주시",y:35.1800,x:128.1076},{province:"경남",name:"창녕군",y:35.5444,x:128.4926},
+  {province:"경남",name:"창원마산합포구",y:35.1827,x:128.5745},{province:"경남",name:"창원마산회원구",y:35.2218,x:128.5817},
+  {province:"경남",name:"창원성산구",y:35.2271,x:128.6814},{province:"경남",name:"창원의창구",y:35.2778,x:128.6576},
+  {province:"경남",name:"창원진해구",y:35.1596,x:128.6913},{province:"경남",name:"통영시",y:34.8544,x:128.4330},
+  {province:"경남",name:"하동군",y:35.0675,x:127.7518},{province:"경남",name:"함안군",y:35.2727,x:128.4065},
+  {province:"경남",name:"함양군",y:35.5197,x:127.7258},{province:"경남",name:"합천군",y:35.5657,x:128.1651},
+  // 제주
+  {province:"제주",name:"제주시",y:33.4996,x:126.5312},{province:"제주",name:"서귀포시",y:33.2541,x:126.5600},
+];
+
+// ── 전국 자동 파이프라인 상태 ──────────────────────────────────────────
+const NW_PIPELINE_KEY = 'nw_pipeline'; // Firestore meta doc key
+let nwPipeline = {
+  running: false,
+  stop: false,
+  phase: 'idle',        // idle | collect | verify1 | verify2 | done
+  regionIdx: 0,         // NATIONWIDE_REGIONS 현재 인덱스
+  totalRegions: NATIONWIDE_REGIONS.length,
+  regionStatus: {},     // { 'province_name': { lastCollect, lastV1, lastV2, placeCount } }
+  stats: { collected: 0, v1Done: 0, v2Done: 0, v2Skipped: 0, upgraded: 0 },
+  log: [],
+};
+
 function impCatConfirmed(cat) { return IMP_CONFIRMED_CATS.some(k=>(cat||'').includes(k)); }
 function impMapCat(c){c=c||'';if(c.includes('애견카페')||c.includes('반려견카페'))return'애견카페';if(c.includes('펫카페'))return'펫카페';if(c.includes('애견운동장')||c.includes('반려견운동장'))return'애견운동장';if(c.includes('카페'))return'카페';if(c.includes('음식점')||c.includes('레스토랑')||c.includes('식당'))return'음식점';if(c.includes('브런치'))return'브런치카페';if(c.includes('디저트'))return'디저트카페';return'카페';}
 function impGuessArea(r,a){const s=r||a||'';const m=[['분당구','분당'],['판교','분당'],['수지구','용인'],['기흥구','용인'],['처인구','용인'],['죽전','보정동'],['보정동','보정동'],['수원','수원'],['파주','파주'],['고양','고양'],['일산','고양'],['남양주','남양주'],['다산동','남양주'],['하남','하남'],['광주시','광주'],['가평','가평'],['양평','양평'],['화성','화성'],['평택','평택'],['안양','안양'],['부천','부천'],['시흥','시흥'],['의정부','의정부'],['구리시','구리'],['안산','안산'],['군포','군포'],['오산','오산'],['안성','안성'],['여주','여주'],['양주','양주'],['동두천','동두천'],['포천','포천'],['이천','이천'],['김포','김포'],['광명','광명'],['의왕','의왕'],['과천','과천'],['성남','분당']];for(const[k,v]of m)if(s.includes(k))return v;return'기타';}
@@ -6017,6 +6288,9 @@ function impShowExport(){
 const PET_KW_STAGE1 = ['애견카페','펫카페','반려견카페','도그카페','애견운동장','반려견운동장','애견파크','반려동물카페','애견호텔','펫호텔','반려견동반'];
 const PET_FACILITY_KW = ['반려견동반','반려동물동반','반려견 동반','반려동물 동반','애견동반','애견 동반','반려동물 가능','반려견 가능','반려동물'];
 const PET_REVIEW_KW   = ['강아지','반려견','애견','멍멍이','퍼피','강쥐','멍멍','반려동물','펫프렌들리','dog friendly'];
+// 이름·카테고리에서 로컬 검증용 (네트워크 불필요, 더 넓은 범위)
+const PET_KW_LOCAL = ['강아지','반려견','반려동물','애견','펫','pet','dog','도그','멍멍','퍼피',
+                      '동물병원','수의','훈련소','어질리티','그루밍','grooming','반려묘','냥이카페','고양이카페'];
 
 // 2단계 자동검증 상태
 let autoV = { running:false, stop:false, total:0, done:0, upgraded:0, cur:'', log:[] };
@@ -6051,23 +6325,26 @@ function renderVerifyTab() {
   content.innerHTML = `
     <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:16px">
       <div style="background:#FDEEE8;border-radius:10px;padding:12px;text-align:center">
-        <div style="font-size:22px;font-weight:900;color:#F07030">${counts.verified}</div>
+        <div id="stat-verified" style="font-size:22px;font-weight:900;color:#F07030">${counts.verified}</div>
         <div style="font-size:11px;color:#888;margin-top:2px"><span style="color:#F07030">●</span> 검증 완료</div>
       </div>
       <div style="background:#F1F8E9;border-radius:10px;padding:12px;text-align:center">
-        <div style="font-size:22px;font-weight:900;color:#A8D86E">${counts.confirmed}</div>
+        <div id="stat-confirmed" style="font-size:22px;font-weight:900;color:#A8D86E">${counts.confirmed}</div>
         <div style="font-size:11px;color:#888;margin-top:2px"><span style="color:#A8D86E">●</span> 확인 완료</div>
       </div>
       <div style="background:#F5F5F5;border-radius:10px;padding:12px;text-align:center">
-        <div style="font-size:22px;font-weight:900;color:#888">${counts.unverified}</div>
+        <div id="stat-unverified" style="font-size:22px;font-weight:900;color:#888">${counts.unverified}</div>
         <div style="font-size:11px;color:#888;margin-top:2px">● 확인 필요</div>
       </div>
       <div style="background:#E3F2FD;border-radius:10px;padding:12px;text-align:center">
-        <div style="font-size:22px;font-weight:900;color:#1976D2">${counts.search}</div>
+        <div id="stat-search" style="font-size:22px;font-weight:900;color:#1976D2">${counts.search}</div>
         <div style="font-size:11px;color:#888;margin-top:2px">● 검색 결과</div>
       </div>
     </div>
-    <div style="font-size:12px;color:#888;margin-bottom:12px">총 ${total}개 장소 · 검증 완료율 ${Math.round((counts.verified+counts.confirmed)/total*100)}%</div>
+    <div id="stat-total-text" style="font-size:12px;color:#888;margin-bottom:4px">총 ${total}개 장소 · 검증 완료율 ${Math.round((counts.verified+counts.confirmed)/total*100)}%</div>
+    <div style="font-size:11px;color:#AAA;margin-bottom:12px">
+      카카오 URL 있음: ${places.filter(p=>p&&p.id!=null&&p.kakaoUrl).length}개 · 없음: ${places.filter(p=>p&&p.id!=null&&!p.kakaoUrl).length}개
+    </div>
 
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
       <button id="btn-stage1-auto" onclick="stage1BatchAutoVerify()" style="padding:9px 16px;background:#A8D86E;color:white;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">
@@ -6083,11 +6360,25 @@ function renderVerifyTab() {
 
     ${autoPanel ? `<div id="auto-verify-panel">${autoPanel}</div>` : '<div id="auto-verify-panel"></div>'}
 
+    <!-- 전국 자동 파이프라인 섹션 -->
+    <div style="margin-bottom:16px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;cursor:pointer"
+        onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none'">
+        <div style="font-size:13px;font-weight:800;color:#1F2937">🌍 전국 자동 파이프라인</div>
+        <div style="font-size:11px;color:#9CA3AF">클릭해서 펼치기/접기</div>
+      </div>
+      <div id="nw-pipeline-panel" style="background:#F9FAFB;border-radius:12px;padding:14px;border:1px solid #E5E7EB">
+        <div style="text-align:center;padding:20px;color:#9CA3AF;font-size:13px">로딩 중...</div>
+      </div>
+    </div>
+
     <div style="font-size:13px;font-weight:700;margin-bottom:8px;color:#333">지역별 현황</div>
     <div style="background:white;border-radius:10px;padding:4px 12px;border:1px solid #F0F0F0">
       ${areaRows || '<div style="padding:12px;text-align:center;color:#AAA;font-size:13px">확인 필요 장소 없음 🎉</div>'}
     </div>
   `;
+  // 전국 파이프라인 UI 초기화
+  setTimeout(() => renderNationwidePipelineUI(), 50);
 }
 
 function buildAutoVerifyPanel() {
@@ -6111,9 +6402,25 @@ function buildAutoVerifyPanel() {
       <div style="background:#F5F5F5;border-radius:6px;height:8px;margin-bottom:6px;overflow:hidden">
         <div style="background:linear-gradient(90deg,#F07030,#A8D86E);height:100%;width:${pct}%;transition:width .3s;border-radius:6px"></div>
       </div>
-      <div style="display:flex;justify-content:space-between;font-size:11px;color:#888;margin-bottom:8px">
+      <div style="display:flex;justify-content:space-between;font-size:11px;color:#888;margin-bottom:4px">
         <span>${autoV.done} / ${autoV.total} 확인</span>
         <span style="color:#CC3300;font-weight:700">↑ ${autoV.upgraded}개 업그레이드</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:11px;color:#AAA;margin-bottom:4px">
+        <span>💾 Firestore: <strong style="color:#F07030">${autoV.synced||0}</strong>개 저장${(autoV.pendingSync||[]).length>0?` · ${autoV.pendingSync.length}개 대기`:''}</span>
+        ${(autoV.pendingSync||[]).length>0?`<span style="color:#F07030;font-weight:600">100개마다 자동저장</span>`:``}
+      </div>
+      <div style="background:#F9FAFB;border-radius:8px;padding:8px 10px;margin-bottom:8px">
+        <div style="font-size:10px;font-weight:700;color:#9CA3AF;margin-bottom:5px">채널별 검출 현황</div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:4px;font-size:11px">
+          <span>🏷 이름/카테고리: <strong style="color:#A8D86E">${autoV.ch_local||0}</strong></span>
+          <span>📍 카카오 SDK: <strong style="color:#F07030">${autoV.ch_kakaoSdk||0}</strong></span>
+          <span>📰 네이버 블로그: <strong style="color:#03C75A">${autoV.ch_naver||0}</strong></span>
+          <span>💾 방문 기록: <strong style="color:#F07030">${autoV.ch_memory||0}</strong></span>
+          <span>🗺 카카오페이지: <strong style="color:#888">${autoV.ch_kakaoPage||0}</strong></span>
+          <span style="color:#AAA">프록시: ✅${autoV.proxyOk||0}/❌${autoV.proxyFail||0}</span>
+        </div>
+        <div style="font-size:10px;color:#C0C0C0;margin-top:4px">대상: URL있음 ${autoV.urlCount||0}개 · URL없음 ${autoV.noUrlCount||0}개</div>
       </div>
       ${autoV.running && autoV.cur ? `<div style="font-size:11px;color:#AAA;margin-bottom:8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">🔍 ${autoV.cur} 확인 중...</div>` : ''}
       ${logHtml ? `<div style="max-height:120px;overflow-y:auto">${logHtml}</div>` : ''}
@@ -6205,29 +6512,42 @@ async function fetchKakaoPagePetSignal(url) {
   ];
   const cutoff3mo = Date.now() - 90 * 24 * 60 * 60 * 1000;
 
+  // ★ Unicode 이스케이프 디코딩 (\uXXXX → 실제 한국어)
+  function unicodeDecode(str) {
+    try { return str.replace(/\\u([0-9a-fA-F]{4})/g, (_, c) => String.fromCharCode(parseInt(c, 16))); }
+    catch(e) { return str; }
+  }
+
   for (const proxyFn of PROXIES) {
     try {
-      const res = await fetch(proxyFn(url), { signal: AbortSignal.timeout(12000) });
-      if (!res.ok) continue;
-      const html = await res.text();
+      const res = await fetch(proxyFn(url), { signal: AbortSignal.timeout(14000) });
+      if (!res.ok) {
+        if (autoV.running) autoV.proxyFail = (autoV.proxyFail||0)+1;
+        continue;
+      }
+      const rawHtml = await res.text();
+      // 유효한 HTML/JSON 응답인지 확인 (프록시가 오류 페이지 반환하는 경우 필터)
+      if (rawHtml.length < 500) {
+        if (autoV.running) autoV.proxyFail = (autoV.proxyFail||0)+1;
+        continue;
+      }
+      if (autoV.running) autoV.proxyOk = (autoV.proxyOk||0)+1;
+
+      // ★ Unicode 디코딩 적용 (한국어가 \uXXXX로 이스케이프된 경우 대응)
+      const html = unicodeDecode(rawHtml);
 
       // ── 1) __NEXT_DATA__ JSON 파싱 → 날짜 포함 리뷰 데이터 ──
       let recentPetReview = false;
       const ndMatch = html.match(/<script id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/);
       if (ndMatch) {
         try {
-          const nd = JSON.parse(ndMatch[1]);
-          // 카카오맵 내부 구조: props.pageProps 안 어딘가에 댓글/후기 배열이 있음
-          const json = JSON.stringify(nd);
-          // 날짜 패턴 (yyyy-MM-dd 또는 epoch ms) 근처의 펫 키워드 검사
-          // 간단 접근: JSON 전체에서 최근 날짜 문자열 추출 후 그 주변 텍스트에 펫 키워드 있는지
+          const json = unicodeDecode(ndMatch[1]); // JSON도 별도 디코딩
           const datePattern = /\d{4}-\d{2}-\d{2}/g;
           let m;
           while ((m = datePattern.exec(json)) !== null) {
             const d = new Date(m[0]).getTime();
             if (isNaN(d) || d < cutoff3mo) continue;
-            // 날짜 앞뒤 500자 슬라이스에서 펫 키워드 검색
-            const snippet = json.slice(Math.max(0, m.index - 300), m.index + 300);
+            const snippet = json.slice(Math.max(0, m.index - 400), m.index + 400);
             if (PET_REVIEW_KW.some(kw => snippet.includes(kw))) {
               recentPetReview = true;
               break;
@@ -6239,14 +6559,17 @@ async function fetchKakaoPagePetSignal(url) {
       // ── 2) 시설 정보 키워드 (날짜 무관 — 업장이 등록한 정보) ──
       const hasFacilityKw = PET_FACILITY_KW.some(kw => html.includes(kw));
 
-      // ── 3) 폴백: 날짜 파싱 없이 키워드만 (NEXT_DATA 없는 경우) ──
-      const hasAnyReviewKw = !ndMatch && PET_REVIEW_KW.some(kw => html.includes(kw));
+      // ── 3) 전체 HTML에서 펫 키워드 검색 (__NEXT_DATA__ 없는 경우 포함) ──
+      const hasAnyPetKw = PET_REVIEW_KW.some(kw => html.includes(kw)) ||
+                          PET_FACILITY_KW.some(kw => html.includes(kw));
 
-      if (recentPetReview) return { found: true, strong: true };      // 최근 3개월 리뷰 → 검증완료
-      if (hasFacilityKw)   return { found: true, strong: false };     // 시설 명시 → 확인완료
-      if (hasAnyReviewKw)  return { found: true, strong: false };     // 날짜 불명 리뷰 → 확인완료
+      if (recentPetReview) return { found: true, strong: true };   // 최근 3개월 리뷰 → 검증완료
+      if (hasFacilityKw)   return { found: true, strong: false };  // 시설 명시 → 확인완료
+      if (hasAnyPetKw)     return { found: true, strong: false };  // 키워드 발견 → 확인완료
       return { found: false };
-    } catch (e) { /* try next proxy */ }
+    } catch (e) {
+      if (autoV.running) autoV.proxyFail = (autoV.proxyFail||0)+1;
+    }
   }
   return { found: false, error: true };
 }
@@ -6264,6 +6587,85 @@ async function checkRecentMemoryForPlace(placeId) {
   } catch(e) { return false; }
 }
 
+/* ── 채널 2: 카카오 Places SDK 카테고리 직접 조회 (프록시 불필요) ── */
+async function fetchKakaoCategorySignal(placeName, lat, lng) {
+  return new Promise(resolve => {
+    try {
+      if (!window.kakao?.maps?.services?.Places) { resolve({ found: false, skip: true }); return; }
+      const ps = new kakao.maps.services.Places();
+      const timer = setTimeout(() => resolve({ found: false, timeout: true }), 6000);
+      ps.keywordSearch(placeName, (data, status) => {
+        clearTimeout(timer);
+        if (status !== kakao.maps.services.Status.OK || !data.length) {
+          resolve({ found: false }); return;
+        }
+        // 위도/경도 기준으로 가장 가까운 결과 선택
+        let best = null, bestDist = Infinity;
+        data.forEach(d => {
+          const dlat = parseFloat(d.y) - lat;
+          const dlng = parseFloat(d.x) - lng;
+          const dist = Math.sqrt(dlat*dlat + dlng*dlng);
+          if (dist < bestDist) { bestDist = dist; best = d; }
+        });
+        // 반경 500m 이상이면 다른 장소로 판단하고 무시
+        if (!best || bestDist > 0.005) { resolve({ found: false }); return; }
+        const cat = (best.category_name || '').toLowerCase();
+        const PET_CAT_KW = ['애견','펫','반려','dog','동물병원','수의','훈련','그루밍','grooming'];
+        const found = PET_CAT_KW.some(kw => cat.includes(kw));
+        resolve({ found, category: best.category_name });
+      }, {
+        location: new kakao.maps.LatLng(lat, lng),
+        radius: 500,
+        size: 5
+      });
+    } catch(e) { resolve({ found: false, error: true }); }
+  });
+}
+
+/* ── 채널 3: 네이버 블로그 검색 (CORS 프록시 경유) ── */
+async function fetchNaverBlogSignal(placeName) {
+  const PROXIES = [
+    u => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
+    u => `https://corsproxy.io/?${encodeURIComponent(u)}`
+  ];
+  // 6개월 이내 최신 블로그 글 검색
+  const query = encodeURIComponent(`${placeName} 반려견`);
+  const url = `https://search.naver.com/search.naver?where=blog&query=${query}&sort=1&nso=so%3Add%2Cp%3A6m`;
+
+  function unicodeDecodeLocal(str) {
+    try { return str.replace(/\\u([0-9a-fA-F]{4})/g, (_,c) => String.fromCharCode(parseInt(c,16))); }
+    catch(e) { return str; }
+  }
+
+  for (const proxyFn of PROXIES) {
+    try {
+      const res = await fetch(proxyFn(url), { signal: AbortSignal.timeout(12000) });
+      if (!res.ok) continue;
+      const raw = await res.text();
+      if (raw.length < 500) continue;
+      const html = unicodeDecodeLocal(raw);
+      const lower = html.toLowerCase();
+
+      // 검색 결과 없음 패턴 감지
+      const noResult = ['검색결과가 없습니다','결과가 없','일치하는 결과 없음','블로그 검색결과가 없어요']
+        .some(s => lower.includes(s));
+      if (noResult) return { found: false, noResult: true };
+
+      // 장소 이름 + 반려견 키워드 동시 등장
+      const nameLower = placeName.toLowerCase();
+      const PET_BLOG_KW = ['강아지','반려견','반려동물','애견','펫','dog','퍼피','멍멍'];
+      const hasName   = lower.includes(nameLower);
+      const hasPetKw  = PET_BLOG_KW.some(kw => lower.includes(kw));
+
+      if (hasName && hasPetKw) return { found: true, strong: false };
+      // 이름이 없어도 검색 자체에서 반려동물 키워드가 나오면 약한 신호
+      if (hasPetKw && !noResult) return { found: true, strong: false, weak: true };
+      return { found: false };
+    } catch(e) {}
+  }
+  return { found: false, error: true };
+}
+
 /* 자동검증 UI 업데이트 (탭 재렌더링 없이 패널만 갱신) */
 function refreshAutoVerifyPanel() {
   const panelEl = document.getElementById('auto-verify-panel');
@@ -6272,14 +6674,421 @@ function refreshAutoVerifyPanel() {
   panelEl.innerHTML = html || '';
 }
 
-/* 메인 자동검증 함수 */
+/* 스탯 카운터만 실시간 업데이트 (전체 탭 리렌더 없이) */
+function refreshVerifyStats() {
+  const counts = { verified:0, confirmed:0, unverified:0, search:0 };
+  places.filter(p=>p&&p.id!=null).forEach(p => {
+    const s = getPlaceStatus(p);
+    if (counts[s] !== undefined) counts[s]++;
+  });
+  const total = places.filter(p=>p&&p.id!=null).length;
+  const sv = document.getElementById('stat-verified');
+  const sc = document.getElementById('stat-confirmed');
+  const su = document.getElementById('stat-unverified');
+  const ss = document.getElementById('stat-search');
+  const st = document.getElementById('stat-total-text');
+  if (sv) sv.textContent = counts.verified;
+  if (sc) sc.textContent = counts.confirmed;
+  if (su) su.textContent = counts.unverified;
+  if (ss) ss.textContent = counts.search;
+  if (st) st.textContent = `총 ${total}개 장소 · 검증 완료율 ${Math.round((counts.verified+counts.confirmed)/total*100)}%`;
+}
+
+
+// ══════════════════════════════════════════════════════
+//  전국 자동 파이프라인 엔진
+// ══════════════════════════════════════════════════════
+
+/* Firestore에서 파이프라인 상태 로드 */
+async function nwLoadState() {
+  if (!firebaseReady || !db) return;
+  try {
+    const doc = await db.collection('meta').doc(NW_PIPELINE_KEY).get();
+    if (doc.exists) {
+      const d = doc.data();
+      nwPipeline.regionIdx    = d.regionIdx    ?? 0;
+      nwPipeline.regionStatus = d.regionStatus  ?? {};
+      nwPipeline.stats        = d.stats         ?? nwPipeline.stats;
+    }
+  } catch(e) {}
+}
+
+/* Firestore에 파이프라인 상태 저장 */
+async function nwSaveState() {
+  if (!firebaseReady || !db) return;
+  try {
+    await db.collection('meta').doc(NW_PIPELINE_KEY).set({
+      regionIdx:    nwPipeline.regionIdx,
+      regionStatus: nwPipeline.regionStatus,
+      stats:        nwPipeline.stats,
+      updatedAt:    firebase.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
+  } catch(e) {}
+}
+
+/* 특정 지역에서 장소 수집 (Kakao REST) */
+async function nwCollectRegion(region) {
+  const existingKakaoIds = new Set(places.map(p => p.kakaoId).filter(Boolean));
+  const newFound = [];
+  for (const kw of IMP_KWS) {
+    for (let pg = 1; pg <= 3; pg++) {
+      if (nwPipeline.stop) return newFound;
+      try {
+        const url = `https://dapi.kakao.com/v2/local/search/keyword.json?query=${encodeURIComponent(kw)}&x=${region.x}&y=${region.y}&radius=8000&page=${pg}&size=15`;
+        const r = await fetch(url, { headers: { 'Authorization': `KakaoAK ${KAKAO_REST_KEY}` } });
+        if (!r.ok) break;
+        const j = await r.json();
+        if (!j.documents?.length) break;
+        for (const item of j.documents) {
+          if (existingKakaoIds.has(item.id)) continue;
+          if (places.some(p => p.name === item.place_name &&
+            Math.abs(p.lat - parseFloat(item.y)) < 0.001 &&
+            Math.abs(p.lng - parseFloat(item.x)) < 0.001)) continue;
+          existingKakaoIds.add(item.id);
+          newFound.push({
+            name:        item.place_name,
+            lat:         parseFloat(item.y),
+            lng:         parseFloat(item.x),
+            address:     item.road_address_name || item.address_name,
+            phone:       item.phone || '',
+            kakaoUrl:    item.place_url || '',
+            kakaoId:     item.id,
+            category:    impMapCat(item.category_name),
+            confirmed:   impCatConfirmed(item.category_name),
+            area:        region.name,
+            province:    region.province,
+            status:      impCatConfirmed(item.category_name) ? 'confirmed' : 'unverified',
+            source:      'auto_pipeline',
+            addedAt:     new Date().toISOString(),
+          });
+        }
+        if (j.meta?.is_end) break;
+        await new Promise(r => setTimeout(r, 200));
+      } catch(e) { break; }
+    }
+  }
+  return newFound;
+}
+
+/* 수집된 장소를 Firestore에 저장 */
+async function nwSavePlacesToFirestore(newPlaces) {
+  if (!firebaseReady || !db || !newPlaces.length) return 0;
+  const batch = db.batch();
+  let count = 0;
+  for (const p of newPlaces) {
+    const ref = db.collection('places').doc();
+    batch.set(ref, { ...p, id: ref.id });
+    count++;
+    if (count % 450 === 0) { await batch.commit(); }
+  }
+  try { await batch.commit(); } catch(e) {}
+  return count;
+}
+
+/* 전국 단계1 검증: kakaoUrl로 장소 확인 */
+async function nwVerifyStage1Region(regionName) {
+  const targets = places.filter(p =>
+    (p.province === regionName || p.area === regionName) &&
+    getPlaceStatus(p) === 'unverified' && p.kakaoUrl
+  );
+  let upgraded = 0;
+  for (const p of targets) {
+    if (nwPipeline.stop) break;
+    try {
+      const r = await fetch(`https://dapi.kakao.com/v2/local/search/keyword.json?query=${encodeURIComponent(p.name)}&x=${p.lng}&y=${p.lat}&radius=500&size=5`,
+        { headers: { 'Authorization': `KakaoAK ${KAKAO_REST_KEY}` } });
+      if (r.ok) {
+        const j = await r.json();
+        if (j.documents?.some(d => d.id === p.kakaoId || d.place_name === p.name)) {
+          await updatePlaceStatus(p.id, 'confirmed');
+          upgraded++;
+        }
+      }
+    } catch(e) {}
+    await new Promise(r => setTimeout(r, 250));
+  }
+  return upgraded;
+}
+
+/* 전국 단계2 검증: 30일 내 완료된 곳은 스킵 */
+async function nwVerifyStage2Region(regionName) {
+  const THIRTY_DAYS = 30 * 24 * 60 * 60 * 1000;
+  const now = Date.now();
+
+  // 이 지역의 장소 중 verified 아닌 것만, 단 30일 내 v2 완료된 곳 스킵
+  const regionKey = regionName;
+  const regionSt  = nwPipeline.regionStatus[regionKey] || {};
+  const lastV2    = regionSt.lastV2 ? new Date(regionSt.lastV2).getTime() : 0;
+
+  let targets = places.filter(p =>
+    (p.province === regionName || p.area === regionName) &&
+    getPlaceStatus(p) !== 'verified' &&
+    p.kakaoUrl
+  );
+
+  // 장소별 lastVerifiedAt 체크 (Firestore에 저장된 경우)
+  let upgraded = 0, skipped = 0;
+  for (const p of targets) {
+    if (nwPipeline.stop) break;
+
+    // 장소별 30일 스킵 체크
+    const placeV2At = p.lastV2At ? new Date(p.lastV2At).getTime() : 0;
+    if (now - placeV2At < THIRTY_DAYS) { skipped++; continue; }
+
+    // 최근 방문 기록 체크
+    const hasMemory = await checkRecentMemoryForPlace(p.id);
+    if (hasMemory) {
+      await updatePlaceStatus(p.id, 'verified');
+      upgraded++;
+    } else if (p.kakaoUrl) {
+      const result = await fetchKakaoPagePetSignal(p.kakaoUrl);
+      if (result.found) {
+        const newStatus = result.strong ? 'verified' : 'confirmed';
+        const currentStatus = getPlaceStatus(p);
+        const rank = { unverified: 0, confirmed: 1, verified: 2 };
+        if ((rank[newStatus] ?? 0) > (rank[currentStatus] ?? 0)) {
+          await updatePlaceStatus(p.id, newStatus);
+          upgraded++;
+        }
+      }
+      // lastV2At 업데이트
+      if (firebaseReady && db) {
+        db.collection('places').doc(String(p.id))
+          .update({ lastV2At: new Date().toISOString() }).catch(()=>{});
+      }
+    }
+    nwPipeline.stats.v2Done++;
+    await new Promise(r => setTimeout(r, 400));
+  }
+  nwPipeline.stats.v2Skipped += skipped;
+  return { upgraded, skipped };
+}
+
+/* 전체 파이프라인 실행 */
+async function runNationwidePipeline() {
+  if (nwPipeline.running) return;
+  await nwLoadState();
+
+  nwPipeline.running = true;
+  nwPipeline.stop    = false;
+  nwPipeline.phase   = 'collect';
+  renderNationwidePipelineUI();
+
+  const total = NATIONWIDE_REGIONS.length;
+
+  for (let i = nwPipeline.regionIdx; i < total; i++) {
+    if (nwPipeline.stop) break;
+    const region = NATIONWIDE_REGIONS[i];
+    const rKey   = region.province + '_' + region.name;
+    nwPipeline.regionIdx = i;
+
+    // ── 1단계: 장소 수집 ──────────────────────────────
+    nwPipeline.phase = 'collect';
+    nwUpdateLog(`📍 [${i+1}/${total}] ${region.province} ${region.name} — 수집 시작`);
+    renderNationwidePipelineUI();
+
+    const newPlaces = await nwCollectRegion(region);
+    if (newPlaces.length) {
+      await nwSavePlacesToFirestore(newPlaces);
+      nwPipeline.stats.collected += newPlaces.length;
+      // places 배열에도 추가
+      places.push(...newPlaces);
+    }
+    nwUpdateLog(`  ✅ 수집 ${newPlaces.length}개`);
+
+    if (!nwPipeline.regionStatus[rKey]) nwPipeline.regionStatus[rKey] = {};
+    nwPipeline.regionStatus[rKey].lastCollect = new Date().toISOString();
+    nwPipeline.regionStatus[rKey].collected   = (nwPipeline.regionStatus[rKey].collected || 0) + newPlaces.length;
+
+    await new Promise(r => setTimeout(r, 300));
+    if (nwPipeline.stop) break;
+
+    // ── 2단계: 1단계 검증 ─────────────────────────────
+    nwPipeline.phase = 'verify1';
+    nwUpdateLog(`  🔍 1단계 검증 중...`);
+    renderNationwidePipelineUI();
+
+    const v1up = await nwVerifyStage1Region(region.name);
+    nwPipeline.stats.v1Done += v1up;
+    nwPipeline.regionStatus[rKey].lastV1 = new Date().toISOString();
+    nwUpdateLog(`  ✅ 1단계 ${v1up}개 업그레이드`);
+
+    await new Promise(r => setTimeout(r, 300));
+    if (nwPipeline.stop) break;
+
+    // ── 3단계: 2단계 검증 (30일 스킵) ────────────────
+    nwPipeline.phase = 'verify2';
+    nwUpdateLog(`  🤖 2단계 검증 중 (30일 내 완료된 곳 스킵)...`);
+    renderNationwidePipelineUI();
+
+    const { upgraded: v2up, skipped: v2sk } = await nwVerifyStage2Region(region.name);
+    nwPipeline.stats.upgraded += v2up;
+    nwPipeline.regionStatus[rKey].lastV2 = new Date().toISOString();
+    nwUpdateLog(`  ✅ 2단계 ${v2up}개 업그레이드 (${v2sk}개 스킵)`);
+
+    // 진행 상태 저장 (매 지역 완료 시)
+    nwPipeline.regionIdx = i + 1;
+    await nwSaveState();
+    renderNationwidePipelineUI();
+
+    await new Promise(r => setTimeout(r, 500));
+  }
+
+  // 전체 완료 또는 중단
+  if (nwPipeline.regionIdx >= total && !nwPipeline.stop) {
+    nwPipeline.phase = 'done';
+    nwPipeline.regionIdx = 0; // 다음 실행 시 처음부터
+    await nwSaveState();
+    nwUpdateLog(`🎉 전국 파이프라인 완료! 수집 ${nwPipeline.stats.collected}개 / 업그레이드 ${nwPipeline.stats.upgraded}개`);
+    showToast('🎉 전국 파이프라인 완료!', 5000);
+    invalidatePlacesCache();
+  } else {
+    nwUpdateLog(`⏸ 일시 중단됨 (${nwPipeline.regionIdx}/${total} 완료)`);
+  }
+
+  nwPipeline.running = false;
+  renderNationwidePipelineUI();
+}
+
+function nwUpdateLog(msg) {
+  nwPipeline.log.unshift(`[${new Date().toLocaleTimeString('ko-KR')}] ${msg}`);
+  if (nwPipeline.log.length > 80) nwPipeline.log.pop();
+}
+
+function stopNationwidePipeline() {
+  nwPipeline.stop = true;
+  nwUpdateLog('⏸ 중단 요청됨...');
+  renderNationwidePipelineUI();
+}
+
+function resetNationwidePipeline() {
+  if (nwPipeline.running) return;
+  nwPipeline.regionIdx = 0;
+  nwPipeline.stats = { collected: 0, v1Done: 0, v2Done: 0, v2Skipped: 0, upgraded: 0 };
+  nwPipeline.log = [];
+  nwSaveState();
+  renderNationwidePipelineUI();
+}
+
+/* 관리자 패널 열릴 때 자동시작 체크 */
+async function nwCheckAutoStart() {
+  if (!firebaseReady || !db) return;
+  await nwLoadState();
+  const total = NATIONWIDE_REGIONS.length;
+  const remaining = total - (nwPipeline.regionIdx || 0);
+  if (remaining > 0 && nwPipeline.regionIdx > 0) {
+    // 미완료 지역 있음 → 알림 배너 표시
+    showNwResumeBanner(remaining, total);
+  }
+}
+
+function showNwResumeBanner(remaining, total) {
+  const existingBanner = document.getElementById('nw-resume-banner');
+  if (existingBanner) return;
+  const banner = document.createElement('div');
+  banner.id = 'nw-resume-banner';
+  banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:9999;background:#1F2937;color:#fff;padding:10px 16px;display:flex;align-items:center;gap:12px;font-size:13px;font-family:inherit';
+  banner.innerHTML = `
+    <span>🌍 전국 파이프라인 ${total - remaining}/${total} 지역 완료. 이어서 실행할까요?</span>
+    <button onclick="document.getElementById('nw-resume-banner').remove(); switchAdminTab(document.querySelector('[data-tab=verify]'),'verify'); setTimeout(()=>{ document.getElementById('nw-auto-tab-btn')?.click(); },300);"
+      style="background:#F07030;color:#fff;border:none;border-radius:16px;padding:5px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">
+      ▶ 이어서 실행
+    </button>
+    <button onclick="document.getElementById('nw-resume-banner').remove()"
+      style="background:none;border:none;color:#9CA3AF;font-size:20px;cursor:pointer;margin-left:auto">×</button>
+  `;
+  document.body.appendChild(banner);
+}
+
+/* 전국 파이프라인 UI 렌더 */
+function renderNationwidePipelineUI() {
+  const el = document.getElementById('nw-pipeline-panel');
+  if (!el) return;
+
+  const total   = NATIONWIDE_REGIONS.length;
+  const done    = nwPipeline.regionIdx;
+  const pct     = Math.round(done / total * 100);
+  const current = NATIONWIDE_REGIONS[Math.min(done, total-1)];
+  const phaseLabel = { idle:'대기', collect:'📍 수집 중', verify1:'🔍 1단계 검증', verify2:'🤖 2단계 검증', done:'✅ 완료' };
+
+  // 시/도별 진행 현황
+  const provinceMap = {};
+  NATIONWIDE_REGIONS.forEach((r, idx) => {
+    if (!provinceMap[r.province]) provinceMap[r.province] = { total: 0, done: 0 };
+    provinceMap[r.province].total++;
+    if (idx < done) provinceMap[r.province].done++;
+  });
+  const provHtml = Object.entries(provinceMap).map(([prov, s]) => {
+    const pct2 = Math.round(s.done / s.total * 100);
+    const color = pct2 === 100 ? '#A8D86E' : pct2 > 0 ? '#F07030' : '#E5E7EB';
+    return `<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
+      <div style="width:48px;font-size:11px;font-weight:700;color:#374151">${prov}</div>
+      <div style="flex:1;height:8px;background:#F3F4F6;border-radius:4px;overflow:hidden">
+        <div style="height:100%;background:${color};width:${pct2}%;transition:width .3s"></div>
+      </div>
+      <div style="font-size:10px;color:#9CA3AF;width:36px;text-align:right">${s.done}/${s.total}</div>
+    </div>`;
+  }).join('');
+
+  el.innerHTML = `
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+      ${!nwPipeline.running
+        ? `<button onclick="runNationwidePipeline()" style="padding:9px 18px;background:#F07030;color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">
+            ${done > 0 && done < total ? '▶ 이어서 실행' : '▶ 전국 파이프라인 시작'}
+           </button>
+           ${done > 0 ? `<button onclick="resetNationwidePipeline()" style="padding:9px 14px;background:#F5F5F5;color:#555;border:none;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">🔄 처음부터</button>` : ''}`
+        : `<button onclick="stopNationwidePipeline()" style="padding:9px 18px;background:#EF4444;color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">⏸ 중단</button>`
+      }
+    </div>
+
+    <div style="background:#F9FAFB;border-radius:10px;padding:12px;margin-bottom:12px">
+      <div style="display:flex;justify-content:space-between;margin-bottom:6px">
+        <span style="font-size:13px;font-weight:700;color:#1F2937">
+          ${nwPipeline.running ? phaseLabel[nwPipeline.phase] + ' — ' + (current?.province||'') + ' ' + (current?.name||'') : (done >= total ? '✅ 전국 완료' : `${done}/${total} 지역 완료`)}
+        </span>
+        <span style="font-size:12px;color:#9CA3AF">${pct}%</span>
+      </div>
+      <div style="height:8px;background:#E5E7EB;border-radius:4px;overflow:hidden">
+        <div style="height:100%;background:#F07030;width:${pct}%;transition:width .3s"></div>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px">
+      ${[['수집', nwPipeline.stats.collected,'#3B82F6'],['1단계↑',nwPipeline.stats.v1Done,'#A8D86E'],['2단계↑',nwPipeline.stats.upgraded,'#F07030'],['스킵',nwPipeline.stats.v2Skipped,'#9CA3AF']].map(([l,v,c])=>
+        `<div style="background:#fff;border-radius:8px;padding:8px;text-align:center;box-shadow:0 1px 4px rgba(0,0,0,.06)">
+          <div style="font-size:18px;font-weight:800;color:${c}">${v}</div>
+          <div style="font-size:10px;color:#9CA3AF;font-weight:600">${l}</div>
+        </div>`
+      ).join('')}
+    </div>
+
+    <div style="margin-bottom:12px">
+      <div style="font-size:12px;font-weight:700;color:#374151;margin-bottom:8px">시/도별 진행현황</div>
+      ${provHtml}
+    </div>
+
+    <div style="background:#1F2937;border-radius:8px;padding:10px;max-height:160px;overflow-y:auto">
+      <div style="font-size:10px;font-weight:700;color:#9CA3AF;margin-bottom:6px">실행 로그</div>
+      ${nwPipeline.log.map(l=>`<div style="font-size:11px;color:#D1D5DB;line-height:1.6;font-family:monospace">${l}</div>`).join('') || '<div style="font-size:11px;color:#6B7280">로그가 없어요</div>'}
+    </div>
+  `;
+}
+
+/* 메인 자동검증 함수 (기존 장소 대상, 30일 내 완료된 곳 스킵) */
 async function runAutoStage2Verify() {
   if (autoV.running) return;
 
-  // 대상: verified 제외한 모든 kakaoUrl 보유 장소
-  const targets = places.filter(p =>
-    p && p.id != null && p.kakaoUrl && getPlaceStatus(p) !== 'verified'
-  );
+  const THIRTY_DAYS = 30 * 24 * 60 * 60 * 1000;
+  const SYNC_BATCH_SIZE = 100; // ★ 100개 검증마다 Firestore 자동 동기화
+  const now = Date.now();
+
+  // 대상: verified 제외 + 30일 내 2단계 완료된 곳 스킵
+  const targets = places.filter(p => {
+    if (!p || p.id == null || !p.kakaoUrl) return false;
+    if (getPlaceStatus(p) === 'verified') return false;
+    const lastV2 = p.lastV2At ? new Date(p.lastV2At).getTime() : 0;
+    return now - lastV2 >= THIRTY_DAYS;
+  });
   // kakaoUrl 없는 장소도 메모리 체크는 가능
   const noUrlTargets = places.filter(p =>
     p && p.id != null && !p.kakaoUrl && getPlaceStatus(p) !== 'verified'
@@ -6288,54 +7097,122 @@ async function runAutoStage2Verify() {
   const allTargets = [...targets, ...noUrlTargets];
   if (!allTargets.length) { showToast('검증할 장소가 없어요'); return; }
 
-  autoV = { running: true, stop: false, total: allTargets.length, done: 0, upgraded: 0, cur: '', log: [] };
+  const urlCount = targets.length;
+  const noUrlCount = noUrlTargets.length;
+  autoV = {
+    running: true, stop: false, total: allTargets.length, done: 0, upgraded: 0,
+    cur: '', log: [], pendingSync: [], synced: 0,
+    urlCount, noUrlCount,
+    // 채널별 진단 카운터
+    ch_local: 0, ch_memory: 0, ch_kakaoSdk: 0, ch_naver: 0, ch_kakaoPage: 0,
+    proxyOk: 0, proxyFail: 0
+  };
   renderVerifyTab();
+
+  /* 대기 중인 변경사항을 Firestore에 일괄 저장 */
+  async function flushPendingSync() {
+    if (!autoV.pendingSync.length) return;
+    const toFlush = autoV.pendingSync.splice(0);
+    if (firebaseReady && db) {
+      const CHUNK = 400;
+      for (let i = 0; i < toFlush.length; i += CHUNK) {
+        const batch = db.batch();
+        toFlush.slice(i, i + CHUNK).forEach(({ place, status, nowStr }) => {
+          if (place.firestoreId)
+            batch.update(db.collection('places').doc(place.firestoreId), { petStatus: status, lastV2At: nowStr });
+        });
+        await batch.commit();
+      }
+    }
+    autoV.synced += toFlush.length;
+    invalidatePlacesCache();
+    refreshVerifyStats();
+    refreshAutoVerifyPanel();
+  }
+
+  const statusRank = { search: 0, unverified: 0, confirmed: 1, verified: 2 };
+
+  /* 점수가 더 높은 상태 선택 */
+  function pickBetter(a, b) {
+    return (statusRank[b]??-1) > (statusRank[a]??-1) ? b : a;
+  }
 
   for (const p of allTargets) {
     if (autoV.stop) break;
-
     autoV.cur = p.name;
     refreshAutoVerifyPanel();
 
     const currentStatus = getPlaceStatus(p);
     let newStatus = null;
 
-    // 1) Firestore 최근 방문 기록 → 검증완료
-    const hasMemory = await checkRecentMemoryForPlace(p.id);
-    if (hasMemory) {
-      newStatus = 'verified';
-    } else if (p.kakaoUrl) {
-      // 2) 카카오맵 페이지 스크래핑
-      const result = await fetchKakaoPagePetSignal(p.kakaoUrl);
-      if (result.found) {
-        // 시설 정보에 반려견동반 명시 → 확인완료 (검증완료보다 한 단계 낮음)
-        // 리뷰에도 있으면 검증완료
-        newStatus = result.strong ? 'verified' : 'confirmed';
+    // ── 채널 1: 로컬 이름/카테고리 체크 (즉시, 네트워크 없음) ────
+    const localText = ((p.name||'') + ' ' + (p.cat||'')).toLowerCase();
+    if (PET_KW_LOCAL.some(kw => localText.includes(kw.toLowerCase()))) {
+      newStatus = 'confirmed';
+      autoV.ch_local++;
+    }
+
+    // ── 채널 2·3·4: 네트워크 체크 병렬 실행 ──────────────────────
+    // (이미 verified 아닌 경우만, 불필요한 요청 방지)
+    if (newStatus !== 'verified') {
+      const [memRes, sdkRes, naverRes, kakaoPageRes] = await Promise.all([
+        // 채널 2: Firestore 방문 기록
+        checkRecentMemoryForPlace(p.id),
+        // 채널 3: 카카오 SDK 카테고리 (프록시 불필요)
+        fetchKakaoCategorySignal(p.name, p.lat, p.lng),
+        // 채널 4: 네이버 블로그 검색
+        fetchNaverBlogSignal(p.name),
+        // 채널 5: 카카오맵 페이지 스크래핑 (kakaoUrl 없으면 스킵)
+        p.kakaoUrl ? fetchKakaoPagePetSignal(p.kakaoUrl) : Promise.resolve({ found: false })
+      ]);
+
+      // 각 채널 결과 반영 (더 높은 등급으로만 업그레이드)
+      if (memRes)           { newStatus = pickBetter(newStatus, 'verified');  autoV.ch_memory++; }
+      if (sdkRes.found)     { newStatus = pickBetter(newStatus, 'confirmed'); autoV.ch_kakaoSdk++; }
+      if (naverRes.found)   { newStatus = pickBetter(newStatus, 'confirmed'); autoV.ch_naver++; }
+      if (kakaoPageRes.found) {
+        const cand = kakaoPageRes.strong ? 'verified' : 'confirmed';
+        newStatus = pickBetter(newStatus, cand);
+        autoV.ch_kakaoPage++;
       }
     }
 
-    // 현재보다 높은 등급으로 올라갈 때만 업데이트
-    const statusRank = { search: 0, unverified: 0, confirmed: 1, verified: 2 };
-    if (newStatus && (statusRank[newStatus] ?? 0) > (statusRank[currentStatus] ?? 0)) {
-      await updatePlaceStatus(p.id, newStatus);
+    // ── 최종: 현재보다 높은 등급일 때만 적용 ────────────────────
+    if (newStatus && (statusRank[newStatus]??0) > (statusRank[currentStatus]??0)) {
+      const nowStr = new Date().toISOString();
+      p.petStatus = newStatus;
+      p.lastV2At  = nowStr;
+      // 마커 색 즉시 반영
+      const info = markers[p.id];
+      if (info) {
+        const color = STATUS_COLORS[newStatus] || STATUS_COLORS.unverified;
+        info.color = color;
+        const el = info.marker.getElement();
+        if (info.isHeart) {
+          const heart = el?.querySelector('.m-heart'); if (heart) heart.style.color = color;
+        } else {
+          const dot = el?.querySelector('.m-dot'); if (dot) dot.style.background = color;
+        }
+      }
       autoV.upgraded++;
-      autoV.log.unshift({ name: p.name, status: newStatus, area: p.area || '' });
+      autoV.log.unshift({ name: p.name, status: newStatus, area: p.area||'' });
       if (autoV.log.length > 50) autoV.log.pop();
+      autoV.pendingSync.push({ place: p, status: newStatus, nowStr });
+      if (autoV.pendingSync.length >= SYNC_BATCH_SIZE) await flushPendingSync();
     }
 
     autoV.done++;
     refreshAutoVerifyPanel();
-
-    // 요청 간격 (CORS 프록시 과부하 방지)
-    await new Promise(r => setTimeout(r, 400));
+    // 병렬 요청이 있을 경우 간격을 살짝 줌 (프록시 부하 방지)
+    await new Promise(r => setTimeout(r, 300));
   }
 
+  await flushPendingSync();
   autoV.running = false;
   autoV.cur = '';
-  const upgraded = autoV.upgraded;
   invalidatePlacesCache();
   renderVerifyTab();
-  showToast(`🤖 2단계 검증 완료 — ${upgraded}개 업그레이드!`, 4000);
+  showToast(`🤖 2단계 검증 완료 — ${autoV.upgraded}개 업그레이드 · ${autoV.synced}개 저장!`, 4000);
 }
 
 // ══════════════════════════════════════════════════════
@@ -6363,9 +7240,20 @@ function showToast(msg, duration=2600) {
 // ══════════════════════════════════════════════════════
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') {
-    if (document.getElementById('submit-modal').classList.contains('open')) closeModal('submit-modal');
-    else if (document.getElementById('notice-modal').classList.contains('open')) closeModal('notice-modal');
-    else if (activePlace) closeDrawer();
+    // 모달 역순으로 닫기 (가장 최근에 열린 것 먼저)
+    const legendOverlay = document.getElementById('legend-help-overlay');
+    const iosOverlay    = document.getElementById('ios-install-overlay');
+    if (iosOverlay)                                                        { iosOverlay.remove(); return; }
+    if (legendOverlay?.classList.contains('open'))                         { legendOverlay.classList.remove('open'); return; }
+    if (document.getElementById('feedback-modal').classList.contains('open')) { closeFeedbackModal(); return; }
+    if (document.getElementById('memory-modal').classList.contains('open'))   { closeModal('memory-modal'); return; }
+    if (document.getElementById('submit-modal').classList.contains('open'))   { closeModal('submit-modal'); return; }
+    if (document.getElementById('notice-modal').classList.contains('open'))   { closeModal('notice-modal'); return; }
+    // 추억 패널 / 목록 패널 닫기
+    const memPanel = document.getElementById('memories-panel');
+    const sidebar  = document.getElementById('sidebar');
+    if (memPanel?.classList.contains('mobile-open') || sidebar?.classList.contains('mobile-open')) { setMobileTab('map'); return; }
+    if (activePlace) closeDrawer();
   }
 });
 
