@@ -7949,6 +7949,9 @@ async function nwCollectRegion(region) {
           if (places.some(p => p.name === item.place_name &&
             Math.abs(p.lat - parseFloat(item.y)) < 0.001 &&
             Math.abs(p.lng - parseFloat(item.x)) < 0.001)) continue;
+          // 방어적 필터: 카테고리 코드가 맞아도 서브카테고리에 비관련 항목 혼입 방지
+          const _excCatCheck = item.category_name || '';
+          if (['동물병원','수의','반려동물 용품','반려동물용품','애견용품','애견미용','펫샵'].some(x => _excCatCheck.includes(x))) continue;
           existingKakaoIds.add(item.id);
           const _cat = impMapCat(item.category_name);
           newFound.push({
@@ -8107,15 +8110,21 @@ async function nwVerifyStage2Region(regionName) {
   const pickBetter = (a, b) => (statusRank[b]??-1) > (statusRank[a]??-1) ? b : a;
 
   // kakaoUrl 없는 장소도 포함 (메모리·카카오SDK 체크 가능)
-  const allTargets = places.filter(p => {
+  // 먼저 이 지역의 검증 대상 후보 전체 (verified/rejected 제외)
+  const regionCandidates = places.filter(p => {
     if (!p || p.id == null) return false;
     if (p.province !== regionName && p.area !== regionName) return false;
     const st = getPlaceStatus(p);
     if (st === 'verified') return false;  // 이미 검증완료
     if (st === 'rejected') return false;  // 펫 비적합 판정 — 재검사 제외
+    return true;
+  });
+  // 30일 이내에 처리된 곳은 스킵 — skipped 카운트 계산
+  const allTargets = regionCandidates.filter(p => {
     const placeV2At = p.lastV2At ? new Date(p.lastV2At).getTime() : 0;
     return (now - placeV2At >= THIRTY_DAYS);
   });
+  const skippedCount = regionCandidates.length - allTargets.length;
 
   let upgraded = 0;
   const pendingBatch = [];
@@ -8138,8 +8147,10 @@ async function nwVerifyStage2Region(regionName) {
     }
 
     // ── 채널2~5: 네트워크 병렬 실행 ──
+    // 스코프를 함수 레벨로 선언 — rejected 판단에서도 참조 가능
+    let memRes = false, sdkRes = null, naverRes = null, kakaoPageRes = null;
     if (newStatus !== 'verified') {
-      const [memRes, sdkRes, naverRes, kakaoPageRes] = await Promise.all([
+      [memRes, sdkRes, naverRes, kakaoPageRes] = await Promise.all([
         checkRecentMemoryForPlace(p.id),
         fetchKakaoCategorySignal(p.name, p.lat, p.lng),
         fetchNaverBlogSignal(p.name),
@@ -8195,7 +8206,7 @@ async function nwVerifyStage2Region(regionName) {
   await Promise.all(Array.from({ length: CONCURRENT }, _worker));
 
   await flush();
-  return { upgraded, skipped: 0 };
+  return { upgraded, skipped: skippedCount };
 }
 
 /* 전체 파이프라인 실행 */
@@ -8262,6 +8273,7 @@ async function runNationwidePipeline() {
 
     const { upgraded: v2up, skipped: v2sk } = await nwVerifyStage2Region(region.name);
     nwPipeline.stats.upgraded += v2up;
+    nwPipeline.stats.v2Skipped += v2sk;
     nwPipeline.regionStatus[rKey].lastV2 = new Date().toISOString();
     nwUpdateLog(`  ✅ 2단계 ${v2up}개 업그레이드 (${v2sk}개 스킵)`);
 
