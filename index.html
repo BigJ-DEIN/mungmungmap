@@ -3680,9 +3680,11 @@ function doLiveSearch() {
   const viewKmH = latDiff * 111;  // 위도 1° ≈ 111km
   const viewMaxKm = Math.max(viewKmW, viewKmH);
 
-  // gridN × gridN 포인트: 줌인일수록 밀집도가 높으므로 최소 2×2 보장
-  const gridN = viewMaxKm <= 2.0 ? 2   // 줌인/소규모: 2×2 (기존 1×1 → 개선)
-              : 3;                      // 광역 뷰포트: 3×3
+  // gridN × gridN 포인트: 줌인일수록 셀 반경↓ → 각 셀 내 장소 수↓ → 뒤에 밀려 누락 방지
+  // 핵심: 4×4 = 셀 반경 절반 → 카카오 결과 앞페이지에 목표 장소 진입 확률↑
+  const gridN = viewMaxKm <= 2.0 ? 4   // 줌인/밀집 지역: 4×4 (2×2 → 개선)
+              : viewMaxKm <= 5.0 ? 3   // 중간 뷰포트:   3×3
+              : 2;                     // 광역 뷰포트:   2×2
 
   // 그리드 중심 좌표 배열
   const gridPoints = [];
@@ -3871,11 +3873,11 @@ async function renderLiveResults(rawData) {
                  !_excludedKakaoIds.has(String(d.id))) // 블랙리스트 제외
     .map((d, i) => ({ ...d, _idx: i }));
 
-  // 즉시 목록·지도 표시 (처리 전 미리보기) — 홍시 프로필로 수집 중 표시
+  // 즉시 목록·지도 표시 (처리 전 미리보기) — 하늘색 원으로 수집 중 표시
   liveData.forEach(d => {
     const lat = parseFloat(d.y), lng = parseFloat(d.x);
-    const pinHtml = `<div class="hongsi-search-pin"><img src="icon-192.png" alt="홍시"></div>`;
-    const icon = L.divIcon({ html: pinHtml, className:'', iconSize:[28,28], iconAnchor:[14,14] });
+    const dotHtml = `<div style="width:12px;height:12px;border-radius:50%;background:#87CEEB;border:2px solid white;box-shadow:0 1px 4px rgba(0,0,0,.25)"></div>`;
+    const icon = L.divIcon({ html: dotHtml, className:'', iconSize:[12,12], iconAnchor:[6,6] });
     const m = L.marker([lat, lng], { icon }).addTo(map).on('click', () => showLivePopup(d, false));
     if (d.id) liveMarkers[d.id] = m;
   });
@@ -4537,22 +4539,38 @@ async function showSearchSuggestions(query) {
       const current = document.getElementById('search-input')?.value.trim();
       if (!current || current.toLowerCase() !== q) return;
       try {
-        const resp = await fetch(
-          `https://dapi.kakao.com/v2/local/search/address.json?query=${encodeURIComponent(query)}&size=5`,
-          { headers: { 'Authorization': `KakaoAK ${KAKAO_REST_KEY}` } }
-        );
-        if (!resp.ok) throw new Error();
-        const json = await resp.json();
-        let docs = (json.documents || []).filter(d => d.y && d.x);
-        // 결과 없으면 keyword search 시도
-        if (!docs.length) {
-          const resp2 = await fetch(
-            `https://dapi.kakao.com/v2/local/search/keyword.json?query=${encodeURIComponent(query)}&size=5`,
+        // keyword(장소명 전국 검색) + address(지역/주소) 병렬 실행
+        // → 장소명 검색은 위치 무관 전국 검색 (카카오맵 앱과 동일하게 상호명으로 검색)
+        // → 주소 검색은 지역명·동네 이동용
+        const [kwResp, addrResp] = await Promise.allSettled([
+          fetch(
+            `https://dapi.kakao.com/v2/local/search/keyword.json?query=${encodeURIComponent(query)}&size=15`,
             { headers: { 'Authorization': `KakaoAK ${KAKAO_REST_KEY}` } }
-          );
-          const json2 = await resp2.json();
-          docs = (json2.documents || []).filter(d => d.y && d.x);
+          ),
+          fetch(
+            `https://dapi.kakao.com/v2/local/search/address.json?query=${encodeURIComponent(query)}&size=5`,
+            { headers: { 'Authorization': `KakaoAK ${KAKAO_REST_KEY}` } }
+          )
+        ]);
+
+        let kwDocs = [], addrDocs = [];
+        if (kwResp.status === 'fulfilled' && kwResp.value.ok) {
+          const j = await kwResp.value.json();
+          kwDocs = (j.documents || []).filter(d => d.y && d.x && d.place_name);
         }
+        if (addrResp.status === 'fulfilled' && addrResp.value.ok) {
+          const j = await addrResp.value.json();
+          addrDocs = (j.documents || []).filter(d => d.y && d.x);
+        }
+
+        // place_name 있는 것은 장소, 없는 것은 주소 → 합산 후 중복 제거
+        const seenKeys = new Set();
+        let docs = [...kwDocs, ...addrDocs].filter(d => {
+          const k = (d.place_name || d.address_name || '') + '|' + d.x + '|' + d.y;
+          if (seenKeys.has(k)) return false;
+          seenKeys.add(k); return true;
+        });
+
         if (!docs.length) {
           const b = document.getElementById('search-suggestions');
           if (b?.querySelector('#sg-searching')) {
