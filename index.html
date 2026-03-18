@@ -21,6 +21,12 @@
   <!-- ★ API 키 설정 필요: developers.kakao.com → 내 애플리케이션 → JavaScript 키 입력 -->
   <script>
     window.KAKAO_JS_KEY = '8636f71c9fd0f4b857622a9ba0be7dcb';
+    // PWA 서비스 워커 등록 (홈화면 추가 프롬프트 활성화에 필요)
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js').catch(() => {});
+      });
+    }
     // PWA 홈화면 추가 - beforeinstallprompt 이벤트 가능한 빨리 캡처
     window._pwaInstallPrompt = null;
     window.addEventListener('beforeinstallprompt', e => {
@@ -1147,7 +1153,7 @@
       <label style="display:flex; align-items:center; gap:8px; font-size:13px; color:#666; cursor:pointer; user-select:none">
         <input type="checkbox" id="chk-homescreen" checked
           style="width:16px;height:16px;accent-color:#F07030;cursor:pointer;">
-        <span>📲 홍시의 대동여지도를 홈화면에 추가할게요</span>
+        <span>📲 뭉뭉맵을 홈화면에 추가할게요</span>
       </label>
     </div>
     <button class="btn-login" id="auth-btn" onclick="doAuth()">로그인하고 시작하기</button>
@@ -1172,6 +1178,7 @@
     </div>
     <div class="user-badge" id="user-badge" onclick="showUserMenu()">
       <span id="user-initial">?</span>
+      <img id="user-badge-img" src="" alt="" style="display:none;width:32px;height:32px;border-radius:50%;object-fit:cover;position:absolute;top:0;left:0">
       <div class="notif-dot" id="notif-dot"></div>
     </div>
     <button class="hdr-btn admin-btn" id="admin-btn" style="display:none" onclick="openAdminPanel()">관리자</button>
@@ -1448,6 +1455,9 @@
     </button>
     <button class="mtab" id="tab-report" onclick="openSubmitModal()">
       <i class="fa fa-plus-circle"></i>제보
+    </button>
+    <button class="mtab" id="tab-install" onclick="onInstallTabClick()" title="홈화면에 추가">
+      <i class="fa fa-mobile" style="font-size:22px"></i>바로가기
     </button>
   </div>
 </div>
@@ -1952,6 +1962,7 @@ async function loadUserDogProfile(uid) {
     const doc = await db.collection('users').doc(uid).get();
     if (doc.exists && doc.data().dog) {
       currentDog = doc.data().dog;
+      updateUserBadge(); // 강아지 사진/이름 첫 글자로 뱃지 갱신
     }
   } catch(e) {}
 }
@@ -1968,8 +1979,18 @@ async function doLogout() {
   location.reload();
 }
 
-function showUserMenu() {
+async function showUserMenu() {
   if (!currentUser) return;
+  // currentDog 미로드 상태면 Firestore에서 다시 가져오기
+  if (!currentDog && firebaseReady && db) {
+    try {
+      const doc = await db.collection('users').doc(currentUser.uid).get();
+      if (doc.exists && doc.data().dog) {
+        currentDog = doc.data().dog;
+        updateUserBadge();
+      }
+    } catch(e) {}
+  }
   const dog = currentDog;
   const dogPhotoHTML = dog?.photoURL
     ? `<img src="${dog.photoURL}" id="profile-dog-photo-preview" style="width:72px;height:72px;border-radius:50%;object-fit:cover;border:2.5px dashed #E8C8BC">`
@@ -2011,6 +2032,11 @@ function showUserMenu() {
       style="width:100%;padding:13px;background:#E04E14;color:white;border:none;border-radius:14px;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit;margin-bottom:10px">
       저장하기
     </button>
+    ${!isPWAInstalled() ? `
+    <button onclick="tryAddToHomescreen()"
+      style="width:100%;padding:13px;background:#FFF3EE;color:#E04E14;border:1.5px solid #F9C8B0;border-radius:14px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;margin-bottom:10px">
+      📲 홈화면에 추가하기
+    </button>` : ''}
     <button onclick="doLogout()"
       style="width:100%;padding:13px;background:#F5F5F5;color:#AAA;border:none;border-radius:14px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit">
       로그아웃
@@ -2050,6 +2076,7 @@ async function saveProfileChanges() {
     if (dogName)  currentDog.name  = dogName;
     if (dogBreed) currentDog.breed = dogBreed;
     if (dogAge !== null && !isNaN(dogAge)) currentDog.age = dogAge;
+    updateUserBadge(); // 강아지 이름 첫 글자 / 사진 반영
 
     showToast('✅ 저장됐어요!');
     closeModal('profile-modal');
@@ -2085,6 +2112,7 @@ async function onProfileDogPhotoSelected(e) {
     }
     // 로컬 상태 반영
     if (currentDog) currentDog.photoURL = photoURL;
+    updateUserBadge(); // 뱃지에 강아지 사진 즉시 반영
 
     if (statusEl) { statusEl.textContent = '✅ 사진이 업데이트됐어요!'; }
     setTimeout(() => { if (statusEl) statusEl.style.display = 'none'; }, 2500);
@@ -2488,24 +2516,37 @@ async function rejectCorrectionRequest(docId) {
 
 //  PWA 홈화면 추가
 // ══════════════════════════════════════════════════════
+function isPWAInstalled() {
+  return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+}
+
 function tryAddToHomescreen() {
   const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
-  const isInStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
-
-  // 이미 설치된 경우 스킵
-  if (isInStandalone) return;
+  if (isPWAInstalled()) return;
 
   if (window._pwaInstallPrompt) {
     // Android/Chrome: 네이티브 설치 프롬프트
     window._pwaInstallPrompt.prompt();
-    window._pwaInstallPrompt.userChoice.then(() => {
+    window._pwaInstallPrompt.userChoice.then((choice) => {
       window._pwaInstallPrompt = null;
+      if (choice.outcome === 'accepted') hideInstallBanner();
     });
   } else if (isIOS) {
     // iOS Safari: 수동 안내 모달
     showIOSInstallGuide();
+  } else {
+    // Android이지만 install prompt 아직 없는 경우 → 안내 토스트
+    showToast('📲 브라우저 메뉴 → "홈 화면에 추가"를 눌러주세요!', 4000);
   }
-  // 그 외 (데스크탑 등)는 조용히 스킵
+}
+
+/* ── 설치 탭 버튼 클릭 ── */
+function onInstallTabClick() {
+  if (isPWAInstalled()) {
+    showToast('이미 홈화면에 추가되어 있어요 🏠');
+    return;
+  }
+  tryAddToHomescreen();
 }
 
 function showIOSInstallGuide() {
@@ -2554,14 +2595,32 @@ function showIOSInstallGuide() {
 
 //  START APP
 // ══════════════════════════════════════════════════════
+/* ── 유저 뱃지 업데이트 — 강아지 사진 > 강아지 이름 첫 글자 > 유저 이름 첫 글자 순서 ── */
+function updateUserBadge() {
+  const initialEl = document.getElementById('user-initial');
+  const imgEl     = document.getElementById('user-badge-img');
+  if (!initialEl || !imgEl) return;
+
+  if (currentDog?.photoURL) {
+    imgEl.src = currentDog.photoURL;
+    imgEl.style.display = 'block';
+    initialEl.style.display = 'none';
+  } else {
+    imgEl.style.display = 'none';
+    initialEl.style.display = '';
+    const dogInitial  = currentDog?.name ? currentDog.name.charAt(0) : null;
+    const userInitial = (currentUser?.displayName || currentUser?.email || '?').charAt(0).toUpperCase();
+    initialEl.textContent = dogInitial || userInitial;
+  }
+}
+
 function startApp(user) {
   currentUser = user;
   document.getElementById('login-screen').style.display = 'none';
   document.getElementById('app-screen').style.display   = 'block';
 
-  const initial = (user.displayName || user.email).charAt(0).toUpperCase();
-  document.getElementById('user-initial').textContent   = initial;
-  document.getElementById('user-badge').title           = `${user.displayName || user.email}`;
+  document.getElementById('user-badge').title = `${user.displayName || user.email}`;
+  updateUserBadge(); // 강아지 정보 로드 전엔 유저 이름 첫 글자로 표시
 
   if (user.isAdmin) {
     document.getElementById('admin-btn').style.display  = 'flex';
@@ -5298,7 +5357,10 @@ async function renderAdminUsers() {
 
   document.getElementById('admin-content').innerHTML = `
     <div class="admin-section">
-      <h3>👥 회원 목록 (${users.length}명)</h3>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+        <h3 style="margin:0">👥 회원 목록 (${users.length}명)</h3>
+        <button onclick="renderAdminUsers()" style="font-size:12px;padding:5px 12px;border:1px solid #E2E8F0;border-radius:8px;background:#F8FAFF;color:#1E3A8A;cursor:pointer;font-family:inherit">🔄 새로고침</button>
+      </div>
       <table class="admin-table">
         <thead><tr><th>이메일</th><th>이름</th><th>가입일</th><th>최근 로그인</th><th>구분</th></tr></thead>
         <tbody>
@@ -6275,7 +6337,7 @@ async function resetWronglyRejected() {
         batch.update(doc.ref, {
           petStatus: 'unverified',
           active: true,
-          lastV2At: null   // 30일 스킵 해제 → 즉시 재검증 대상
+          lastV2At: null   // 3개월 스킵 해제 → 즉시 재검증 대상
         });
       });
       await batch.commit();
@@ -6865,7 +6927,7 @@ async function nwSavePlacesToFirestore(newPlaces) {
 }
 
 /* 파이프라인용 Firestore 배치 flush + 실시간 스탯 갱신
-   setV2At=false 이면 petStatus 만 씀 (1단계용) — lastV2At 을 쓰면 2단계 30일 스킵에 걸림 */
+   setV2At=false 이면 petStatus 만 씀 (1단계용) — lastV2At 을 쓰면 2단계 3개월 스킵에 걸림 */
 async function nwFlushStatusBatch(batch_arr, setV2At = true) {
   if (!firebaseReady || !db || !batch_arr.length) return;
   const CHUNK = 400;
@@ -6909,7 +6971,7 @@ async function nwVerifyStage1Region(regionName) {
   let upgraded = 0;
   const pendingBatch = [];
 
-  // 1단계는 lastV2At 을 쓰지 않음 (setV2At=false) — 2단계 30일 스킵 필터에 걸리지 않도록
+  // 1단계는 lastV2At 을 쓰지 않음 (setV2At=false) — 2단계 3개월 스킵 필터에 걸리지 않도록
   const flush = async () => {
     if (!pendingBatch.length) return;
     await nwFlushStatusBatch([...pendingBatch], false);
@@ -6955,9 +7017,9 @@ async function nwVerifyStage1Region(regionName) {
   return upgraded;
 }
 
-/* ── 단계2 검증: 5채널 병렬 + 3-worker 동시 처리 (30일 스킵) ── */
+/* ── 단계2 검증: 5채널 병렬 + 3-worker 동시 처리 (3개월 스킵) ── */
 async function nwVerifyStage2Region(regionName) {
-  const THIRTY_DAYS = 30 * 24 * 60 * 60 * 1000;
+  const THIRTY_DAYS = 90 * 24 * 60 * 60 * 1000; // 3개월 스킵
   const now = Date.now();
   const statusRank = { search: 0, unverified: 0, confirmed: 1, verified: 2 };
   const pickBetter = (a, b) => (statusRank[b]??-1) > (statusRank[a]??-1) ? b : a;
@@ -7184,7 +7246,7 @@ async function runNationwidePipeline() {
 
     // ── 3단계: 2단계 검증 (30일 스킵) ────────────────
     nwPipeline.phase = 'verify2';
-    nwUpdateLog(`  🤖 2단계 검증 중 (30일 내 완료된 곳 스킵)...`);
+    nwUpdateLog(`  🤖 2단계 검증 중 (3개월 내 완료된 곳 스킵)...`);
     renderNationwidePipelineUI();
 
     const { upgraded: v2up, skipped: v2sk } = await nwVerifyStage2Region(region.name);
@@ -7448,15 +7510,15 @@ function renderNationwidePipelineUI() {
   `;
 }
 
-/* 메인 자동검증 함수 (기존 장소 대상, 30일 내 완료된 곳 스킵) */
+/* 메인 자동검증 함수 (기존 장소 대상, 3개월 내 완료된 곳 스킵) */
 async function runAutoStage2Verify() {
   if (autoV.running) return;
 
-  const THIRTY_DAYS = 30 * 24 * 60 * 60 * 1000;
+  const THIRTY_DAYS = 90 * 24 * 60 * 60 * 1000; // 3개월 스킵
   const SYNC_BATCH_SIZE = 100; // ★ 100개 검증마다 Firestore 자동 동기화
   const now = Date.now();
 
-  // 대상: verified 제외 + 30일 내 2단계 완료된 곳 스킵
+  // 대상: verified 제외 + 3개월 내 2단계 완료된 곳 스킵
   const targets = places.filter(p => {
     if (!p || p.id == null || !p.kakaoUrl) return false;
     if (getPlaceStatus(p) === 'verified') return false;
