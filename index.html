@@ -4468,7 +4468,7 @@ function setCatFilter(btn, catKey) {
   if (isMobile()) setMobileTab('list');
 }
 
-function getFiltered(ignoreViewport = false) {
+function getFiltered(ignoreViewport = false, ignoreSearch = false) {
   // 뷰포트 범위 (지도 범위 연동 모드 + ignoreViewport=false일 때만 계산)
   const vpBounds = (viewportSync && !ignoreViewport && map) ? map.getBounds() : null;
   return places.filter(p => {
@@ -4493,7 +4493,7 @@ function getFiltered(ignoreViewport = false) {
     if (activeFilters.hasFee  && !p.entryFee) return false;
     if (activeFilters.noFee   && p.entryFee)  return false;
     if (activeFilters.catType !== 'all' && getCatKey(p) !== activeFilters.catType) return false;
-    if (searchText) {
+    if (!ignoreSearch && searchText) {
       const q = searchText.toLowerCase();
       return (p.name||'').toLowerCase().includes(q) || (p.addr||'').toLowerCase().includes(q) ||
              (p.note||'').toLowerCase().includes(q)  || (p.cat||'').toLowerCase().includes(q);
@@ -4677,37 +4677,35 @@ async function showSearchSuggestions(query) {
   box.innerHTML = html;
   box.classList.add('open');
 
-  // ── 4. Kakao 전국 장소 검색 ────────────────────────────────────────────────
-  // kakaoPS (홍시야 찾아줘와 동일한 초기화된 인스턴스) 사용 — 위치 무관 전국 검색
+  // ── 4. Kakao REST API 전국 장소 검색 (홍시야 찾아줘와 동일한 방식) ──────────
   clearTimeout(_sgKakaoTimer);
   _sgKakaoTimer = setTimeout(async () => {
-    // 검색어 변경 확인
     const current = document.getElementById('search-input')?.value.trim();
     if (!current || current.toLowerCase() !== q) return;
 
-    // SDK 아직 준비 안 됐으면 초기화 요청 후 최대 3초 대기
-    if (!kakaoReady) {
-      initKakaoSearch();
-      for (let i = 0; i < 30; i++) {
-        await new Promise(r => setTimeout(r, 100));
-        if (kakaoReady) break;
-      }
-    }
+    try {
+      const mc = (typeof map !== 'undefined') ? map.getCenter() : null;
+      const locParam = mc ? `&x=${mc.lng}&y=${mc.lat}` : '';
+      const resp = await fetch(
+        `https://dapi.kakao.com/v2/local/search/keyword.json?query=${encodeURIComponent(query)}&size=10${locParam}`,
+        { headers: { 'Authorization': `KakaoAK ${KAKAO_REST_KEY}` },
+          signal: AbortSignal.timeout(6000) }
+      );
+      if (!resp.ok) return; // 429 등 오류 시 조용히 종료
 
-    // 검색어 다시 확인 (대기 중 변경됐을 수 있음)
-    const cur2 = document.getElementById('search-input')?.value.trim();
-    if (!cur2 || cur2.toLowerCase() !== q) return;
+      const json = await resp.json();
+      const docs = (json.documents || []).filter(d => d.y && d.x && d.place_name);
 
-    // ── 공통: 결과 드롭다운 업데이트 ────────────────────────────────────────
-    function renderKakaoResults(data) {
+      // 검색어 다시 확인 (대기 중 변경됐을 수 있음)
+      const chk = document.getElementById('search-input')?.value.trim();
+      if (!chk || chk.toLowerCase() !== q || !docs.length) return;
+
       const bx = document.getElementById('search-suggestions');
       if (!bx) return;
-      const chk = document.getElementById('search-input')?.value.trim();
-      if (!chk || chk.toLowerCase() !== q) return;
 
-      _sgKakaoPlaces = data;
+      _sgKakaoPlaces = docs;
       let kakaoHtml = `<div class="sg-section-label">카카오맵 장소</div>`;
-      kakaoHtml += data.slice(0, 8).map((d, idx) => {
+      kakaoHtml += docs.slice(0, 8).map((d, idx) => {
         const addr = d.road_address_name || d.address_name || '';
         const cat  = (d.category_name || '').split(' > ').pop();
         const inDB = places.some(p => p.kakaoId === d.id || p.name === d.place_name);
@@ -4724,26 +4722,7 @@ async function showSearchSuggestions(query) {
         .replace(/<div class="sg-section-label">카카오맵 장소<\/div>[\s\S]*$/, '');
       bx.innerHTML = stripped + kakaoHtml;
       bx.classList.add('open');
-    }
-
-    // ── A. kakaoPS SDK 검색 (홍시야 찾아줘와 동일한 방식) ───────────────────
-    if (kakaoReady && kakaoPS) {
-      // x(경도)/y(위도) 제공 → Kakao SDK 전국 검색 (거리순 정렬용 참고점으로만 사용)
-      const mc = map.getCenter();
-      kakaoPS.keywordSearch(query, (data, status) => {
-        const chk = document.getElementById('search-input')?.value.trim();
-        if (!chk || chk.toLowerCase() !== q) return;
-        if (status === kakao.maps.services.Status.OK && data?.length) {
-          renderKakaoResults(data);
-        } else {
-          // SDK 결과 없음 → REST fallback 시도
-          _sgRestFallback(query, q, renderKakaoResults);
-        }
-      }, { x: mc.lng, y: mc.lat, size: 15 }); // 지도 중심 기준 전국 검색
-    } else {
-      // SDK 준비 안 됐으면 REST로
-      _sgRestFallback(query, q, renderKakaoResults);
-    }
+    } catch(e) { /* 타임아웃·오류 시 조용히 종료 */ }
 
   }, 300);
 }
@@ -4961,12 +4940,12 @@ document.addEventListener('click', e => {
 });
 
 function filterPlaces() {
-  const filtered = getFiltered();
+  const filtered = getFiltered();         // 검색어 포함 — 목록(리스트)용
   renderList(filtered);
   if (clusterGroup) {
-    // 마커 표시 기준: filtered와 동일 (뷰포트 연동 시 뷰포트 밖 마커 숨김)
-    // → '홍시야 찾아줘' 전에는 persistent 마커만 표시, 뷰포트 이동 시 과거 마커 노출 방지
-    const markerFiltered = filtered;
+    // 마커는 검색어 무관하게 뷰포트·필터 기준으로만 표시
+    // → 검색창에 글자를 입력해도 지도 마커는 사라지지 않음
+    const markerFiltered = getFiltered(false, true); // ignoreSearch=true
     const filteredSet = new Set(markerFiltered.map(f => f.id));
     places.forEach(p => {
       const m = markers[p.id]; if (!m) return;
