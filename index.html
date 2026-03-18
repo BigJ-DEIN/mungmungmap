@@ -3815,6 +3815,59 @@ function doLiveSearch() {
         }
       }
 
+      // ── C) 역지오코딩 → 동네명 기반 반려동물 카페 검색 ────────────────────
+      // 카카오 카테고리 태그가 없어도 사용자 검색 패턴으로 연관된 장소 발굴
+      // 예: "성수동 반려견 카페" 검색 시 콩카세·플로서라구또 같은 미태그 장소 포함
+      try {
+        const ctr = map.getCenter();
+        const rgResp = await fetch(
+          `https://dapi.kakao.com/v2/local/geo/coord2regioncode.json?x=${ctr.lng}&y=${ctr.lat}`,
+          { headers: { 'Authorization': `KakaoAK ${KAKAO_REST_KEY}` },
+            signal: AbortSignal.timeout(5000) }
+        );
+        if (rgResp.ok) {
+          const rgJson = await rgResp.json();
+          const reg    = rgJson.documents?.[0];
+          // 동(洞) 우선, 없으면 구(區), 없으면 시(市) 사용
+          const dong   = reg?.region_3depth_name || '';
+          const gu     = reg?.region_2depth_name || '';
+          const areaName = dong.replace(/\d+가$/, '') || gu; // "성수동1가" → "성수동"
+          if (areaName) {
+            const areaKws = [
+              areaName + ' 반려견 카페',
+              areaName + ' 애견 카페',
+              areaName + ' 강아지 카페',
+              areaName + ' 반려동물 카페',
+              areaName + ' 펫카페',
+              areaName + ' 반려견',        // 넓은 반려동물 장소 포함
+            ];
+            for (const kw of areaKws) {
+              tasks.push((async () => {
+                for (let page = 1; page <= 5; page++) {
+                  try {
+                    const resp = await fetch(
+                      `https://dapi.kakao.com/v2/local/search/keyword.json` +
+                      `?query=${encodeURIComponent(kw)}&size=15&page=${page}`,
+                      { headers: { 'Authorization': `KakaoAK ${KAKAO_REST_KEY}` },
+                        signal: AbortSignal.timeout(6000) }
+                    );
+                    if (!resp.ok) break;
+                    const json = await resp.json();
+                    if (json.documents?.length) {
+                      // 지역명+반려동물 조합 검색 결과 → 카카오가 연관 장소로 판단한 것
+                      allResults = allResults.concat(
+                        json.documents.map(d => ({ ...d, _fromPetKeyword: true }))
+                      );
+                    }
+                    if (json.meta?.is_end !== false) break;
+                  } catch(e) { break; }
+                }
+              })());
+            }
+          }
+        }
+      } catch(e) { /* 역지오코딩 실패 시 무시 */ }
+
       await Promise.allSettled(tasks);
     } catch(e) {}
     restDone = true;
