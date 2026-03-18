@@ -2103,22 +2103,31 @@ function onDogPhotoSelected(e) {
   reader.readAsDataURL(file);
 }
 
-/* 강아지 사진 Firebase Storage에 업로드 */
-async function uploadDogPhoto(uid, blob) {
+/* 강아지 사진 압축 (Canvas → WebP, max 200px, 최대 ~10KB) */
+async function compressDogPhoto(blob) {
+  try {
+    const canvas = document.createElement('canvas');
+    const img = new Image();
+    await new Promise(r => { img.onload = r; img.src = URL.createObjectURL(blob); });
+    const maxSz = 200;
+    const ratio = Math.min(maxSz / img.width, maxSz / img.height, 1);
+    canvas.width  = Math.round(img.width  * ratio);
+    canvas.height = Math.round(img.height * ratio);
+    canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+    // WebP 지원 브라우저는 WebP, 아니면 JPEG fallback
+    const webpBlob = await new Promise(r => canvas.toBlob(r, 'image/webp', 0.78));
+    if (webpBlob && webpBlob.size > 0) return webpBlob;
+    return await new Promise(r => canvas.toBlob(r, 'image/jpeg', 0.78));
+  } catch(e) { console.warn('compressDogPhoto 실패', e); return blob; }
+}
+
+/* 강아지 사진 Firebase Storage에 업로드 (압축 blob 직접 받음) */
+async function uploadDogPhoto(uid, compressedBlob) {
   if (!firebaseReady || !firebase.storage) return null;
   try {
     const storage = firebase.storage();
     const ref = storage.ref(`dog_photos/${uid}.webp`);
-    // compress to WebP
-    const canvas = document.createElement('canvas');
-    const img = new Image();
-    await new Promise(r => { img.onload = r; img.src = URL.createObjectURL(blob); });
-    const maxSz = 250;
-    const ratio = Math.min(maxSz/img.width, maxSz/img.height, 1);
-    canvas.width = img.width * ratio; canvas.height = img.height * ratio;
-    canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
-    const webpBlob = await new Promise(r => canvas.toBlob(r, 'image/webp', 0.85));
-    await ref.put(webpBlob);
+    await ref.put(compressedBlob, { contentType: compressedBlob.type || 'image/webp' });
     return await ref.getDownloadURL();
   } catch(e) { console.warn('dog photo upload failed', e); return null; }
 }
@@ -2217,6 +2226,19 @@ async function saveProfileChanges() {
   if (!currentUser || !db) return;
   const btn = document.getElementById('btn-profile-save');
   if (btn) { btn.disabled = true; btn.textContent = '저장 중...'; }
+
+  // 사진 업로드가 아직 진행 중이면 완료까지 대기 (최대 15초)
+  if (_profilePhotoUploadPromise) {
+    if (btn) btn.textContent = '사진 업로드 중...';
+    const uploadedURL = await Promise.race([
+      _profilePhotoUploadPromise,
+      new Promise(r => setTimeout(() => r(null), 15000)) // 15초 타임아웃
+    ]);
+    _profilePhotoUploadPromise = null;
+    if (uploadedURL && currentDog) currentDog.photoURL = uploadedURL;
+    if (btn) btn.textContent = '저장 중...';
+  }
+
   // 문서가 없는 경우(가입 시 Firestore 오류) 먼저 기본 문서 보장
   await ensureUserDocument(currentUser).catch(() => {});
   try {
@@ -2260,39 +2282,46 @@ async function saveProfileChanges() {
   }
 }
 
+// 진행 중인 프로필 사진 업로드 promise (저장하기 시 대기용)
+let _profilePhotoUploadPromise = null;
+
 async function onProfileDogPhotoSelected(e) {
   const file = e.target.files[0]; if (!file) return;
   const statusEl = document.getElementById('profile-photo-status');
-  if (statusEl) { statusEl.style.display = 'block'; statusEl.textContent = '업로드 중...'; }
 
-  try {
-    // 미리보기 즉시 표시
-    const reader = new FileReader();
-    reader.onload = ev => {
-      const prev = document.getElementById('profile-dog-photo-preview');
-      if (prev) { prev.outerHTML = `<img id="profile-dog-photo-preview" src="${ev.target.result}" style="width:64px;height:64px;border-radius:50%;object-fit:cover;border:2.5px dashed #E8C8BC">`; }
-    };
-    reader.readAsDataURL(file);
+  // ① 즉시 압축 (로컬, 빠름)
+  if (statusEl) { statusEl.style.display = 'block'; statusEl.textContent = '⏳ 압축 중...'; }
+  const compressed = await compressDogPhoto(file);
+  const sizeKB = Math.round(compressed.size / 1024);
 
-    // 리사이즈(max 400px WebP) 후 Storage 업로드
-    const photoURL = await uploadDogPhoto(currentUser.uid, file);
-    if (!photoURL) throw new Error('URL 없음');
-
-    // Firestore 업데이트
-    if (db) {
-      const updateData = { 'dog.photoURL': photoURL };
-      await db.collection('users').doc(currentUser.uid).update(updateData);
-    }
-    // 로컬 상태 반영
-    if (currentDog) currentDog.photoURL = photoURL;
-    updateUserBadge(); // 뱃지에 강아지 사진 즉시 반영
-
-    if (statusEl) { statusEl.textContent = '✅ 사진이 업데이트됐어요!'; }
-    setTimeout(() => { if (statusEl) statusEl.style.display = 'none'; }, 2500);
-  } catch(err) {
-    if (statusEl) { statusEl.textContent = '❌ 업로드 실패. 다시 시도해주세요.'; }
-    console.warn('프로필 사진 업로드 실패:', err);
+  // ② 미리보기 즉시 갱신 (로컬 ObjectURL — 네트워크 필요 없음)
+  const localURL = URL.createObjectURL(compressed);
+  const prev = document.getElementById('profile-dog-photo-preview');
+  if (prev) {
+    prev.outerHTML = `<img id="profile-dog-photo-preview" src="${localURL}"
+      style="width:64px;height:64px;border-radius:50%;object-fit:cover;border:2.5px dashed #E8C8BC">`;
   }
+  if (statusEl) { statusEl.textContent = `📤 업로드 중 (${sizeKB}KB)...`; }
+
+  // ③ 백그라운드 업로드 시작 — 완료를 기다리지 않고 진행
+  _profilePhotoUploadPromise = (async () => {
+    try {
+      const photoURL = await uploadDogPhoto(currentUser.uid, compressed);
+      if (!photoURL) throw new Error('URL 없음');
+      // Firestore 즉시 반영
+      if (db) await db.collection('users').doc(currentUser.uid).set({ 'dog': { ...(currentDog||{}), photoURL } }, { merge: true });
+      if (!currentDog) currentDog = {};
+      currentDog.photoURL = photoURL;
+      updateUserBadge();
+      if (statusEl) { statusEl.textContent = '✅ 사진 준비됐어요!'; }
+      setTimeout(() => { if (statusEl) statusEl.style.display = 'none'; }, 2000);
+      return photoURL;
+    } catch(err) {
+      if (statusEl) { statusEl.textContent = '❌ 업로드 실패. 저장하기로 재시도해요.'; }
+      console.warn('프로필 사진 업로드 실패:', err);
+      return null;
+    }
+  })();
 }
 
 
