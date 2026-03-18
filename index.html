@@ -1840,6 +1840,7 @@ async function doAuth() {
 
   // Offline mode fallback (no Firebase)
   if (!firebaseReady) {
+    _doAuthInProgress = false; // try/finally 밖 early-return이므로 직접 해제
     const fakeUser = { uid: 'local-'+email, email, displayName: name, isAdmin: isAdmin(email) };
     localStorage.setItem('hsdyj_user', JSON.stringify(fakeUser));
     startApp(fakeUser);
@@ -3068,9 +3069,19 @@ function updateAllMarkerSizes() {
 }
 
 function initMap() {
-  if (map) return; // 이미 초기화됨 — 이중 호출 시 크래시 방지
-  // 기본 위치: 경기도 중심 (줌 9) — 위치 권한 거부 시 폴백
-  map = L.map('map', { zoomControl:false }).setView([37.55, 127.1], 9);
+  if (map) return; // JS 상태: 이미 초기화됨
+  const mapContainer = document.getElementById('map');
+  // iOS/Android 페이지 복원 시 JS 변수는 리셋됐지만 DOM에 Leaflet 흔적이 남는 경우 방어
+  if (mapContainer && mapContainer._leaflet_id) {
+    delete mapContainer._leaflet_id;
+    mapContainer.innerHTML = '';
+  }
+  try {
+    map = L.map('map', { zoomControl:false }).setView([37.55, 127.1], 9);
+  } catch(e) {
+    console.error('[initMap] Leaflet 초기화 실패:', e.message);
+    return;
+  }
   L.control.zoom({ position:'bottomright' }).addTo(map);
   L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
     attribution:'© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors © <a href="https://carto.com/attributions">CARTO</a>',
@@ -7804,8 +7815,8 @@ document.addEventListener('DOMContentLoaded', () => {
   // Check Firebase auth state
   if (firebaseReady && auth) {
     auth.onAuthStateChanged(user => {
-      // doAuth 실행 중엔 doAuth가 직접 startApp을 호출하므로 여기서는 스킵
-      if (user && !currentUser && !_doAuthInProgress) {
+      // doAuth 실행 중이거나 앱이 이미 기동됐으면 startApp 재호출 금지
+      if (user && !_doAuthInProgress && !_appStarted) {
         const userData = {
           uid: user.uid, email: user.email,
           displayName: user.displayName || user.email.split('@')[0],
