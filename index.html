@@ -7567,9 +7567,14 @@ function renderVerifyTab() {
         <div id="stat-total-text" style="font-size:12px;color:#888">총 ${total}개 장소 · 검증 완료율 ${total>0?Math.round((counts.verified+counts.confirmed)/total*100):0}%</div>
         <div style="font-size:11px;color:#AAA;margin-top:2px">카카오 URL 있음: ${places.filter(p=>p&&p.id!=null&&p.kakaoUrl).length}개 · 없음: ${places.filter(p=>p&&p.id!=null&&!p.kakaoUrl).length}개</div>
       </div>
-      <button onclick="stage1FirestoreSync()" style="padding:6px 12px;background:#F5F5F5;color:#777;border:1px solid #E0E0E0;border-radius:8px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;flex-shrink:0">
-        ☁️ Firestore 동기화
-      </button>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <button onclick="stage1FirestoreSync()" style="padding:6px 12px;background:#F5F5F5;color:#777;border:1px solid #E0E0E0;border-radius:8px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit">
+          ☁️ Firestore 동기화
+        </button>
+        <button onclick="resetWronglyRejected()" style="padding:6px 12px;background:#FFF3E0;color:#E65100;border:1px solid #FFCC80;border-radius:8px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit">
+          🔄 잘못 거절된 장소 복구
+        </button>
+      </div>
     </div>
 
     <!-- 전국 파이프라인 (메인 컨트롤) -->
@@ -7686,6 +7691,60 @@ async function stage1BatchAutoVerify() {
 }
 
 /* Firestore에 petStatus 없는 기존 장소들 동기화 */
+// ── 잘못 rejected된 auto_pipeline_cat 장소 일괄 복구 ──────────────────
+// 이전 HTML 스크래핑 방식이 시설 태그를 못 읽어 wrongly rejected된 장소를
+// unverified + active:true 로 되돌림 → 재검증 파이프라인 대상에 포함시킴
+async function resetWronglyRejected() {
+  if (!firebaseReady || !db) { showToast('Firebase 연결 필요'); return; }
+  if (!confirm('auto_pipeline_cat 출처의 rejected 장소를 unverified로 복구합니다.\n파이프라인 재실행 전에 수행하세요. 계속할까요?')) return;
+
+  showToast('🔄 복구 대상 조회 중...', 3000);
+
+  // Firestore에서 source=auto_pipeline_cat + petStatus=rejected 장소 조회
+  let total = 0, done = 0;
+  try {
+    const snap = await db.collection('places')
+      .where('source', '==', 'auto_pipeline_cat')
+      .where('petStatus', '==', 'rejected')
+      .get();
+
+    total = snap.docs.length;
+    if (total === 0) { showToast('복구할 장소 없음 (이미 완료됐거나 없음)'); return; }
+
+    showToast(`🔄 ${total}개 복구 중...`, 5000);
+
+    // 500개씩 배치 처리
+    const CHUNK = 400;
+    const docs = snap.docs;
+    for (let i = 0; i < docs.length; i += CHUNK) {
+      const batch = db.batch();
+      docs.slice(i, i + CHUNK).forEach(doc => {
+        batch.update(doc.ref, {
+          petStatus: 'unverified',
+          active: true,
+          lastV2At: null   // 30일 스킵 해제 → 즉시 재검증 대상
+        });
+      });
+      await batch.commit();
+      done += Math.min(CHUNK, docs.length - i);
+      showToast(`🔄 복구 중... ${done}/${total}`, 2000);
+    }
+
+    // 메모리상 places 배열도 동기화
+    snap.docs.forEach(doc => {
+      const p = places.find(x => x.firestoreId === doc.id);
+      if (p) { p.petStatus = 'unverified'; p.active = true; p.lastV2At = null; }
+    });
+
+    invalidatePlacesCache();
+    filterPlaces();
+    showToast(`✅ ${total}개 복구 완료! 이제 파이프라인 재실행하세요.`, 5000);
+    renderVerifyTab();
+  } catch(e) {
+    showToast(`❌ 오류: ${e.message}`, 4000);
+  }
+}
+
 async function stage1FirestoreSync() {
   if (!firebaseReady || !db) { showToast('Firebase 필요'); return; }
   const toSync = places.filter(p => p && p.firestoreId && !p.petStatus);
@@ -7725,14 +7784,22 @@ const _proxyQueue = {
 };
 
 /* CORS 프록시를 통해 카카오맵 페이지 HTML 가져오기 */
-async function fetchKakaoPagePetSignal(url) {
+async function fetchKakaoPagePetSignal(url, kakaoId) {
   const PROXIES = [
     u => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`,
     u => `https://thingproxy.freeboard.io/fetch/${encodeURIComponent(u)}`
-  ]; // allorigins.win 제거 (상시 429)
-  const cutoff3mo = Date.now() - 90 * 24 * 60 * 60 * 1000;
+  ];
 
-  // ★ Unicode 이스케이프 디코딩 (\uXXXX → 실제 한국어)
+  // ── Kakao place ID 추출 ──
+  // url 예: "http://place.map.kakao.com/1985260898"
+  const id = kakaoId || (url && url.match(/\/(\d+)\/?$/)?.[1]);
+  if (!id) return { found: false, error: true };
+
+  // ★ HTML 스크래핑 대신 Kakao JSON API 직접 호출
+  // place.map.kakao.com/main/v/{id} → 시설 태그 포함 JSON 반환
+  const jsonApiUrl = `https://place.map.kakao.com/main/v/${id}`;
+
+  // Unicode 이스케이프 디코딩 (\uXXXX → 실제 한국어)
   function unicodeDecode(str) {
     try { return str.replace(/\\u([0-9a-fA-F]{4})/g, (_, c) => String.fromCharCode(parseInt(c, 16))); }
     catch(e) { return str; }
@@ -7742,53 +7809,42 @@ async function fetchKakaoPagePetSignal(url) {
     try {
       await _proxyQueue.acquire();
       let res;
-      try { res = await fetch(proxyFn(url), { signal: AbortSignal.timeout(6000) }); }
+      try { res = await fetch(proxyFn(jsonApiUrl), { signal: AbortSignal.timeout(8000) }); }
       finally { _proxyQueue.release(); }
       if (!res.ok) {
         if (autoV.running) autoV.proxyFail = (autoV.proxyFail||0)+1;
         continue;
       }
-      const rawHtml = await res.text();
-      // 유효한 HTML/JSON 응답인지 확인 (프록시가 오류 페이지 반환하는 경우 필터)
-      if (rawHtml.length < 500) {
+      const rawText = await res.text();
+      if (rawText.length < 100) {
+        if (autoV.running) autoV.proxyFail = (autoV.proxyFail||0)+1;
+        continue;
+      }
+
+      // JSON 파싱 시도
+      let data;
+      try { data = JSON.parse(rawText); }
+      catch(e) {
+        // JSON 파싱 실패 → 프록시가 HTML 오류 페이지 반환한 경우
         if (autoV.running) autoV.proxyFail = (autoV.proxyFail||0)+1;
         continue;
       }
       if (autoV.running) autoV.proxyOk = (autoV.proxyOk||0)+1;
 
-      // ★ Unicode 디코딩 적용 (한국어가 \uXXXX로 이스케이프된 경우 대응)
-      const html = unicodeDecode(rawHtml);
+      // JSON 전체를 문자열로 변환 후 키워드 검색 (한국어 유니코드 디코딩 포함)
+      const str = unicodeDecode(JSON.stringify(data));
 
-      // ── 1) __NEXT_DATA__ JSON 파싱 → 날짜 포함 리뷰 데이터 ──
-      let recentPetReview = false;
-      const ndMatch = html.match(/<script id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/);
-      if (ndMatch) {
-        try {
-          const json = unicodeDecode(ndMatch[1]); // JSON도 별도 디코딩
-          const datePattern = /\d{4}-\d{2}-\d{2}/g;
-          let m;
-          while ((m = datePattern.exec(json)) !== null) {
-            const d = new Date(m[0]).getTime();
-            if (isNaN(d) || d < cutoff3mo) continue;
-            const snippet = json.slice(Math.max(0, m.index - 400), m.index + 400);
-            if (PET_REVIEW_KW.some(kw => snippet.includes(kw))) {
-              recentPetReview = true;
-              break;
-            }
-          }
-        } catch(e) { /* JSON 파싱 실패 무시 */ }
+      // ── 1) 시설 태그 확인 (반려견동반, 반려동물동반 등) ──
+      // Kakao JSON에 facilityInfo.iconService 또는 유사 필드에 태그명이 포함됨
+      if (PET_FACILITY_KW.some(kw => str.includes(kw))) {
+        return { found: true, strong: true }; // 카카오 공식 시설 태그 → verified
       }
 
-      // ── 2) 시설 정보 키워드 (날짜 무관 — 업장이 등록한 정보) ──
-      const hasFacilityKw = PET_FACILITY_KW.some(kw => html.includes(kw));
+      // ── 2) 리뷰/설명에 펫 키워드 포함 여부 ──
+      if (PET_REVIEW_KW.some(kw => str.includes(kw))) {
+        return { found: true, strong: false }; // 키워드 발견 → confirmed
+      }
 
-      // ── 3) 전체 HTML에서 펫 키워드 검색 (__NEXT_DATA__ 없는 경우 포함) ──
-      const hasAnyPetKw = PET_REVIEW_KW.some(kw => html.includes(kw)) ||
-                          PET_FACILITY_KW.some(kw => html.includes(kw));
-
-      if (recentPetReview) return { found: true, strong: true };   // 최근 3개월 리뷰 → 검증완료
-      if (hasFacilityKw)   return { found: true, strong: false };  // 시설 명시 → 확인완료
-      if (hasAnyPetKw)     return { found: true, strong: false };  // 키워드 발견 → 확인완료
       return { found: false };
     } catch (e) {
       if (autoV.running) autoV.proxyFail = (autoV.proxyFail||0)+1;
@@ -8257,9 +8313,9 @@ async function nwVerifyStage2Region(regionName) {
     let memRes = false, sdkRes = null, naverRes = null, kakaoPageRes = null;
     if (newStatus !== 'verified') {
       if (p.source === 'auto_pipeline_cat') {
-        // 카테고리 수집 장소: Kakao 페이지 단일 채널
-        kakaoPageRes = p.kakaoUrl
-          ? await fetchKakaoPagePetSignal(p.kakaoUrl)
+        // 카테고리 수집 장소: Kakao JSON API 단일 채널 (kakaoId 우선)
+        kakaoPageRes = (p.kakaoUrl || p.kakaoId)
+          ? await fetchKakaoPagePetSignal(p.kakaoUrl, p.kakaoId)
           : { found: false };
         if (kakaoPageRes?.found) newStatus = pickBetter(newStatus, kakaoPageRes.strong ? 'verified' : 'confirmed');
       } else {
@@ -8268,7 +8324,7 @@ async function nwVerifyStage2Region(regionName) {
           checkRecentMemoryForPlace(p.id),
           fetchKakaoCategorySignal(p.name, p.lat, p.lng),
           fetchNaverBlogSignal(p.name),
-          p.kakaoUrl ? fetchKakaoPagePetSignal(p.kakaoUrl) : Promise.resolve({ found: false })
+          (p.kakaoUrl || p.kakaoId) ? fetchKakaoPagePetSignal(p.kakaoUrl, p.kakaoId) : Promise.resolve({ found: false })
         ]);
         if (memRes)              newStatus = pickBetter(newStatus, 'verified');
         if (sdkRes?.found)       newStatus = pickBetter(newStatus, 'confirmed');
@@ -8679,7 +8735,7 @@ async function runAutoStage2Verify() {
         checkRecentMemoryForPlace(p.id),
         fetchKakaoCategorySignal(p.name, p.lat, p.lng),
         fetchNaverBlogSignal(p.name),
-        p.kakaoUrl ? fetchKakaoPagePetSignal(p.kakaoUrl) : Promise.resolve({ found: false })
+        (p.kakaoUrl || p.kakaoId) ? fetchKakaoPagePetSignal(p.kakaoUrl, p.kakaoId) : Promise.resolve({ found: false })
       ]);
 
       if (memRes)           { newStatus = pickBetter(newStatus, 'verified');  autoV.ch_memory++; }
