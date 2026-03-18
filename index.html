@@ -3254,27 +3254,32 @@ function doLiveSearch() {
 
   const center = map.getCenter();
   const bounds = map.getBounds();
-  // Calc radius from map bounds (rough estimate)
   const latDiff = bounds.getNorth() - bounds.getSouth();
   const lngDiff = bounds.getEast() - bounds.getWest();
-  const radiusKm = Math.min(Math.max((latDiff * 111 + lngDiff * 88) / 4 * 1000, 2000), 20000);
+  // 현재 지도 뷰 기준 반경 (최소 500m, 최대 5km)
+  const radiusM = Math.min(Math.max((latDiff * 111 + lngDiff * 88) / 4 * 1000, 500), 5000);
 
-  const queries = ['애견동반', '반려견동반', '애견카페', '펫카페'];
+  const opts = { x: center.lng, y: center.lat, radius: Math.round(radiusM), size: 15 };
+
+  // 카테고리 코드: CE7=카페, FD6=음식점, AT4=관광명소(공원/운동장), AD5=숙박
+  // 키워드 검색과 달리 이름에 '반려견' 없어도 시설태그만 있으면 수집 가능
+  const catCodes = ['CE7', 'FD6', 'AT4', 'AD5'];
+  const pages    = [1, 2, 3]; // 카테고리별 최대 3페이지 (45개)
   let allResults = [];
-  let pending = queries.length;
+  let pending    = catCodes.length * pages.length;
 
-  queries.forEach(q => {
-    kakaoPS.keywordSearch(q, (data, status) => {
-      if (status === kakao.maps.services.Status.OK) {
-        allResults = allResults.concat(data);
-      }
-      pending--;
-      if (pending === 0) renderLiveResults(allResults);
-    }, {
-      x: center.lng,
-      y: center.lat,
-      radius: Math.round(radiusKm),
-      size: 15
+  function onAllDone() {
+    renderLiveResults(allResults);
+  }
+
+  catCodes.forEach(code => {
+    pages.forEach(page => {
+      kakaoPS.categorySearch(code, (data, status) => {
+        if (status === kakao.maps.services.Status.OK && data?.length) {
+          allResults = allResults.concat(data);
+        }
+        if (--pending === 0) onAllDone();
+      }, { ...opts, page });
     });
   });
 }
@@ -3361,8 +3366,8 @@ async function renderLiveResults(rawData) {
       console.warn('autoAddLivePlace 실패:', d.place_name, e);
       skipped++;
     }
-    // 짧은 딜레이로 프록시 과부하 방지
-    await new Promise(r => setTimeout(r, 300));
+    // 짧은 딜레이로 프록시 과부하 방지 (category search → 장소 많아져 100ms로 단축)
+    await new Promise(r => setTimeout(r, 100));
   }
 
   // 완료 — liveData가 비었으면 라이브 섹션 자체가 사라짐
