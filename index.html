@@ -189,9 +189,10 @@
     #search-clear.visible { display:flex; }
     /* 검색 자동완성 드롭다운 */
     #search-suggestions {
-      position:absolute; top:calc(100% + 6px); left:0; right:0; z-index:1200;
-      background:white; border-radius:14px; box-shadow:0 6px 24px rgba(0,0,0,.13);
-      border:1.5px solid #F0F0F0; overflow:hidden; display:none;
+      position:absolute; top:calc(100% + 6px); left:0; right:0; z-index:1500;
+      background:white; border-radius:14px; box-shadow:0 8px 30px rgba(0,0,0,.15);
+      border:1.5px solid #EEE; overflow:hidden; display:none;
+      min-width:260px;
     }
     #search-suggestions.open { display:block; }
     .sg-section-label {
@@ -3149,6 +3150,8 @@ async function loadNonPipelinePlaces() {
 }
 
 async function initApp() {
+  // 이전 세션 캐시 초기화 — 확인완료/필요 마커를 매 세션마다 현재 위치 기준으로 새로 로딩
+  invalidatePlacesCache(true);
   initMap();                        // 지도 먼저 → viewport bounds 확보
   await loadViewportPlaces();       // 현재 뷰포트 타일만 로딩
   loadNonPipelinePlaces();          // live_search/user_report 장소 별도 로딩 (비동기)
@@ -4264,11 +4267,13 @@ function clearSearch() {
   inp?.focus();
 }
 
-function showSearchSuggestions(query) {
-  const box  = document.getElementById('search-suggestions');
+let _sgKakaoTimer = null;
+
+async function showSearchSuggestions(query) {
+  const box = document.getElementById('search-suggestions');
   if (!box) return;
-  const q    = query.toLowerCase();
-  let html   = '';
+  const q = query.toLowerCase();
+  let html = '';
 
   // ── 1. DB 장소 매칭 (최대 5개) ──
   const matchedPlaces = places
@@ -4277,7 +4282,7 @@ function showSearchSuggestions(query) {
   if (matchedPlaces.length > 0) {
     html += `<div class="sg-section-label">장소</div>`;
     html += matchedPlaces.map(p => `
-      <div class="sg-item" onclick="selectPlaceSuggestion(${p.id})">
+      <div class="sg-item" onmousedown="event.preventDefault()" onclick="selectPlaceSuggestion(${p.id})">
         <div class="sg-item-icon">${p.emoji || '📍'}</div>
         <div class="sg-item-main">
           <div class="sg-item-name">${p.name}</div>
@@ -4286,15 +4291,15 @@ function showSearchSuggestions(query) {
       </div>`).join('');
   }
 
-  // ── 2. 지역명 매칭 ──
+  // ── 2. 정적 지역명 매칭 ──
   const matchedAreas = Object.entries(AREA_COORDS)
-    .filter(([name]) => name.toLowerCase().includes(q))
+    .filter(([name]) => name.includes(query) || name.toLowerCase().includes(q))
     .slice(0, 5);
   if (matchedAreas.length > 0) {
     html += `<div class="sg-section-label">지역</div>`;
     html += matchedAreas.map(([name, coords]) => `
-      <div class="sg-item" onclick="selectAreaSuggestion('${name}', ${coords[0]}, ${coords[1]}, ${coords[2]})">
-        <div class="sg-item-icon">📍</div>
+      <div class="sg-item" onmousedown="event.preventDefault()" onclick="selectAreaSuggestion('${name}', ${coords[0]}, ${coords[1]}, ${coords[2]})">
+        <div class="sg-item-icon">🗺️</div>
         <div class="sg-item-main">
           <div class="sg-item-name">${name}</div>
           <div class="sg-item-sub">지도로 이동</div>
@@ -4302,12 +4307,73 @@ function showSearchSuggestions(query) {
       </div>`).join('');
   }
 
-  if (!html) {
-    html = `<div class="sg-empty">결과 없음</div>`;
-  }
-
+  // ── 3. 즉시 결과 표시 (kakao 결과 대기 중 표시) ──
+  if (!html) html = `<div class="sg-empty" id="sg-searching">검색 중...</div>`;
   box.innerHTML = html;
   box.classList.add('open');
+
+  // ── 4. Kakao 지오코딩 fallback (정적 목록에 없을 때) ──
+  clearTimeout(_sgKakaoTimer);
+  if (matchedAreas.length === 0) {
+    _sgKakaoTimer = setTimeout(async () => {
+      // 검색어가 바뀌었으면 중단
+      const current = document.getElementById('search-input')?.value.trim();
+      if (!current || current.toLowerCase() !== q) return;
+      try {
+        const resp = await fetch(
+          `https://dapi.kakao.com/v2/local/search/address.json?query=${encodeURIComponent(query)}&size=5`,
+          { headers: { 'Authorization': `KakaoAK ${KAKAO_REST_KEY}` } }
+        );
+        if (!resp.ok) throw new Error();
+        const json = await resp.json();
+        let docs = (json.documents || []).filter(d => d.y && d.x);
+        // 결과 없으면 keyword search 시도
+        if (!docs.length) {
+          const resp2 = await fetch(
+            `https://dapi.kakao.com/v2/local/search/keyword.json?query=${encodeURIComponent(query)}&size=5`,
+            { headers: { 'Authorization': `KakaoAK ${KAKAO_REST_KEY}` } }
+          );
+          const json2 = await resp2.json();
+          docs = (json2.documents || []).filter(d => d.y && d.x);
+        }
+        if (!docs.length) {
+          const b = document.getElementById('search-suggestions');
+          if (b?.querySelector('#sg-searching')) {
+            b.innerHTML = `<div class="sg-empty">결과 없음</div>`;
+          }
+          return;
+        }
+        // 검색어가 바뀌지 않았으면 드롭다운 업데이트
+        const now = document.getElementById('search-input')?.value.trim();
+        if (!now || now.toLowerCase() !== q) return;
+        const kakaoHtml = `<div class="sg-section-label">지역</div>` +
+          docs.slice(0, 5).map(d => {
+            const name   = d.place_name || d.address_name || query;
+            const addr   = d.road_address_name || d.address_name || '';
+            const lat    = parseFloat(d.y), lng = parseFloat(d.x);
+            const safeNm = name.replace(/'/g, "\\'");
+            return `<div class="sg-item" onmousedown="event.preventDefault()" onclick="selectAreaSuggestion('${safeNm}', ${lat}, ${lng}, 15)">
+              <div class="sg-item-icon">🗺️</div>
+              <div class="sg-item-main">
+                <div class="sg-item-name">${name}</div>
+                <div class="sg-item-sub">${addr || '지도로 이동'}</div>
+              </div>
+            </div>`;
+          }).join('');
+        // 장소 섹션 유지 + 지역 섹션 추가
+        const existingPlaceHtml = matchedPlaces.length > 0
+          ? box.innerHTML.replace(/<div class="sg-empty[^>]*>.*?<\/div>/s, '')
+          : '';
+        box.innerHTML = existingPlaceHtml + kakaoHtml;
+        box.classList.add('open');
+      } catch(e) {
+        const b = document.getElementById('search-suggestions');
+        if (b?.querySelector('#sg-searching')) {
+          b.innerHTML = `<div class="sg-empty">결과를 찾지 못했어요</div>`;
+        }
+      }
+    }, 300);
+  }
 }
 
 function hideSearchSuggestions() {
