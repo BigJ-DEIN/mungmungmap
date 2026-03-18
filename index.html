@@ -21,6 +21,14 @@
   <!-- ★ API 키 설정 필요: developers.kakao.com → 내 애플리케이션 → JavaScript 키 입력 -->
   <script>
     window.KAKAO_JS_KEY = '8636f71c9fd0f4b857622a9ba0be7dcb';
+    // iOS Safari unhandled rejection으로 인한 페이지 크래시 방지
+    window.addEventListener('unhandledrejection', e => {
+      console.error('[unhandledrejection]', e.reason);
+      e.preventDefault(); // iOS에서 페이지 강제 종료 방지
+    });
+    window.addEventListener('error', e => {
+      console.error('[globalError]', e.message, e.filename, e.lineno);
+    });
     // PWA 서비스 워커 등록 (홈화면 추가 프롬프트 활성화에 필요)
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
@@ -2662,7 +2670,7 @@ function startApp(user) {
     loadExcludedPlaces().catch(() => {}); // 오등록 블랙리스트 로드
   }
 
-  requestAnimationFrame(() => setTimeout(initApp, 80));
+  requestAnimationFrame(() => setTimeout(() => initApp().catch(e => console.error('[initApp] unhandled error:', e)), 80));
 }
 
 /* ── 오등록 영구 제외 목록 Firestore에서 로드 ── */
@@ -2739,7 +2747,7 @@ async function loadViewportPlaces() {
         places.length = 0;
         arr.forEach(p => places.push(p));
         _markAllTilesLoaded();          // 전체 이미 로딩됨 표시
-        if (clusterGroup) places.forEach(addMarker);
+        if (clusterGroup) places.forEach(p => { try { addMarker(p); } catch(e) { console.warn('[addMarker cache]', e.message); } });
         return;
       }
     } catch(e) {}
@@ -2781,22 +2789,24 @@ async function loadViewportPlaces() {
     const { tile, snap } = result;
     const newBatch = [];
     snap.docs.forEach(doc => {
-      const p = { ...doc.data(), firestoreId: doc.id };
-      if (p.active === false) return;                                   // 비활성 제외
-      // auto_pipeline_cat 미확인 장소는 메모리에 올리지 않음 — 마커·메모리 낭비 방지
-      if (p.source === 'auto_pipeline_cat') {
-        const st = p.petStatus;
-        if (st !== 'confirmed' && st !== 'verified') return;
-      }
-      if (p.lng == null || p.lng < tile.lo || p.lng >= tile.lo + VP_TILE_DEG) return; // lng 필터
-      if (existingIds.has(doc.id)) return;                              // 중복 제외
-      existingIds.add(doc.id); // 병렬 결과 간 중복 방지
-      places.push(p);
-      newBatch.push(p);
+      try {
+        const p = { ...doc.data(), firestoreId: doc.id };
+        if (p.active === false) return;                                   // 비활성 제외
+        // auto_pipeline_cat 미확인 장소는 메모리에 올리지 않음 — 마커·메모리 낭비 방지
+        if (p.source === 'auto_pipeline_cat') {
+          const st = p.petStatus;
+          if (st !== 'confirmed' && st !== 'verified') return;
+        }
+        if (p.lng == null || p.lng < tile.lo || p.lng >= tile.lo + VP_TILE_DEG) return; // lng 필터
+        if (existingIds.has(doc.id)) return;                              // 중복 제외
+        existingIds.add(doc.id); // 병렬 결과 간 중복 방지
+        places.push(p);
+        newBatch.push(p);
+      } catch(docErr) { console.warn('[loadViewportPlaces] doc 처리 실패:', docErr); }
     });
     _loadedTiles.add(tile.key);
     if (newBatch.length > 0 && clusterGroup) {
-      newBatch.forEach(addMarker);
+      newBatch.forEach(p => { try { addMarker(p); } catch(e) { console.warn('[addMarker]', e.message, p?.id); } });
       anyNew = true;
     }
   }
