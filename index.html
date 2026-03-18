@@ -4584,17 +4584,57 @@ async function showSearchSuggestions(query) {
   box.innerHTML = html;
   box.classList.add('open');
 
-  // ── 4. Kakao 지오코딩 fallback (정적 목록에 없을 때) ──
+  // ── 4. Kakao SDK + REST 전국 장소 검색 (지도 위치 무관) ──────────────────
+  // SDK keywordSearch: JS API 키 사용 → REST 키 소진과 무관하게 동작
+  // 카카오맵 앱과 동일: 상호명 입력 → 전국 어디든 검색 → 클릭하면 해당 위치로 이동
   clearTimeout(_sgKakaoTimer);
   if (matchedAreas.length === 0) {
-    _sgKakaoTimer = setTimeout(async () => {
+    _sgKakaoTimer = setTimeout(() => {
       // 검색어가 바뀌었으면 중단
       const current = document.getElementById('search-input')?.value.trim();
       if (!current || current.toLowerCase() !== q) return;
+
+      // ── SDK keywordSearch (JS API 키, 위치 무관 전국 검색) ───────────────
+      if (window.kakao?.maps?.services?.Places) {
+        const ps = new kakao.maps.services.Places();
+        ps.keywordSearch(query, (data, status) => {
+          const currentVal = document.getElementById('search-input')?.value.trim();
+          if (!currentVal || currentVal.toLowerCase() !== q) return;
+          const box = document.getElementById('search-suggestions');
+          if (!box) return;
+
+          if (status === kakao.maps.services.Status.OK && data?.length) {
+            _sgKakaoPlaces = data;
+            let kakaoHtml = `<div class="sg-section-label">카카오맵 장소</div>`;
+            kakaoHtml += data.slice(0, 8).map((d, idx) => {
+              const addr = d.road_address_name || d.address_name || '';
+              const cat  = (d.category_name || '').split(' > ').pop();
+              const inDB = places.some(p => p.kakaoId === d.id || p.name === d.place_name);
+              return `<div class="sg-item" onmousedown="event.preventDefault()" onclick="selectKakaoPlaceSuggestion(${idx})">
+                <div class="sg-item-icon">${inDB ? '📍' : '🔍'}</div>
+                <div class="sg-item-main">
+                  <div class="sg-item-name">${d.place_name}${inDB ? ' <span style="font-size:10px;color:#7BC74D">등록됨</span>' : ''}</div>
+                  <div class="sg-item-sub">${cat ? cat + ' · ' : ''}${addr}</div>
+                </div>
+              </div>`;
+            }).join('');
+            const existingHtml = matchedPlaces.length > 0
+              ? box.innerHTML.replace(/<div class="sg-empty[^>]*>[\s\S]*?<\/div>/, '')
+              : '';
+            box.innerHTML = existingHtml + kakaoHtml;
+            box.classList.add('open');
+          } else {
+            if (box.querySelector('#sg-searching')) {
+              box.innerHTML = `<div class="sg-empty">결과 없음</div>`;
+            }
+          }
+        }, { size: 15 });  // 위치 파라미터 없음 → 전국 검색
+        return; // SDK 검색 시작했으면 REST 호출 불필요
+      }
+
+      // ── SDK 없을 때 REST fallback ─────────────────────────────────────────
+      ;(async () => {
       try {
-        // keyword(장소명 전국 검색) + address(지역/주소) 병렬 실행
-        // → 장소명 검색은 위치 무관 전국 검색 (카카오맵 앱과 동일하게 상호명으로 검색)
-        // → 주소 검색은 지역명·동네 이동용
         const [kwResp, addrResp] = await Promise.allSettled([
           fetch(
             `https://dapi.kakao.com/v2/local/search/keyword.json?query=${encodeURIComponent(query)}&size=15`,
@@ -4616,7 +4656,6 @@ async function showSearchSuggestions(query) {
           addrDocs = (j.documents || []).filter(d => d.y && d.x);
         }
 
-        // place_name 있는 것은 장소, 없는 것은 주소 → 합산 후 중복 제거
         const seenKeys = new Set();
         let docs = [...kwDocs, ...addrDocs].filter(d => {
           const k = (d.place_name || d.address_name || '') + '|' + d.x + '|' + d.y;
@@ -4624,11 +4663,9 @@ async function showSearchSuggestions(query) {
           seenKeys.add(k); return true;
         });
 
+        const b = document.getElementById('search-suggestions');
         if (!docs.length) {
-          const b = document.getElementById('search-suggestions');
-          if (b?.querySelector('#sg-searching')) {
-            b.innerHTML = `<div class="sg-empty">결과 없음</div>`;
-          }
+          if (b?.querySelector('#sg-searching')) b.innerHTML = `<div class="sg-empty">결과 없음</div>`;
           return;
         }
         // 검색어가 바뀌지 않았으면 드롭다운 업데이트
@@ -4690,6 +4727,7 @@ async function showSearchSuggestions(query) {
           b.innerHTML = `<div class="sg-empty">결과를 찾지 못했어요</div>`;
         }
       }
+      })(); // REST fallback async IIFE 닫기
     }, 300);
   }
 }
