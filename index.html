@@ -3687,24 +3687,34 @@ function initKakaoSearch() {
   if (kakaoReady) return;
   const key = window.KAKAO_JS_KEY;
   if (!key || key === 'YOUR_KAKAO_JS_KEY') return;
-  if (window.kakao && window.kakao.maps) {
-    try {
-      kakaoPS = new kakao.maps.services.Places();
-      kakaoReady = true;
-    } catch(e) {}
-    return;
-  }
-  // Dynamically load Kakao SDK
-  const s = document.createElement('script');
-  s.src = `//dapi.kakao.com/v2/maps/sdk.js?appkey=${key}&libraries=services&autoload=false`;
-  s.onload = () => {
+
+  // kakao.maps.load() 이후 Places 서비스 초기화
+  function _initPlaces() {
     kakao.maps.load(() => {
       try {
         kakaoPS = new kakao.maps.services.Places();
         kakaoReady = true;
       } catch(e) { console.warn('Kakao Places init failed', e); }
     });
-  };
+  }
+
+  if (window.kakao && window.kakao.maps) {
+    // SDK 스크립트는 로드됐지만 services 미초기화일 수 있음 → 반드시 load() 호출
+    if (window.kakao.maps.services) {
+      // 이미 services 사용 가능 — 바로 초기화
+      try { kakaoPS = new kakao.maps.services.Places(); kakaoReady = true; }
+      catch(e) { console.warn('Kakao Places init failed', e); }
+    } else {
+      // services 아직 없음 → kakao.maps.load() 로 초기화 필요
+      _initPlaces();
+    }
+    return;
+  }
+
+  // SDK 스크립트 자체가 아직 없음 → 동적 로드 후 초기화
+  const s = document.createElement('script');
+  s.src = `//dapi.kakao.com/v2/maps/sdk.js?appkey=${key}&libraries=services&autoload=false`;
+  s.onload = _initPlaces;
   document.head.appendChild(s);
 }
 
