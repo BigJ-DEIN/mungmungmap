@@ -3717,7 +3717,9 @@ function getFiltered(ignoreViewport = false) {
       if (st !== 'confirmed' && st !== 'verified') return false;
     }
     // 지도 범위 연동: 현재 뷰포트 밖의 장소 제외
-    if (vpBounds && p.lat != null && p.lng != null) {
+    // 좌표가 없는 장소는 뷰포트 판단 불가 → 목록에서 제외 (다른 지역 장소가 섞이는 문제 방지)
+    if (vpBounds) {
+      if (p.lat == null || p.lng == null) return false;
       if (!vpBounds.contains([p.lat, p.lng])) return false;
     }
     if (activeFilters.area !== 'all' && p.province !== activeFilters.area) return false;
@@ -3850,7 +3852,10 @@ function openPlace(p) {
   if (activePlace) setMarkerActive(activePlace.id, false);
   activePlace = p;
   setMarkerActive(p.id, true);
-  map.flyTo([p.lat, p.lng], 16, { duration:1 });
+  // 좌표가 없는 장소는 flyTo 스킵 (flyTo에 null 전달 시 오류로 드로어 오픈 중단되는 버그 방지)
+  if (p.lat != null && p.lng != null) {
+    map.flyTo([p.lat, p.lng], 16, { duration:1 });
+  }
 
   // Log view
   if (firebaseReady && currentUser) {
