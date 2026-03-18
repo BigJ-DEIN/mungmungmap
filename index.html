@@ -495,6 +495,45 @@
     .btn-modal-cancel { flex:1; padding:13px; background:#F5F5F5; border:none; border-radius:12px; font-size:14px; font-weight:600; color:#888; font-family:inherit; cursor:pointer; }
     .btn-modal-submit { flex:2; padding:13px; background:#E04E14; border:none; border-radius:12px; font-size:14px; font-weight:700; color:#fff; font-family:inherit; cursor:pointer; }
 
+    /* ── NEW PLACE REPORT FLOW ── */
+    .rep-step { display:none; }
+    .rep-step.active { display:block; }
+    .rep-step-header { display:flex; align-items:center; gap:8px; margin-bottom:16px; }
+    .rep-step-dots { display:flex; gap:5px; margin-left:auto; }
+    .rep-step-dot { width:7px; height:7px; border-radius:50%; background:#E0E0E0; transition:background .2s; }
+    .rep-step-dot.on { background:#E04E14; }
+    .rep-search-box { display:flex; gap:8px; margin-bottom:10px; }
+    .rep-search-box input { flex:1; padding:11px 14px; border:2px solid #EBEBEB; border-radius:12px; font-size:14px; font-family:inherit; outline:none; }
+    .rep-search-box input:focus { border-color:#E04E14; }
+    .rep-search-btn { padding:11px 16px; background:#E04E14; color:#fff; border:none; border-radius:12px; font-size:13px; font-weight:700; font-family:inherit; cursor:pointer; white-space:nowrap; }
+    .rep-result-list { max-height:240px; overflow-y:auto; margin-bottom:4px; }
+    .rep-result-item { display:flex; align-items:flex-start; gap:10px; padding:11px 12px; border:2px solid #EBEBEB; border-radius:12px; margin-bottom:7px; cursor:pointer; transition:border-color .15s, background .15s; }
+    .rep-result-item:hover, .rep-result-item.selected { border-color:#E04E14; background:#FFF5F2; }
+    .rep-result-name { font-size:13px; font-weight:700; color:#2D2D2D; }
+    .rep-result-cat { font-size:11px; color:#E04E14; margin-top:1px; }
+    .rep-result-addr { font-size:11px; color:#888; margin-top:2px; }
+    .rep-selected-card { background:#FFF5F2; border:2px solid #E04E14; border-radius:12px; padding:12px 14px; margin-bottom:16px; }
+    .rep-selected-name { font-size:14px; font-weight:800; color:#2D2D2D; }
+    .rep-selected-sub { font-size:12px; color:#888; margin-top:3px; }
+    .rep-cond-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:16px; }
+    .rep-cond-btn { padding:10px 6px; border:2px solid #E5E7EB; border-radius:12px; background:white; font-size:13px; font-family:inherit; font-weight:600; cursor:pointer; display:flex; flex-direction:column; align-items:center; gap:3px; transition:border-color .15s, background .15s; }
+    .rep-cond-btn .rep-cond-icon { font-size:18px; }
+    .rep-cond-btn .rep-cond-label { font-size:11px; color:#888; }
+    .rep-cond-btn.yes { border-color:#4CAF50; background:#F0FFF4; }
+    .rep-cond-btn.no  { border-color:#EF4444; background:#FFF5F5; }
+    .rep-cond-btn.yes .rep-cond-label { color:#4CAF50; }
+    .rep-cond-btn.no  .rep-cond-label { color:#EF4444; }
+    .rep-cond-section { margin-bottom:16px; }
+    .rep-cond-section > label { display:block; font-size:13px; font-weight:600; color:#555; margin-bottom:8px; }
+    .rep-toggle-row { display:flex; gap:8px; }
+    .rep-toggle-opt { flex:1; padding:10px 6px; border:2px solid #E5E7EB; border-radius:12px; background:white; font-size:12px; font-family:inherit; font-weight:600; cursor:pointer; text-align:center; transition:border-color .15s, background .15s; }
+    .rep-toggle-opt.active { border-color:#E04E14; background:#FFF5F2; color:#E04E14; }
+    .rep-note-area { width:100%; padding:11px 14px; border:2px solid #EBEBEB; border-radius:12px; font-size:13px; font-family:inherit; outline:none; resize:vertical; }
+    .rep-note-area:focus { border-color:#E04E14; }
+    .rep-empty { text-align:center; padding:32px 0; color:#BDBDBD; font-size:13px; }
+    .rep-kakao-link { display:inline-flex; align-items:center; gap:4px; font-size:12px; color:#1976D2; text-decoration:none; margin-top:4px; }
+    .lc-req-btn { display:inline-block; margin-top:8px; padding:6px 14px; background:#E04E14; color:white; border:none; border-radius:20px; font-size:12px; font-weight:700; font-family:inherit; cursor:pointer; }
+
     /* ── ADMIN PANEL ── */
     #admin-panel {
       position:fixed; inset:0; background:#F0F2F5; z-index:2000;
@@ -1145,6 +1184,7 @@
       <div class="qf-row">
         <button class="filter-chip" data-cond="대형견"       onclick="toggleFilter(this,'대형견')">대형견 OK</button>
         <button class="filter-chip" data-cond="실내"         onclick="toggleFilter(this,'실내')">실내 가능</button>
+        <button class="filter-chip" data-cond="테라스"       onclick="toggleFilter(this,'테라스')">🌿 테라스</button>
         <button class="filter-chip" data-cond="케이지불필요"  onclick="toggleFilter(this,'케이지불필요')">케이지 불필요</button>
         <button class="filter-chip fee-chip" data-cond="입장료있음" onclick="toggleFilter(this,'입장료있음')">입장료</button>
       </div>
@@ -1407,21 +1447,97 @@
   </div>
 </div>
 
-<!-- ══ PLACE REPORT MODAL ══ -->
+<!-- ══ PLACE REPORT MODAL (multi-step) ══ -->
 <div class="modal-overlay" id="submit-modal" onclick="modalOverlayClick(event,'submit-modal')">
   <div class="modal-sheet">
     <div class="modal-handle"></div>
     <div class="modal-content">
-      <div class="modal-title">🐾 새 장소 알려주기</div>
-      <div class="modal-sub">홍시랑 가기 좋은 곳 발견했어요? 확인 후 지도에 올릴게요!</div>
-      <div class="modal-field"><label>장소 이름 *</label><input id="rep-name" placeholder="카페 이름" /></div>
-      <div class="modal-field"><label>주소</label><input id="rep-addr" placeholder="경기도..." /></div>
-      <div class="modal-field"><label>전화번호</label><input id="rep-phone" placeholder="031-..." /></div>
-      <div class="modal-field"><label>메모 / 출처 링크</label><textarea id="rep-note" rows="3" placeholder="강아지 동반 조건, 네이버/카카오 링크 등"></textarea></div>
-      <div class="modal-actions">
-        <button class="btn-modal-cancel" onclick="closeModal('submit-modal')">취소</button>
-        <button class="btn-modal-submit" onclick="submitReport()">알려주기 🐾</button>
+      <div class="modal-title">🐾 새 장소 제보하기</div>
+
+      <!-- STEP 1: Search -->
+      <div class="rep-step active" id="rep-step-1">
+        <div class="rep-step-header">
+          <span style="font-size:13px;color:#888">카카오맵에서 장소를 검색하세요</span>
+          <div class="rep-step-dots">
+            <div class="rep-step-dot on"></div><div class="rep-step-dot"></div><div class="rep-step-dot"></div>
+          </div>
+        </div>
+        <div class="rep-search-box">
+          <input id="rep-search-input" placeholder="예) 카페 홍시, 강아지 카페 분당" onkeydown="if(event.key==='Enter')repSearch()" />
+          <button class="rep-search-btn" onclick="repSearch()">검색</button>
+        </div>
+        <div id="rep-result-list" class="rep-result-list">
+          <div class="rep-empty">검색어를 입력하면 카카오맵 결과가 나와요 🗺️</div>
+        </div>
       </div>
+
+      <!-- STEP 2: Pet Conditions -->
+      <div class="rep-step" id="rep-step-2">
+        <div class="rep-step-header">
+          <span style="font-size:13px;color:#888">반려동물 조건을 알려주세요</span>
+          <div class="rep-step-dots">
+            <div class="rep-step-dot"></div><div class="rep-step-dot on"></div><div class="rep-step-dot"></div>
+          </div>
+        </div>
+        <div id="rep-selected-preview" class="rep-selected-card" style="margin-bottom:16px"></div>
+
+        <div class="rep-cond-section">
+          <label>🐕 입장 가능 견종</label>
+          <div class="rep-toggle-row">
+            <button class="rep-toggle-opt" id="rco-large-y"  onclick="repToggle('large','yes')">대형견 OK</button>
+            <button class="rep-toggle-opt" id="rco-large-n"  onclick="repToggle('large','no')">소형견만</button>
+            <button class="rep-toggle-opt" id="rco-large-u"  onclick="repToggle('large','unknown')">모름</button>
+          </div>
+        </div>
+        <div class="rep-cond-section">
+          <label>🏠 실내 동반 가능</label>
+          <div class="rep-toggle-row">
+            <button class="rep-toggle-opt" id="rco-indoor-y" onclick="repToggle('indoor','yes')">실내 가능</button>
+            <button class="rep-toggle-opt" id="rco-indoor-n" onclick="repToggle('indoor','no')">테라스만</button>
+            <button class="rep-toggle-opt" id="rco-indoor-u" onclick="repToggle('indoor','unknown')">모름</button>
+          </div>
+        </div>
+        <div class="rep-cond-section">
+          <label>📦 케이지 필요 여부</label>
+          <div class="rep-toggle-row">
+            <button class="rep-toggle-opt" id="rco-cage-y"   onclick="repToggle('cage','yes')">케이지 필수</button>
+            <button class="rep-toggle-opt" id="rco-cage-n"   onclick="repToggle('cage','no')">케이지 불필요</button>
+            <button class="rep-toggle-opt" id="rco-cage-u"   onclick="repToggle('cage','unknown')">모름</button>
+          </div>
+        </div>
+        <div class="rep-cond-section">
+          <label>💰 입장료</label>
+          <div class="rep-toggle-row">
+            <button class="rep-toggle-opt" id="rco-fee-y"    onclick="repToggle('fee','yes')">입장료 있음</button>
+            <button class="rep-toggle-opt" id="rco-fee-n"    onclick="repToggle('fee','no')">무료</button>
+            <button class="rep-toggle-opt" id="rco-fee-u"    onclick="repToggle('fee','unknown')">모름</button>
+          </div>
+        </div>
+        <div class="modal-actions" style="margin-top:8px">
+          <button class="btn-modal-cancel" onclick="repGoto(1)">← 다시 검색</button>
+          <button class="btn-modal-submit" onclick="repGoto(3)">다음 →</button>
+        </div>
+      </div>
+
+      <!-- STEP 3: Note + Submit -->
+      <div class="rep-step" id="rep-step-3">
+        <div class="rep-step-header">
+          <span style="font-size:13px;color:#888">추가 정보를 남겨주세요</span>
+          <div class="rep-step-dots">
+            <div class="rep-step-dot"></div><div class="rep-step-dot"></div><div class="rep-step-dot on"></div>
+          </div>
+        </div>
+        <div id="rep-confirm-card" class="rep-selected-card" style="margin-bottom:16px"></div>
+        <div class="modal-field">
+          <label>메모 (선택)</label>
+          <textarea class="rep-note-area" id="rep-note" rows="3" placeholder="출처 링크, 알게 된 경위, 방문 경험 등을 자유롭게 적어주세요"></textarea>
+        </div>
+        <div class="modal-actions">
+          <button class="btn-modal-cancel" onclick="repGoto(2)">← 이전</button>
+          <button class="btn-modal-submit" onclick="submitReport()">제보하기 🐾</button>
+        </div>
+      </div>
+
     </div>
   </div>
 </div>
@@ -1654,7 +1770,7 @@ let dogRegBlob    = null;   // File blob for dog photo during registration
 let map           = null;
 let clusterGroup  = null;
 let markers       = {};
-let activeFilters = { area:'all', largeDog:false, indoor:false, noCage:false, hasFee:false, noFee:false, catType:'all' };
+let activeFilters = { area:'all', largeDog:false, indoor:false, outdoor:false, noCage:false, hasFee:false, noFee:false, catType:'all' };
 let activePlace   = null;
 let searchText    = '';
 let mobileTab     = 'map';   // map | list | filter
@@ -3231,6 +3347,7 @@ function toggleFilter(btn, type) {
   const on = btn.classList.contains('active');
   if (type==='대형견')      activeFilters.largeDog = on;
   if (type==='실내')        activeFilters.indoor   = on;
+  if (type==='테라스')      activeFilters.outdoor  = on;
   if (type==='케이지불필요') activeFilters.noCage   = on;
   if (type==='입장료있음')  { activeFilters.hasFee = on; if (on) { activeFilters.noFee=false; document.querySelector('[data-cond="입장료없음"]')?.classList.remove('active'); } }
   if (type==='입장료없음')  { activeFilters.noFee  = on; if (on) { activeFilters.hasFee=false; document.querySelector('[data-cond="입장료있음"]')?.classList.remove('active'); } }
@@ -3256,8 +3373,9 @@ function getFiltered() {
       if (st !== 'confirmed' && st !== 'verified') return false;
     }
     if (activeFilters.area !== 'all' && p.province !== activeFilters.area) return false;
-    if (activeFilters.largeDog && p.large !== true) return false;  // null(미확인) 포함 제외
-    if (activeFilters.indoor  && p.indoor !== true) return false;  // null(미확인) 포함 제외
+    if (activeFilters.largeDog && p.large !== true) return false;   // null(미확인) 포함 제외
+    if (activeFilters.indoor  && p.indoor !== true) return false;   // null(미확인) 포함 제외
+    if (activeFilters.outdoor && p.outdoor !== true) return false;  // null(미확인) 포함 제외
     if (activeFilters.noCage  && p.cage === true) return false;    // null(미확인)은 케이지 불필요 필터에서 제외 안 함
     if (activeFilters.hasFee  && !p.entryFee) return false;
     if (activeFilters.noFee   && p.entryFee)  return false;
@@ -3344,6 +3462,9 @@ function liveCardHtml(d) {
   const cat = d.category_name ? d.category_name.split(' > ').pop() : '';
   const addr = d.road_address_name || d.address_name || '';
   const color = d._inDB ? '#4CAF50' : '#87CEEB';
+  const reqBtn = !d._inDB
+    ? `<button class="lc-req-btn" onclick="event.stopPropagation();openReportWithPlace(liveData[${d._idx}])">+ 추가 요청</button>`
+    : '';
   return `
   <div class="place-card" style="border-left:3px solid ${color}" onclick="map.flyTo([${lat},${lng}],17,{duration:0.7});showLivePopup(liveData[${d._idx}],${d._inDB})">
     <div class="pc-top">
@@ -3357,6 +3478,7 @@ function liveCardHtml(d) {
       <span class="tag t-gray">${addr}</span>
       ${d.phone ? `<span class="tag t-blue">${d.phone}</span>` : ''}
     </div>
+    ${reqBtn}
   </div>`;
 }
 
@@ -4386,11 +4508,41 @@ async function refreshDrawerMemories(placeId) {
 }
 
 // ══════════════════════════════════════════════════════
-//  PLACE REPORT MODAL
+//  PLACE REPORT MODAL (multi-step)
 // ══════════════════════════════════════════════════════
+// State for the new place report flow
+let _repSelected = null;   // selected Kakao place object
+let _repConds = { large: null, indoor: null, cage: null, fee: null };
+
 function openSubmitModal() {
+  _repSelected = null;
+  _repConds = { large: null, indoor: null, cage: null, fee: null };
+  document.getElementById('rep-search-input').value = '';
+  document.getElementById('rep-result-list').innerHTML = '<div class="rep-empty">검색어를 입력하면 카카오맵 결과가 나와요 🗺️</div>';
+  document.getElementById('rep-note').value = '';
+  _repGotoStep(1);
   document.getElementById('submit-modal').classList.add('open');
 }
+
+// Open report modal pre-filled from live search result
+function openReportWithPlace(d) {
+  _repSelected = {
+    place_name: d.place_name,
+    address_name: d.address_name,
+    road_address_name: d.road_address_name,
+    phone: d.phone || '',
+    place_url: d.place_url || '',
+    category_name: d.category_name || '',
+    x: d.x, y: d.y,
+    id: d.id || ''
+  };
+  _repConds = { large: null, indoor: null, cage: null, fee: null };
+  document.getElementById('rep-note').value = '';
+  _repRenderSelected();
+  _repGotoStep(2);
+  document.getElementById('submit-modal').classList.add('open');
+}
+
 function openModal(id) {
   document.getElementById(id)?.classList.add('open');
 }
@@ -4401,26 +4553,162 @@ function closeModal(id) {
 function modalOverlayClick(e, id) {
   if (e.target === e.currentTarget) closeModal(id);
 }
+
+function _repGotoStep(n) {
+  [1,2,3].forEach(i => {
+    document.getElementById('rep-step-'+i)?.classList.toggle('active', i === n);
+  });
+}
+function repGoto(n) {
+  if (n === 2 && !_repSelected) { showToast('먼저 장소를 선택해주세요 🙏'); return; }
+  if (n === 3) _repRenderConfirm();
+  _repGotoStep(n);
+}
+
+function repToggle(field, val) {
+  _repConds[field] = val === 'unknown' ? null : (val === 'yes');
+  const keys = { large: ['y','n','u'], indoor: ['y','n','u'], cage: ['y','n','u'], fee: ['y','n','u'] };
+  ['y','n','u'].forEach(s => {
+    const el = document.getElementById(`rco-${field}-${s}`);
+    if (!el) return;
+    el.classList.toggle('active',
+      (s === 'y' && val === 'yes') || (s === 'n' && val === 'no') || (s === 'u' && val === 'unknown')
+    );
+  });
+}
+
+async function repSearch() {
+  const q = document.getElementById('rep-search-input').value.trim();
+  if (!q) return;
+  const list = document.getElementById('rep-result-list');
+  list.innerHTML = '<div class="rep-empty">검색 중...</div>';
+
+  // Use Kakao Places SDK if ready
+  if (window.kakao && window.kakao.maps && window.kakao.maps.services) {
+    const ps = new kakao.maps.services.Places();
+    ps.keywordSearch(q, (data, status) => {
+      if (status !== kakao.maps.services.Status.OK || !data.length) {
+        list.innerHTML = '<div class="rep-empty">결과가 없어요. 다른 검색어를 시도해봐요.</div>';
+        return;
+      }
+      _repRenderResults(data.slice(0, 10));
+    });
+  } else {
+    // Fallback: dapi REST with REST_KEY header via fetch with kakao key in query
+    try {
+      const key = window.KAKAO_JS_KEY;
+      const url = `https://dapi.kakao.com/v2/local/search/keyword.json?query=${encodeURIComponent(q)}&size=10`;
+      const res = await fetch(url, { headers: { Authorization: `KakaoAK ${key}` } });
+      const json = await res.json();
+      if (!json.documents || !json.documents.length) {
+        list.innerHTML = '<div class="rep-empty">결과가 없어요. 다른 검색어를 시도해봐요.</div>';
+        return;
+      }
+      _repRenderResults(json.documents);
+    } catch(e) {
+      list.innerHTML = '<div class="rep-empty">검색 중 오류가 발생했어요. 다시 시도해주세요.</div>';
+    }
+  }
+}
+
+let _repResultsCache = [];  // stores search result objects by index
+
+function _repRenderResults(data) {
+  _repResultsCache = data;
+  const list = document.getElementById('rep-result-list');
+  list.innerHTML = data.map((d, i) => {
+    const cat = d.category_name ? d.category_name.split(' > ').pop() : '';
+    const addr = d.road_address_name || d.address_name || '';
+    return `<div class="rep-result-item" id="rep-ri-${i}" onclick="_repSelectPlace(${i})">
+      <div>
+        <div class="rep-result-name">${d.place_name}</div>
+        <div class="rep-result-cat">${cat}</div>
+        <div class="rep-result-addr">${addr}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function _repSelectPlace(idx) {
+  const d = _repResultsCache[idx];
+  if (!d) return;
+  document.querySelectorAll('.rep-result-item').forEach(el => el.classList.remove('selected'));
+  document.getElementById('rep-ri-'+idx)?.classList.add('selected');
+  _repSelected = d;
+  // After short delay, advance to step 2
+  setTimeout(() => {
+    _repConds = { large: null, indoor: null, cage: null, fee: null };
+    ['large','indoor','cage','fee'].forEach(f => {
+      ['y','n','u'].forEach(s => document.getElementById(`rco-${f}-${s}`)?.classList.remove('active'));
+    });
+    _repRenderSelected();
+    _repGotoStep(2);
+  }, 150);
+}
+
+function _repRenderSelected() {
+  if (!_repSelected) return;
+  const addr = _repSelected.road_address_name || _repSelected.address_name || '';
+  const cat  = _repSelected.category_name ? _repSelected.category_name.split(' > ').pop() : '';
+  const link = _repSelected.place_url
+    ? `<a class="rep-kakao-link" href="${_repSelected.place_url}" target="_blank" onclick="event.stopPropagation()">🗺️ 카카오맵에서 보기</a>` : '';
+  const html = `
+    <div class="rep-selected-name">${_repSelected.place_name}</div>
+    <div class="rep-selected-sub">${cat}${cat&&addr?' · ':''}${addr}</div>
+    ${link}`;
+  document.getElementById('rep-selected-preview').innerHTML = html;
+}
+
+function _repRenderConfirm() {
+  if (!_repSelected) return;
+  const addr = _repSelected.road_address_name || _repSelected.address_name || '';
+  const cat  = _repSelected.category_name ? _repSelected.category_name.split(' > ').pop() : '';
+  const condLines = [
+    _repConds.large === true  ? '🐕 대형견 OK'   : _repConds.large === false ? '🐕 소형견만'    : null,
+    _repConds.indoor === true ? '🏠 실내 가능'   : _repConds.indoor === false ? '🌿 테라스만'  : null,
+    _repConds.cage === true   ? '📦 케이지 필수' : _repConds.cage === false ? '📦 케이지 불필요' : null,
+    _repConds.fee === true    ? '💰 입장료 있음'  : _repConds.fee === false ? '🆓 무료'          : null,
+  ].filter(Boolean);
+  document.getElementById('rep-confirm-card').innerHTML = `
+    <div class="rep-selected-name">${_repSelected.place_name}</div>
+    <div class="rep-selected-sub">${cat}${cat&&addr?' · ':''}${addr}</div>
+    ${condLines.length ? `<div style="margin-top:8px;font-size:12px;color:#555;line-height:1.9">${condLines.join(' &nbsp;·&nbsp; ')}</div>` : '<div style="margin-top:8px;font-size:12px;color:#BDBDBD">조건 정보 없음 (미확인으로 등록)</div>'}
+  `;
+}
+
 async function submitReport() {
-  const name  = document.getElementById('rep-name').value.trim();
-  const addr  = document.getElementById('rep-addr').value.trim();
-  const phone = document.getElementById('rep-phone').value.trim();
-  const note  = document.getElementById('rep-note').value.trim();
-  if (!name) { showToast('장소 이름을 적어줘요 🙏'); return; }
+  if (!_repSelected) { showToast('장소를 선택해주세요 🙏'); return; }
+  const note = document.getElementById('rep-note').value.trim();
+
+  const reportData = {
+    userId: currentUser?.uid || 'anonymous',
+    userEmail: currentUser?.email || 'anonymous',
+    // Place info from Kakao
+    placeName:    _repSelected.place_name,
+    placeAddr:    _repSelected.road_address_name || _repSelected.address_name || '',
+    placePhone:   _repSelected.phone || '',
+    kakaoPlaceId: _repSelected.id || '',
+    kakaoPlaceUrl:_repSelected.place_url || '',
+    kakaoCategory:_repSelected.category_name || '',
+    lat:          parseFloat(_repSelected.y) || null,
+    lng:          parseFloat(_repSelected.x) || null,
+    // Pet conditions (null = unknown)
+    condLarge:  _repConds.large,
+    condIndoor: _repConds.indoor,
+    condCage:   _repConds.cage,
+    condFee:    _repConds.fee,
+    // Note
+    placeNote: note,
+    status: 'pending',
+    timestamp: firebase.firestore.FieldValue.serverTimestamp()
+  };
 
   if (firebaseReady && db) {
-    await db.collection('reports').add({
-      userId: currentUser?.uid || 'anonymous',
-      userEmail: currentUser?.email || 'anonymous',
-      placeName: name, placeAddr: addr, placePhone: phone, placeNote: note,
-      status: 'pending',
-      timestamp: firebase.firestore.FieldValue.serverTimestamp()
-    });
-
+    await db.collection('reports').add(reportData);
   }
   closeModal('submit-modal');
-  ['rep-name','rep-addr','rep-phone','rep-note'].forEach(id => document.getElementById(id).value='');
-  showToast('전달됐어요! 확인 후 지도에 올릴게요 🙏');
+  document.getElementById('rep-note').value = '';
+  showToast('제보가 전달됐어요! 확인 후 지도에 올릴게요 🙏');
 }
 
 // ══════════════════════════════════════════════════════
@@ -4707,6 +4995,47 @@ async function renderAdminViews() {
     </div>`;
 }
 
+function _fmtCond(val, yesLabel, noLabel) {
+  if (val === true)  return `<span style="color:#4CAF50;font-weight:700">${yesLabel}</span>`;
+  if (val === false) return `<span style="color:#EF4444;font-weight:700">${noLabel}</span>`;
+  return `<span style="color:#BDBDBD">미확인</span>`;
+}
+
+function _reportCardHtml(r) {
+  const kakaoLink = r.kakaoPlaceUrl
+    ? `<a href="${r.kakaoPlaceUrl}" target="_blank" style="font-size:11px;color:#1976D2;text-decoration:none">🗺️ 카카오맵</a>` : '';
+  const condRow = `
+    <div style="display:flex;gap:10px;flex-wrap:wrap;font-size:12px;margin:6px 0 2px">
+      <span>🐕 ${_fmtCond(r.condLarge,'대형견 OK','소형견만')}</span>
+      <span>🏠 ${_fmtCond(r.condIndoor,'실내 가능','테라스만')}</span>
+      <span>📦 ${_fmtCond(r.condCage,'케이지 필수','불필요')}</span>
+      <span>💰 ${_fmtCond(r.condFee,'입장료','무료')}</span>
+    </div>`;
+  return `
+    <div style="border:1px solid #E5E7EB;border-radius:12px;padding:14px;margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:800;font-size:14px">${r.placeName}</div>
+          <div style="font-size:12px;color:#6B7280;margin-top:1px">${r.placeAddr||''}</div>
+          ${r.placePhone?`<div style="font-size:12px;color:#6B7280">${r.placePhone}</div>`:''}
+          ${r.kakaoCategory?`<div style="font-size:11px;color:#E04E14;margin-top:2px">${r.kakaoCategory.split(' > ').pop()}</div>`:''}
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0;margin-left:8px">
+          <span class="admin-badge badge-pending">대기</span>
+          ${kakaoLink}
+        </div>
+      </div>
+      ${condRow}
+      ${r.placeNote?`<div style="font-size:13px;color:#374151;background:#F9FAFB;border-radius:8px;padding:10px;margin:8px 0;line-height:1.5">${r.placeNote}</div>`:''}
+      ${r.lat?`<div style="font-size:11px;color:#9CA3AF">📍 ${r.lat.toFixed(5)}, ${r.lng.toFixed(5)}</div>`:''}
+      <div style="font-size:11px;color:#9CA3AF;margin:6px 0 10px">제보자: ${r.userEmail} · ${fmtTime(r.timestamp)}</div>
+      <div style="display:flex;gap:8px">
+        <button class="btn-sm btn-approve" onclick="updateReport('${r.id}','approved')">✅ 승인</button>
+        <button class="btn-sm btn-reject"  onclick="updateReport('${r.id}','rejected')">❌ 반려</button>
+      </div>
+    </div>`;
+}
+
 async function renderAdminReports() {
   const snap = await db.collection('reports').orderBy('timestamp','desc').get();
   const rows = snap.docs.map(d => ({ id:d.id, ...d.data() }));
@@ -4717,23 +5046,7 @@ async function renderAdminReports() {
   document.getElementById('admin-content').innerHTML = `
     <div class="admin-section">
       <h3>📝 처리 대기 제보 (${pending.length}건)</h3>
-      ${pending.length ? pending.map(r=>`
-        <div style="border:1px solid #E5E7EB;border-radius:12px;padding:14px;margin-bottom:10px">
-          <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
-            <div>
-              <div style="font-weight:800;font-size:14px">${r.placeName}</div>
-              <div style="font-size:12px;color:#6B7280;margin-top:2px">${r.placeAddr||''}</div>
-              ${r.placePhone?`<div style="font-size:12px;color:#6B7280">${r.placePhone}</div>`:''}
-            </div>
-            <span class="admin-badge badge-pending">대기</span>
-          </div>
-          ${r.placeNote?`<div style="font-size:13px;color:#374151;background:#F9FAFB;border-radius:8px;padding:10px;margin-bottom:10px;line-height:1.5">${r.placeNote}</div>`:''}
-          <div style="font-size:11px;color:#9CA3AF;margin-bottom:10px">제보자: ${r.userEmail} · ${fmtTime(r.timestamp)}</div>
-          <div style="display:flex;gap:8px">
-            <button class="btn-sm btn-approve" onclick="updateReport('${r.id}','approved')">✅ 승인</button>
-            <button class="btn-sm btn-reject"  onclick="updateReport('${r.id}','rejected')">❌ 반려</button>
-          </div>
-        </div>`).join('') : '<div class="empty-state"><div class="es-icon">✅</div><p>처리 대기 중인 제보가 없어요</p></div>'}
+      ${pending.length ? pending.map(r => _reportCardHtml(r)).join('') : '<div class="empty-state"><div class="es-icon">✅</div><p>처리 대기 중인 제보가 없어요</p></div>'}
     </div>
     ${resolved.length ? `
     <div class="admin-section">
@@ -4743,7 +5056,7 @@ async function renderAdminReports() {
         <tbody>
           ${resolved.map(r=>`
             <tr>
-              <td style="font-weight:700">${r.placeName}</td>
+              <td style="font-weight:700">${r.placeName}${r.kakaoPlaceUrl?` <a href="${r.kakaoPlaceUrl}" target="_blank" style="font-size:10px;color:#1976D2">🗺️</a>`:''}</td>
               <td style="font-size:12px">${r.userEmail}</td>
               <td><span class="admin-badge ${r.status==='approved'?'badge-approved':'badge-rejected'}">${r.status==='approved'?'승인':'반려'}</span></td>
               <td style="font-size:11px;color:#9CA3AF">${fmtTime(r.timestamp)}</td>
