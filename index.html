@@ -3239,15 +3239,18 @@ async function renderLiveResults(rawData) {
     );
   }
 
-  // Build enriched data with inDB flag
-  liveData = data.map((d, i) => ({
-    ...d,
-    _idx: i,
-    _inDB: dbKakaoIds.has(d.id) || dbNames.has(d.place_name.trim()) || coordInDB(parseFloat(d.y), parseFloat(d.x))
-  }));
+  // 이미 DB에 있는 장소는 liveData에서 제외 — 일반 섹션에 이미 표시됨
+  const alreadyInDBCount = data.filter(d =>
+    dbKakaoIds.has(d.id) || dbNames.has(d.place_name.trim()) ||
+    coordInDB(parseFloat(d.y), parseFloat(d.x))
+  ).length;
+  liveData = data
+    .filter(d => !dbKakaoIds.has(d.id) && !dbNames.has(d.place_name.trim()) &&
+                 !coordInDB(parseFloat(d.y), parseFloat(d.x)))
+    .map((d, i) => ({ ...d, _idx: i }));
 
   // 즉시 목록·지도 표시 (처리 전 미리보기) — kakaoId로 마커 추적
-  liveData.filter(d => !d._inDB).forEach(d => {
+  liveData.forEach(d => {
     const lat = parseFloat(d.y), lng = parseFloat(d.x);
     const dotHtml = `<div style="width:14px;height:14px;border-radius:50%;background:#87CEEB;border:2px solid white;box-shadow:0 1px 6px rgba(0,0,0,.3);cursor:pointer"></div>`;
     const icon = L.divIcon({ html: dotHtml, className:'', iconSize:[14,14], iconAnchor:[7,7] });
@@ -3258,8 +3261,8 @@ async function renderLiveResults(rawData) {
   btn.classList.add('active');
 
   // ── 미등록 장소 자동 처리 시작 ──────────────────────────────────────────
-  const toProcess = liveData.filter(d => !d._inDB);
-  const total = toProcess.length;
+  const total = liveData.length;
+  const alreadyMsg = alreadyInDBCount > 0 ? ` (기등록 ${alreadyInDBCount}개 제외)` : '';
 
   if (total === 0) {
     btn.textContent = '검색 지우기';
@@ -3267,10 +3270,10 @@ async function renderLiveResults(rawData) {
     return;
   }
 
-  showToast(`${data.length}개 발견 · 미등록 ${total}개 자동 등록 중...`);
+  showToast(`${data.length}개 발견${alreadyMsg} · 신규 ${total}개 자동 등록 중...`);
   let done = 0;
 
-  for (const d of toProcess) {
+  for (const d of liveData.slice()) {   // slice()로 복사 — 순회 중 liveData 변경 대비
     // 버튼에 진행률 표시
     btn.textContent = `⏳ 자동 등록 중 ${done}/${total}...`;
 
@@ -3284,7 +3287,7 @@ async function renderLiveResults(rawData) {
     await new Promise(r => setTimeout(r, 300));
   }
 
-  // 완료
+  // 완료 — liveData가 비었으면 라이브 섹션 자체가 사라짐
   btn.textContent = '검색 지우기';
   filterPlaces();
   showToast(`✅ ${done}개 장소 자동 등록 완료!`);
@@ -3324,8 +3327,8 @@ async function autoAddLivePlace(dOverride) {
   const d = dOverride || _livePopupPlace;
   if (!d) return;
 
-  // 이미 등록된 장소면 스킵 (중복 방지)
-  if (d._inDB) return;
+  // 중복 방지: places 배열에 이미 있으면 스킵
+  if (places.some(p => p && (p.kakaoId === d.id || p.name === d.place_name))) return;
 
   // 1) place-api로 반려동물 상세 정보 수집 (파이프라인 동일 채널)
   let petDetails = { large: null, small: null, indoor: null, outdoor: null };
@@ -3548,19 +3551,10 @@ function renderList(filtered) {
 
   let html = '';
 
-  // ─── 카카오 라이브 검색 결과 섹션 ───
+  // ─── 카카오 라이브 검색 결과 섹션 (등록 대기 중인 미등록 장소만 표시) ───
   if (liveData.length > 0) {
-    const newPlaces = liveData.filter(d => !d._inDB);
-    const alreadyIn = liveData.filter(d => d._inDB);
-    html += `<div class="list-section-header"><div class="sec-line"></div>&nbsp;카카오 검색 결과 ${liveData.length}개 &nbsp;<button onclick="clearLiveSearch()" style="font-size:10px;padding:2px 8px;border:1px solid #ccc;border-radius:10px;background:white;cursor:pointer;color:#888;font-family:inherit">지우기</button><div class="sec-line"></div></div>`;
-    if (newPlaces.length > 0) {
-      html += `<div style="padding:3px 10px 2px;font-size:11px;font-weight:700;color:#87CEEB">미등록 장소 (${newPlaces.length})</div>`;
-      html += newPlaces.map(liveCardHtml).join('');
-    }
-    if (alreadyIn.length > 0) {
-      html += `<div style="padding:3px 10px 2px;font-size:11px;font-weight:700;color:#4CAF50">이미 등록된 곳 (${alreadyIn.length})</div>`;
-      html += alreadyIn.map(liveCardHtml).join('');
-    }
+    html += `<div class="list-section-header"><div class="sec-line"></div>&nbsp;⏳ 자동 등록 중 (${liveData.length}개) &nbsp;<button onclick="clearLiveSearch()" style="font-size:10px;padding:2px 8px;border:1px solid #ccc;border-radius:10px;background:white;cursor:pointer;color:#888;font-family:inherit">지우기</button><div class="sec-line"></div></div>`;
+    html += liveData.map(liveCardHtml).join('');
     html += `<div style="height:8px"></div>`;
   }
 
@@ -3580,15 +3574,12 @@ function liveCardHtml(d) {
   const lat = parseFloat(d.y), lng = parseFloat(d.x);
   const cat = d.category_name ? d.category_name.split(' > ').pop() : '';
   const addr = d.road_address_name || d.address_name || '';
-  const color = d._inDB ? '#4CAF50' : '#87CEEB';
-  // 등록 여부 확인 (liveData._inDB는 자동처리 후 갱신됨)
-  const reqBtn = d._inDB
-    ? `<span style="font-size:11px;color:#4CAF50;font-weight:700">✅ 등록됨</span>`
-    : `<span style="font-size:11px;color:#F59E0B;font-weight:600" id="lc-add-${d._idx}">⏳ 등록 중...</span>`;
+  // liveData에는 미등록 장소만 남아있으므로 항상 하늘색·등록중
+  const reqBtn = `<span style="font-size:11px;color:#F59E0B;font-weight:600" id="lc-add-${d._idx}">⏳ 등록 중...</span>`;
   return `
-  <div class="place-card" style="border-left:3px solid ${color}" onclick="map.flyTo([${lat},${lng}],17,{duration:0.7});showLivePopup(liveData[${d._idx}],${d._inDB})">
+  <div class="place-card" style="border-left:3px solid #87CEEB" onclick="map.flyTo([${lat},${lng}],17,{duration:0.7});showLivePopup(liveData.find(x=>x.id==='${d.id}'),false)">
     <div class="pc-top">
-      <div class="pc-emoji" style="background:#F0F8FF;font-size:14px;color:${color}">●</div>
+      <div class="pc-emoji" style="background:#F0F8FF;font-size:14px;color:#87CEEB">●</div>
       <div class="pc-info">
         <div class="pc-name">${d.place_name}</div>
         <div class="pc-meta">${cat}</div>
