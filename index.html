@@ -2152,13 +2152,27 @@ async function compressDogPhoto(blob) {
 
 /* 강아지 사진 Firebase Storage에 업로드 (압축 blob 직접 받음) */
 async function uploadDogPhoto(uid, compressedBlob) {
-  if (!firebaseReady || !firebase.storage) return null;
+  if (!firebaseReady) return null;
   try {
+    if (!firebase.storage) throw new Error('Storage SDK 없음');
     const storage = firebase.storage();
     const ref = storage.ref(`dog_photos/${uid}.webp`);
-    await ref.put(compressedBlob, { contentType: compressedBlob.type || 'image/webp' });
+    // 30초 타임아웃 — put()이 무한 pending 상태가 되는 것 방지
+    const putPromise = ref.put(compressedBlob, { contentType: compressedBlob.type || 'image/webp' });
+    const timeout   = new Promise((_, rej) => setTimeout(() => rej(new Error('upload-timeout')), 30000));
+    await Promise.race([putPromise, timeout]);
     return await ref.getDownloadURL();
-  } catch(e) { console.warn('dog photo upload failed', e); return null; }
+  } catch(e) {
+    console.warn('dog photo upload failed:', e?.code || e?.message || e);
+    // 에러 코드를 상태 표시줄에 노출 — 디버깅용
+    const statusEl = document.getElementById('profile-photo-status');
+    if (statusEl) {
+      const code = e?.code || e?.message || 'unknown';
+      statusEl.style.display = 'block';
+      statusEl.textContent = `❌ 업로드 실패: ${code}`;
+    }
+    return null;
+  }
 }
 
 /* 강아지 프로필 Firestore에서 로드 */
@@ -4631,6 +4645,7 @@ function clearSearch() {
 
 let _sgKakaoTimer = null;
 let _sgKakaoPlaces = [];    // 드롭다운 카카오 장소 결과 임시 저장 (인덱스로 참조)
+const _sgCache = new Map(); // query → { docs, ts } — 5분 캐시로 429 방지
 let _searchResultMarker = null; // 검색창에서 선택한 장소의 임시 핀 마커
 
 async function showSearchSuggestions(query) {
@@ -4682,13 +4697,18 @@ async function showSearchSuggestions(query) {
     const current = document.getElementById('search-input')?.value.trim();
     if (!current || current.toLowerCase() !== q) return;
 
-    const _sgClear = () => {
+    const _sgClear = (msg) => {
       const bx = document.getElementById('search-suggestions');
       if (!bx) return;
-      bx.innerHTML = bx.innerHTML.replace(/<div class="sg-empty[^>]*>[\s\S]*?<\/div>/, '');
-      if (!bx.innerHTML.includes('sg-item')) bx.innerHTML = `<div class="sg-empty">결과 없음</div>`;
+      const stripped = bx.innerHTML.replace(/<div class="sg-empty[^>]*>[\s\S]*?<\/div>/, '');
+      bx.innerHTML = stripped + (stripped.includes('sg-item') ? '' : `<div class="sg-empty">${msg || '결과 없음'}</div>`);
     };
-    try {
+
+    const _sgFetch = async (retrying) => {
+      // 캐시 확인 (5분 유효)
+      const cached = _sgCache.get(q);
+      if (cached && Date.now() - cached.ts < 5 * 60 * 1000) return cached.docs;
+
       const mc = (typeof map !== 'undefined') ? map.getCenter() : null;
       const locParam = mc ? `&x=${mc.lng}&y=${mc.lat}` : '';
       const resp = await fetch(
@@ -4696,20 +4716,27 @@ async function showSearchSuggestions(query) {
         { headers: { 'Authorization': `KakaoAK ${KAKAO_REST_KEY}` },
           signal: AbortSignal.timeout(8000) }
       );
+      if (resp.status === 429) {
+        if (!retrying) {
+          // 2초 후 한 번만 재시도
+          await new Promise(r => setTimeout(r, 2000));
+          return _sgFetch(true);
+        }
+        throw Object.assign(new Error('429'), { is429: true });
+      }
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const json = await resp.json();
+      const docs = (json.documents || []).filter(d => d.y && d.x && d.place_name);
+      if (docs.length) _sgCache.set(q, { docs, ts: Date.now() }); // 성공 시 캐시
+      return docs;
+    };
+
+    try {
+      const docs = await _sgFetch(false);
 
       // 검색어 다시 확인 (대기 중 변경됐을 수 있음)
       const chk = document.getElementById('search-input')?.value.trim();
       if (!chk || chk.toLowerCase() !== q) return;
-
-      if (!resp.ok) {
-        const bx = document.getElementById('search-suggestions');
-        if (bx) bx.innerHTML = bx.innerHTML.replace(/<div class="sg-empty[^>]*>[\s\S]*?<\/div>/, '')
-          + `<div class="sg-empty">검색 오류 (${resp.status})</div>`;
-        return;
-      }
-
-      const json = await resp.json();
-      const docs = (json.documents || []).filter(d => d.y && d.x && d.place_name);
 
       if (!docs.length) { _sgClear(); return; }
 
@@ -4736,10 +4763,7 @@ async function showSearchSuggestions(query) {
       bx.innerHTML = stripped + kakaoHtml;
       bx.classList.add('open');
     } catch(e) {
-      // timeout 또는 네트워크 오류
-      const bx = document.getElementById('search-suggestions');
-      if (bx) bx.innerHTML = bx.innerHTML.replace(/<div class="sg-empty[^>]*>[\s\S]*?<\/div>/, '')
-        + `<div class="sg-empty">검색 오류 (${e?.name || 'ERR'})</div>`;
+      _sgClear(e?.is429 ? '잠시 후 다시 검색해주세요' : '결과 없음');
     }
 
   }, 300);
