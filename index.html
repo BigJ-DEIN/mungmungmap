@@ -2762,40 +2762,42 @@ async function loadViewportPlaces() {
 
   if (!tilesToFetch.length) return; // 모두 이미 로딩됨
 
-  // ── 3. 타일별 Firestore 쿼리 ─────────────────────────────────────────────
+  // ── 3. 타일별 Firestore 쿼리 — 모든 타일 동시 병렬 요청 ──────────────────
   let anyNew = false;
-  for (const tile of tilesToFetch) {
-    try {
-      // lat 단일 필드 범위쿼리 (자동 인덱스) — active/lng는 클라이언트 필터
-      const snap = await db.collection('places')
+  const tileResults = await Promise.all(
+    tilesToFetch.map(tile =>
+      db.collection('places')
         .where('lat', '>=', tile.la)
         .where('lat', '<',  tile.la + VP_TILE_DEG)
-        .get();
+        .get()
+        .then(snap => ({ tile, snap }))
+        .catch(e => { console.error('[Firestore] tile load failed:', tile.key, e); return null; })
+    )
+  );
 
-      const existingIds = new Set(places.map(p => p.firestoreId).filter(Boolean));
-      const newBatch = [];
-      snap.docs.forEach(doc => {
-        const p = { ...doc.data(), firestoreId: doc.id };
-        if (p.active === false) return;                                   // 비활성 제외
-        // auto_pipeline_cat 미확인 장소는 메모리에 올리지 않음 — 마커·메모리 낭비 방지
-        if (p.source === 'auto_pipeline_cat') {
-          const st = p.petStatus;
-          if (st !== 'confirmed' && st !== 'verified') return;
-        }
-        if (p.lng == null || p.lng < tile.lo || p.lng >= tile.lo + VP_TILE_DEG) return; // lng 필터
-        if (existingIds.has(doc.id)) return;                              // 중복 제외
-        places.push(p);
-        newBatch.push(p);
-      });
-
-      _loadedTiles.add(tile.key);
-
-      if (newBatch.length > 0 && clusterGroup) {
-        newBatch.forEach(addMarker);
-        anyNew = true;
+  const existingIds = new Set(places.map(p => p.firestoreId).filter(Boolean));
+  for (const result of tileResults) {
+    if (!result) continue; // 쿼리 실패한 타일 스킵
+    const { tile, snap } = result;
+    const newBatch = [];
+    snap.docs.forEach(doc => {
+      const p = { ...doc.data(), firestoreId: doc.id };
+      if (p.active === false) return;                                   // 비활성 제외
+      // auto_pipeline_cat 미확인 장소는 메모리에 올리지 않음 — 마커·메모리 낭비 방지
+      if (p.source === 'auto_pipeline_cat') {
+        const st = p.petStatus;
+        if (st !== 'confirmed' && st !== 'verified') return;
       }
-    } catch(e) {
-      console.error('[Firestore] tile load failed:', tile.key, e);
+      if (p.lng == null || p.lng < tile.lo || p.lng >= tile.lo + VP_TILE_DEG) return; // lng 필터
+      if (existingIds.has(doc.id)) return;                              // 중복 제외
+      existingIds.add(doc.id); // 병렬 결과 간 중복 방지
+      places.push(p);
+      newBatch.push(p);
+    });
+    _loadedTiles.add(tile.key);
+    if (newBatch.length > 0 && clusterGroup) {
+      newBatch.forEach(addMarker);
+      anyNew = true;
     }
   }
 
