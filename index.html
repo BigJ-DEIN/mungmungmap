@@ -3117,7 +3117,7 @@ function setMarkerActive(id, active) {
 // ══════════════════════════════════════════════════════
 //  KAKAO LIVE SEARCH  (실시간 주변 애견 장소 검색)
 // ══════════════════════════════════════════════════════
-let liveMarkers = [];
+let liveMarkers = {};  // { kakaoId: L.marker } — 개별 제거 가능
 let liveData = [];   // 카카오 라이브 검색 결과 저장
 let kakaoPS = null;
 let kakaoReady = false;
@@ -3246,12 +3246,13 @@ async function renderLiveResults(rawData) {
     _inDB: dbKakaoIds.has(d.id) || dbNames.has(d.place_name.trim()) || coordInDB(parseFloat(d.y), parseFloat(d.x))
   }));
 
-  // 즉시 목록·지도 표시 (처리 전 미리보기)
+  // 즉시 목록·지도 표시 (처리 전 미리보기) — kakaoId로 마커 추적
   liveData.filter(d => !d._inDB).forEach(d => {
     const lat = parseFloat(d.y), lng = parseFloat(d.x);
     const dotHtml = `<div style="width:14px;height:14px;border-radius:50%;background:#87CEEB;border:2px solid white;box-shadow:0 1px 6px rgba(0,0,0,.3);cursor:pointer"></div>`;
     const icon = L.divIcon({ html: dotHtml, className:'', iconSize:[14,14], iconAnchor:[7,7] });
-    L.marker([lat, lng], { icon }).addTo(map).on('click', () => showLivePopup(d, false));
+    const m = L.marker([lat, lng], { icon }).addTo(map).on('click', () => showLivePopup(d, false));
+    if (d.id) liveMarkers[d.id] = m;
   });
   filterPlaces();
   btn.classList.add('active');
@@ -3387,19 +3388,17 @@ async function autoAddLivePlace(dOverride) {
   // 5) 로컬 배열 + 지도 마커 즉시 반영
   places.push(newPlace);
   if (_allKakaoIds && d.id) _allKakaoIds.add(d.id); // 파이프라인 중복 방지 캐시 갱신
-  filterPlaces();
+
+  // 하늘색 임시 마커 제거 → 정식 컬러 마커로 교체
+  if (d.id && liveMarkers[d.id]) {
+    map.removeLayer(liveMarkers[d.id]);
+    delete liveMarkers[d.id];
+  }
   if (typeof addMarker === 'function') addMarker(newPlace);
 
-  // 6) liveData _inDB 플래그 갱신 → 카드 상태 즉시 반영
-  const liveItem = liveData.find(x => x.id === d.id || x.place_name === d.place_name);
-  if (liveItem) {
-    liveItem._inDB = true;
-    const cardStatus = document.getElementById(`lc-add-${liveItem._idx}`);
-    if (cardStatus) {
-      cardStatus.textContent = '✅ 등록됨';
-      cardStatus.style.color = '#4CAF50';
-    }
-  }
+  // 6) liveData에서 제거 → filterPlaces()가 정식 섹션에서 렌더링
+  liveData = liveData.filter(x => x.id !== d.id && x.place_name !== d.place_name);
+  filterPlaces();
 }
 
 function clearLiveSearch() {
@@ -3412,8 +3411,8 @@ function clearLiveSearch() {
 }
 
 function clearLiveMarkers() {
-  liveMarkers.forEach(m => map.removeLayer(m));
-  liveMarkers = [];
+  Object.values(liveMarkers).forEach(m => map.removeLayer(m));
+  liveMarkers = {};
 }
 
 function showKakaoKeyGuide() {
