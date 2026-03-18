@@ -3765,8 +3765,21 @@ function toggleLiveSearch() {
   trySearch();
 }
 
+// 뷰포트 기반 결과 캐시 (15분 TTL) — 동일 위치 재검색 시 keyword.json 호출 절약
+const _liveCache = new Map();
+
 function doLiveSearch() {
   _setLiveFabState(true);
+
+  // ── 캐시 확인: 동일 뷰포트 15분 내 재검색이면 API 호출 없이 바로 표시 ──────
+  const _ctr = map.getCenter();
+  const _cacheKey = `${Math.round(_ctr.getLat()*100)}_${Math.round(_ctr.getLng()*100)}_${map.getLevel()}`;
+  const _cached = _liveCache.get(_cacheKey);
+  if (_cached && Date.now() - _cached.ts < 15 * 60 * 1000) {
+    showToast('📦 캐시된 결과로 표시합니다');
+    renderLiveResults(_cached.data);
+    return;
+  }
 
   const bounds = map.getBounds();
   const N = bounds.getNorth(), S = bounds.getSouth();
@@ -3813,19 +3826,18 @@ function doLiveSearch() {
   const catCodes = ['CE7', 'FD6', 'AT4', 'AD5'];
   const pages    = [1, 2, 3]; // SDK 포인트당 최대 45개 (REST로 나머지 보완)
 
-  // 반려견동반 시설 태그 장소 보완용 키워드 (카카오가 직접 필터)
-  const keywords = ['애견동반', '반려견동반', '애견카페', '펫카페', '반려동물동반', '강아지카페', '도그카페'];
-  const kwPages  = [1, 2, 3];
-
   let allResults = [];
   let sdkDone = false, restDone = false;
 
   function checkAllDone() {
-    if (sdkDone && restDone) renderLiveResults(allResults);
+    if (sdkDone && restDone) {
+      _liveCache.set(_cacheKey, { data: allResults, ts: Date.now() });
+      renderLiveResults(allResults);
+    }
   }
 
-  // ── ① SDK 카테고리 + 키워드 검색 ──────────────────────────────────────────
-  let pending = gridPoints.length * (catCodes.length * pages.length + keywords.length * kwPages.length);
+  // ── ① SDK 카테고리 검색 (키워드 SDK는 항상 ERROR → REST로 대체) ──────────
+  let pending = gridPoints.length * catCodes.length * pages.length;
 
   gridPoints.forEach(pt => {
     const locOpts = { x: pt.lng, y: pt.lat, radius: Math.round(cellRadiusM), size: 15 };
@@ -3842,17 +3854,6 @@ function doLiveSearch() {
       });
     });
 
-    // 키워드 검색 — 카카오가 반려동물 키워드로 직접 필터한 결과이므로 신뢰도 높음
-    keywords.forEach(kw => {
-      kwPages.forEach(page => {
-        kakaoPS.keywordSearch(kw, (data, status) => {
-          if (status === kakao.maps.services.Status.OK && data?.length) {
-            allResults = allResults.concat(data.map(d => ({ ...d, _fromPetKeyword: true })));
-          }
-          if (--pending === 0) { sdkDone = true; checkAllDone(); }
-        }, { ...locOpts, page });
-      });
-    });
   });
 
   // ── ② REST API 검색 (병렬) ────────────────────────────────────────────────
@@ -3895,7 +3896,7 @@ function doLiveSearch() {
         const restKeywords = ['반려견동반', '애견동반', '반려동물동반', '반려견', '반려동물', '애견카페', '펫카페', '강아지카페'];
         for (const kw of restKeywords) {
           tasks.push((async () => {
-            for (let page = 1; page <= 5; page++) {
+            for (let page = 1; page <= 3; page++) {
               try {
                 const resp = await fetch(
                   `https://dapi.kakao.com/v2/local/search/keyword.json` +
@@ -3945,7 +3946,7 @@ function doLiveSearch() {
             ];
             for (const kw of areaKws) {
               tasks.push((async () => {
-                for (let page = 1; page <= 5; page++) {
+                for (let page = 1; page <= 3; page++) {
                   try {
                     const resp = await fetch(
                       `https://dapi.kakao.com/v2/local/search/keyword.json` +
@@ -4982,12 +4983,10 @@ document.addEventListener('click', e => {
 });
 
 function filterPlaces() {
-  const filtered = getFiltered();         // 검색어 포함 — 목록(리스트)용
-  renderList(filtered);
+  // 검색어 무관하게 뷰포트·필터 기준으로만 표시 — 목록과 마커 동일 기준
+  const markerFiltered = getFiltered(false, true); // ignoreSearch=true
+  renderList(markerFiltered);
   if (clusterGroup) {
-    // 마커는 검색어 무관하게 뷰포트·필터 기준으로만 표시
-    // → 검색창에 글자를 입력해도 지도 마커는 사라지지 않음
-    const markerFiltered = getFiltered(false, true); // ignoreSearch=true
     const filteredSet = new Set(markerFiltered.map(f => f.id));
     places.forEach(p => {
       const m = markers[p.id]; if (!m) return;
