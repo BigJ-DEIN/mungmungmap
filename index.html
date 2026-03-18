@@ -4602,18 +4602,20 @@ function onSearchKeydown(e) {
   if (!query) return;
 
   hideSearchSuggestions();
+  const _mc = (typeof map !== 'undefined') ? map.getCenter() : null;
+  const _locP = _mc ? `&x=${_mc.lng}&y=${_mc.lat}` : '';
   fetch(
-    `https://dapi.kakao.com/v2/local/search/keyword.json?query=${encodeURIComponent(query)}&size=1`,
+    `https://dapi.kakao.com/v2/local/search/keyword.json?query=${encodeURIComponent(query)}&size=5${_locP}`,
     { headers: { 'Authorization': `KakaoAK ${KAKAO_REST_KEY}` } }
   )
-  .then(r => r.json())
+  .then(r => { if (r.status === 429) throw new Error('429'); return r.json(); })
   .then(json => {
     const docs = (json.documents || []).filter(d => d.y && d.x && d.place_name);
     if (!docs.length) { showToast('검색 결과를 찾지 못했어요'); return; }
     _sgKakaoPlaces = docs;
     selectKakaoPlaceSuggestion(0);
   })
-  .catch(() => showToast('검색 중 오류가 발생했어요'));
+  .catch(e => showToast(e.message === '429' ? '잠시 후 다시 검색해주세요' : '검색 중 오류가 발생했어요'));
 }
 
 function clearSearch() {
@@ -4726,6 +4728,8 @@ async function showSearchSuggestions(query) {
 
     // ── A. kakaoPS SDK 검색 (홍시야 찾아줘와 동일한 방식) ───────────────────
     if (kakaoReady && kakaoPS) {
+      // x(경도)/y(위도) 제공 → Kakao SDK 전국 검색 (거리순 정렬용 참고점으로만 사용)
+      const mc = map.getCenter();
       kakaoPS.keywordSearch(query, (data, status) => {
         const chk = document.getElementById('search-input')?.value.trim();
         if (!chk || chk.toLowerCase() !== q) return;
@@ -4735,7 +4739,7 @@ async function showSearchSuggestions(query) {
           // SDK 결과 없음 → REST fallback 시도
           _sgRestFallback(query, q, renderKakaoResults);
         }
-      }, { size: 15 }); // 위치 파라미터 없음 → 전국 검색
+      }, { x: mc.lng, y: mc.lat, size: 15 }); // 지도 중심 기준 전국 검색
     } else {
       // SDK 준비 안 됐으면 REST로
       _sgRestFallback(query, q, renderKakaoResults);
@@ -4747,10 +4751,25 @@ async function showSearchSuggestions(query) {
 // REST keyword.json fallback (SDK 실패 또는 미준비 시)
 async function _sgRestFallback(query, q, renderFn) {
   try {
+    const mc = (typeof map !== 'undefined') ? map.getCenter() : null;
+    const locParam = mc ? `&x=${mc.lng}&y=${mc.lat}` : '';
     const resp = await fetch(
-      `https://dapi.kakao.com/v2/local/search/keyword.json?query=${encodeURIComponent(query)}&size=15`,
-      { headers: { 'Authorization': `KakaoAK ${KAKAO_REST_KEY}` } }
+      `https://dapi.kakao.com/v2/local/search/keyword.json?query=${encodeURIComponent(query)}&size=15${locParam}`,
+      { headers: { 'Authorization': `KakaoAK ${KAKAO_REST_KEY}` },
+        signal: AbortSignal.timeout(8000) }
     );
+    if (resp.status === 429) {
+      // 요청 한도 초과 — 잠시 후 재시도 메시지
+      const bx = document.getElementById('search-suggestions');
+      if (bx) {
+        const stripped = bx.innerHTML.replace(/<div class="sg-empty[^>]*>[\s\S]*?<\/div>/, '');
+        const hasOtherResults = stripped.includes('sg-item');
+        if (!hasOtherResults) {
+          bx.innerHTML = stripped + `<div class="sg-empty">잠시 후 다시 검색해주세요</div>`;
+        }
+      }
+      return;
+    }
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     const json = await resp.json();
     const docs = (json.documents || []).filter(d => d.y && d.x && d.place_name);
@@ -6123,17 +6142,21 @@ async function repSearch() {
   // Use Kakao Places SDK if ready
   if (window.kakao && window.kakao.maps && window.kakao.maps.services && kakaoReady) {
     const ps = new kakao.maps.services.Places();
+    const rMc = (typeof map !== 'undefined') ? map.getCenter() : null;
+    const rOpts = rMc ? { x: rMc.lng, y: rMc.lat, size: 15 } : { size: 15 };
     ps.keywordSearch(q, (data, status) => {
       if (status !== kakao.maps.services.Status.OK || !data.length) {
         list.innerHTML = '<div class="rep-empty">결과가 없어요. 다른 검색어를 시도해봐요.</div>';
         return;
       }
       _repRenderResults(data.slice(0, 10));
-    });
+    }, rOpts);
   } else {
     // SDK 미준비 시 REST fallback (REST 키 사용)
     try {
-      const url = `https://dapi.kakao.com/v2/local/search/keyword.json?query=${encodeURIComponent(q)}&size=10`;
+      const rMcR = (typeof map !== 'undefined') ? map.getCenter() : null;
+      const rLocP = rMcR ? `&x=${rMcR.lng}&y=${rMcR.lat}` : '';
+      const url = `https://dapi.kakao.com/v2/local/search/keyword.json?query=${encodeURIComponent(q)}&size=10${rLocP}`;
       const res = await fetch(url, { headers: { Authorization: `KakaoAK ${KAKAO_REST_KEY}` },
                                      signal: AbortSignal.timeout(5000) });
       const json = await res.json();
