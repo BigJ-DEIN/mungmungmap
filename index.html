@@ -1212,7 +1212,7 @@
           <span id="area-toggle-label">지역 전체</span>
           <span class="arrow">▼</span>
         </button>
-        <button class="filter-chip" id="viewport-sync-btn" onclick="toggleViewportSync()" title="지도에 보이는 장소만 목록에 표시" style="white-space:nowrap;font-size:11px">🗺 지도 범위</button>
+        <button class="filter-chip active" id="viewport-sync-btn" onclick="toggleViewportSync()" title="끄면 전체 장소 표시" style="white-space:nowrap;font-size:11px">🗺 지도 범위</button>
       </div>
       <!-- 접을 수 있는 지역 칩 -->
       <div class="area-chips-wrap" id="area-chips-wrap">
@@ -1337,7 +1337,7 @@
     </div>
     <!-- Kakao Live Search -->
     <button id="live-search-btn" onclick="toggleLiveSearch()">
-      🔍 주변에서 더 찾기
+      🔍 근처 한번 더 검색하기
     </button>
     <div id="live-results-panel" style="display:none">
       <div class="lrp-list" id="lrp-list"></div>
@@ -1779,7 +1779,7 @@ let map           = null;
 let clusterGroup  = null;
 let markers       = {};
 let activeFilters = { area:'all', largeDog:false, indoor:false, outdoor:false, noCage:false, hasFee:false, noFee:false, catType:'all' };
-let viewportSync  = false;  // 지도 범위 연동 모드
+let viewportSync  = true;   // 지도 범위 연동 모드 (기본: 켜짐)
 let activePlace   = null;
 let searchText    = '';
 let mobileTab     = 'map';   // map | list | filter
@@ -3296,7 +3296,7 @@ async function renderLiveResults(rawData) {
 
   if (data.length === 0) {
     showToast('주변에서 추가 장소를 찾지 못했어요');
-    btn.textContent = '주변 애견 장소 더 찾기';
+    btn.textContent = '근처 한번 더 검색하기';
     liveData = [];
     filterPlaces();
     return;
@@ -3344,19 +3344,23 @@ async function renderLiveResults(rawData) {
     return;
   }
 
-  showToast(`${data.length}개 발견${alreadyMsg} · 신규 ${total}개 자동 등록 중...`);
-  let done = 0;
+  showToast(`${data.length}개 발견${alreadyMsg} · 신규 ${total}개 반려동물 확인 중...`);
+  let registered = 0;
+  let skipped = 0;
+  let processed = 0;
 
   for (const d of liveData.slice()) {   // slice()로 복사 — 순회 중 liveData 변경 대비
-    // 버튼에 진행률 표시
-    btn.textContent = `⏳ 자동 등록 중 ${done}/${total}...`;
+    processed++;
+    btn.textContent = `⏳ 확인 중 ${processed}/${total}...`;
 
     try {
-      await autoAddLivePlace(d);
+      const added = await autoAddLivePlace(d);
+      if (added) registered++;
+      else skipped++;
     } catch(e) {
       console.warn('autoAddLivePlace 실패:', d.place_name, e);
+      skipped++;
     }
-    done++;
     // 짧은 딜레이로 프록시 과부하 방지
     await new Promise(r => setTimeout(r, 300));
   }
@@ -3364,7 +3368,8 @@ async function renderLiveResults(rawData) {
   // 완료 — liveData가 비었으면 라이브 섹션 자체가 사라짐
   btn.textContent = '검색 지우기';
   filterPlaces();
-  showToast(`✅ ${done}개 장소 자동 등록 완료!`);
+  const skipMsg = skipped > 0 ? ` · 미확인 ${skipped}개 제외` : '';
+  showToast(`✅ ${registered}개 등록 완료${skipMsg}`);
 }
 
 function flyToLive(lat, lng, idx) {
@@ -3397,23 +3402,33 @@ function showLivePopup(d, inDB) {
 
 // 라이브 검색 결과에서 장소를 자동으로 수집·레이블링·등록하는 함수
 // (파이프라인과 동일한 프로세스: place-api 호출 → petDetails 추출 → Firestore 저장)
+// 반환값: true = 등록됨, false = 반려동물 미확인으로 제외
 async function autoAddLivePlace(dOverride) {
   const d = dOverride || _livePopupPlace;
-  if (!d) return;
+  if (!d) return false;
 
   try {
     // 중복 방지: places 배열에 이미 있으면 스킵 (liveData 정리는 finally에서 항상 실행)
-    if (places.some(p => p && (p.kakaoId === d.id || p.name === d.place_name))) return;
+    if (places.some(p => p && (p.kakaoId === d.id || p.name === d.place_name))) return false;
 
-    // 1) place-api로 반려동물 상세 정보 수집 (파이프라인 동일 채널)
+    // 1) place-api로 반려동물 신호 확인 — 미확인 시 등록하지 않음
     let petDetails = { large: null, small: null, indoor: null, outdoor: null };
-    let petStatus = 'confirmed'; // 애견동반 키워드 검색 결과 = 최소 confirmed
-    try {
-      const result = await fetchKakaoPagePetSignal(d.place_url, d.id);
-      if (result?.petDetails) petDetails = result.petDetails;
-      if (result?.recentReview)      petStatus = 'verified';
-      else if (result?.strong === true) petStatus = 'confirmed';
-    } catch(e) { /* place-api 실패 → petStatus=confirmed, petDetails 전부 null */ }
+    let petStatus = 'confirmed';
+    let petFound = false;
+
+    const result = await fetchKakaoPagePetSignal(d.place_url, d.id)
+      .catch(() => ({ found: false, error: true }));
+
+    if (result?.found) {
+      petFound = true;
+      if (result.petDetails) petDetails = result.petDetails;
+      if (result.recentReview)       petStatus = 'verified';
+      else if (result.strong === true) petStatus = 'confirmed';
+      else                             petStatus = 'confirmed'; // weak signal도 confirmed 유지
+    } else {
+      // place-api에서 반려동물 신호 없음 → 등록 안 함, liveData에서만 제거
+      return false;
+    }
 
     // 2) 카테고리·지역 매핑
     const cat  = impMapCat(d.category_name || '');
@@ -3487,9 +3502,16 @@ async function autoAddLivePlace(dOverride) {
     }
     if (typeof addMarker === 'function') addMarker(newPlace);
 
+    return true; // 등록 성공
+
   } finally {
-    // 성공·실패·중복 모든 경우에 liveData에서 제거 후 UI 갱신
+    // 성공·실패·미확인 모든 경우에 liveData에서 제거 후 UI 갱신
     liveData = liveData.filter(x => x.id !== d.id && x.place_name !== d.place_name);
+    // 하늘색 마커는 등록 여부와 무관하게 항상 제거 (미확인이면 그냥 사라짐)
+    if (d.id && liveMarkers[d.id]) {
+      map.removeLayer(liveMarkers[d.id]);
+      delete liveMarkers[d.id];
+    }
     filterPlaces();
   }
 }
@@ -3500,7 +3522,7 @@ function clearLiveSearch() {
   filterPlaces();
   const btn = document.getElementById('live-search-btn');
   btn.classList.remove('active','loading');
-  btn.textContent = '주변 애견 장소 더 찾기';
+  btn.textContent = '근처 한번 더 검색하기';
 }
 
 function clearLiveMarkers() {
@@ -3529,7 +3551,10 @@ function showKakaoKeyGuide() {
 function toggleViewportSync() {
   viewportSync = !viewportSync;
   const btn = document.getElementById('viewport-sync-btn');
-  if (btn) btn.classList.toggle('active', viewportSync);
+  if (btn) {
+    btn.classList.toggle('active', viewportSync);
+    btn.title = viewportSync ? '끄면 전체 장소 표시' : '켜면 지도에 보이는 장소만 표시';
+  }
   filterPlaces();
 }
 
@@ -3582,9 +3607,9 @@ function setCatFilter(btn, catKey) {
   if (isMobile()) setMobileTab('list');
 }
 
-function getFiltered() {
-  // 뷰포트 범위 (지도 범위 연동 모드일 때만 계산)
-  const vpBounds = (viewportSync && map) ? map.getBounds() : null;
+function getFiltered(ignoreViewport = false) {
+  // 뷰포트 범위 (지도 범위 연동 모드 + ignoreViewport=false일 때만 계산)
+  const vpBounds = (viewportSync && !ignoreViewport && map) ? map.getBounds() : null;
   return places.filter(p => {
     if (!p || p.id == null || !p.name) return false; // null 안전
     if (getPlaceStatus(p) === 'rejected') return false; // 펫 비적합 판정 제외
@@ -3635,8 +3660,10 @@ function filterPlaces() {
   const filtered = getFiltered();
   renderList(filtered);
   if (clusterGroup) {
-    // O(n) Set 기반 — 기존 filtered.find() O(n²) 대비 수십배 빠름
-    const filteredSet = new Set(filtered.map(f => f.id));
+    // 마커 표시 기준: 뷰포트 연동은 목록에만 적용, 마커는 카테고리/조건 필터만 반영
+    // → viewport 밖 장소도 지도 마커는 유지 (지도 이동 시 자연스럽게 보임)
+    const markerFiltered = viewportSync ? getFiltered(true) : filtered;
+    const filteredSet = new Set(markerFiltered.map(f => f.id));
     places.forEach(p => {
       const m = markers[p.id]; if (!m) return;
       const show = filteredSet.has(p.id);
