@@ -4011,7 +4011,9 @@ async function renderLiveResults(rawData) {
 }
 
 function flyToLive(lat, lng, idx) {
-  map.flyTo([lat, lng], 17, { animate:true, duration:0.7 });
+  if (!map.getBounds().contains([lat, lng])) {
+    map.setView([lat, lng], map.getZoom(), { animate: true, duration: 0.5 });
+  }
 }
 
 let _livePopupPlace = null; // 팝업에 표시 중인 장소 데이터 임시 저장
@@ -4584,67 +4586,68 @@ async function showSearchSuggestions(query) {
   box.innerHTML = html;
   box.classList.add('open');
 
-  // ── 4. Kakao SDK + REST 전국 장소 검색 (지도 위치 무관) ──────────────────
-  // SDK keywordSearch: JS API 키 사용 → REST 키 소진과 무관하게 동작
+  // ── 4. Kakao 전국 장소 검색 (지도 위치 무관) ─────────────────────────────
+  // REST keyword.json (위치 파라미터 없음) + SDK 동시 실행 → 먼저 오는 결과 사용
   // 카카오맵 앱과 동일: 상호명 입력 → 전국 어디든 검색 → 클릭하면 해당 위치로 이동
   clearTimeout(_sgKakaoTimer);
-  if (matchedAreas.length === 0) {
-    _sgKakaoTimer = setTimeout(() => {
-      // 검색어가 바뀌었으면 중단
-      const current = document.getElementById('search-input')?.value.trim();
-      if (!current || current.toLowerCase() !== q) return;
+  let _sgResultShown = false; // 중복 표시 방지
+  _sgKakaoTimer = setTimeout(() => {
+    // 검색어가 바뀌었으면 중단
+    const current = document.getElementById('search-input')?.value.trim();
+    if (!current || current.toLowerCase() !== q) return;
 
-      // ── SDK keywordSearch (JS API 키, 위치 무관 전국 검색) ───────────────
-      if (window.kakao?.maps?.services?.Places) {
-        const ps = new kakao.maps.services.Places();
-        ps.keywordSearch(query, (data, status) => {
-          const currentVal = document.getElementById('search-input')?.value.trim();
-          if (!currentVal || currentVal.toLowerCase() !== q) return;
-          const box = document.getElementById('search-suggestions');
-          if (!box) return;
+    // 결과를 드롭다운에 표시하는 공통 함수
+    function showKakaoResults(data) {
+      if (_sgResultShown) return; // 이미 표시됨
+      _sgResultShown = true;
+      const bx = document.getElementById('search-suggestions');
+      if (!bx) return;
+      const currentVal = document.getElementById('search-input')?.value.trim();
+      if (!currentVal || currentVal.toLowerCase() !== q) return;
 
-          if (status === kakao.maps.services.Status.OK && data?.length) {
-            _sgKakaoPlaces = data;
-            let kakaoHtml = `<div class="sg-section-label">카카오맵 장소</div>`;
-            kakaoHtml += data.slice(0, 8).map((d, idx) => {
-              const addr = d.road_address_name || d.address_name || '';
-              const cat  = (d.category_name || '').split(' > ').pop();
-              const inDB = places.some(p => p.kakaoId === d.id || p.name === d.place_name);
-              return `<div class="sg-item" onmousedown="event.preventDefault()" onclick="selectKakaoPlaceSuggestion(${idx})">
-                <div class="sg-item-icon">${inDB ? '📍' : '🔍'}</div>
-                <div class="sg-item-main">
-                  <div class="sg-item-name">${d.place_name}${inDB ? ' <span style="font-size:10px;color:#7BC74D">등록됨</span>' : ''}</div>
-                  <div class="sg-item-sub">${cat ? cat + ' · ' : ''}${addr}</div>
-                </div>
-              </div>`;
-            }).join('');
-            const existingHtml = matchedPlaces.length > 0
-              ? box.innerHTML.replace(/<div class="sg-empty[^>]*>[\s\S]*?<\/div>/, '')
-              : '';
-            box.innerHTML = existingHtml + kakaoHtml;
-            box.classList.add('open');
-          } else {
-            if (box.querySelector('#sg-searching')) {
-              box.innerHTML = `<div class="sg-empty">결과 없음</div>`;
-            }
-          }
-        }, { size: 15 });  // 위치 파라미터 없음 → 전국 검색
-        return; // SDK 검색 시작했으면 REST 호출 불필요
+      _sgKakaoPlaces = data;
+      let kakaoHtml = `<div class="sg-section-label">카카오맵 장소</div>`;
+      kakaoHtml += data.slice(0, 8).map((d, idx) => {
+        const addr = d.road_address_name || d.address_name || '';
+        const cat  = (d.category_name || '').split(' > ').pop();
+        const inDB = places.some(p => p.kakaoId === d.id || p.name === d.place_name);
+        return `<div class="sg-item" onmousedown="event.preventDefault()" onclick="selectKakaoPlaceSuggestion(${idx})">
+          <div class="sg-item-icon">${inDB ? '📍' : '🔍'}</div>
+          <div class="sg-item-main">
+            <div class="sg-item-name">${d.place_name}${inDB ? ' <span style="font-size:10px;color:#7BC74D">등록됨</span>' : ''}</div>
+            <div class="sg-item-sub">${cat ? cat + ' · ' : ''}${addr}</div>
+          </div>
+        </div>`;
+      }).join('');
+      // 기존 DB 장소/지역 결과는 유지하고 카카오 결과 추가
+      const stripped = bx.innerHTML
+        .replace(/<div class="sg-empty[^>]*>[\s\S]*?<\/div>/, '')
+        .replace(/<div class="sg-section-label">카카오맵 장소<\/div>[\s\S]*$/, '');
+      bx.innerHTML = stripped + kakaoHtml;
+      bx.classList.add('open');
+    }
+
+    function showNoResult() {
+      if (_sgResultShown) return;
+      const bx = document.getElementById('search-suggestions');
+      if (bx?.querySelector('#sg-searching')) {
+        bx.innerHTML = `<div class="sg-empty">결과 없음</div>`;
       }
+    }
 
-      // ── SDK 없을 때 REST fallback ─────────────────────────────────────────
-      ;(async () => {
-      try {
-        const [kwResp, addrResp] = await Promise.allSettled([
-          fetch(
-            `https://dapi.kakao.com/v2/local/search/keyword.json?query=${encodeURIComponent(query)}&size=15`,
-            { headers: { 'Authorization': `KakaoAK ${KAKAO_REST_KEY}` } }
-          ),
-          fetch(
-            `https://dapi.kakao.com/v2/local/search/address.json?query=${encodeURIComponent(query)}&size=5`,
-            { headers: { 'Authorization': `KakaoAK ${KAKAO_REST_KEY}` } }
-          )
-        ]);
+    // ── A. REST keyword.json (가장 안정적인 전국 검색) ───────────────────────
+    ;(async () => {
+    try {
+      const [kwResp, addrResp] = await Promise.allSettled([
+        fetch(
+          `https://dapi.kakao.com/v2/local/search/keyword.json?query=${encodeURIComponent(query)}&size=15`,
+          { headers: { 'Authorization': `KakaoAK ${KAKAO_REST_KEY}` }, signal: AbortSignal.timeout(5000) }
+        ),
+        fetch(
+          `https://dapi.kakao.com/v2/local/search/address.json?query=${encodeURIComponent(query)}&size=5`,
+          { headers: { 'Authorization': `KakaoAK ${KAKAO_REST_KEY}` }, signal: AbortSignal.timeout(5000) }
+        )
+      ]);
 
         let kwDocs = [], addrDocs = [];
         if (kwResp.status === 'fulfilled' && kwResp.value.ok) {
@@ -4663,73 +4666,67 @@ async function showSearchSuggestions(query) {
           seenKeys.add(k); return true;
         });
 
-        const b = document.getElementById('search-suggestions');
-        if (!docs.length) {
-          if (b?.querySelector('#sg-searching')) b.innerHTML = `<div class="sg-empty">결과 없음</div>`;
-          return;
-        }
-        // 검색어가 바뀌지 않았으면 드롭다운 업데이트
+        // 검색어가 바뀌었으면 중단
         const now = document.getElementById('search-input')?.value.trim();
         if (!now || now.toLowerCase() !== q) return;
+
+        if (!docs.length) { showNoResult(); return; }
 
         // 장소(place_name 있음)와 주소(지역)를 분리
         const placeDocs = docs.filter(d => d.place_name);
         const areaDocs  = docs.filter(d => !d.place_name);
 
-        // 카카오맵 장소 결과 → 전역 배열에 저장 (인덱스로 onclick 참조)
-        _sgKakaoPlaces = placeDocs;
-
-        let kakaoHtml = '';
-
-        // ── 카카오맵 장소 섹션 ──
         if (placeDocs.length > 0) {
-          kakaoHtml += `<div class="sg-section-label">카카오맵 장소</div>`;
-          kakaoHtml += placeDocs.slice(0, 5).map((d, idx) => {
-            const addr = d.road_address_name || d.address_name || '';
-            const cat  = (d.category_name || '').split(' > ').pop();
-            const inDB = places.some(p => p.kakaoId === d.id || p.name === d.place_name);
-            return `<div class="sg-item" onmousedown="event.preventDefault()" onclick="selectKakaoPlaceSuggestion(${idx})">
-              <div class="sg-item-icon">${inDB ? '📍' : '🔍'}</div>
-              <div class="sg-item-main">
-                <div class="sg-item-name">${d.place_name}${inDB ? ' <span style="font-size:10px;color:#7BC74D">등록됨</span>' : ''}</div>
-                <div class="sg-item-sub">${cat ? cat + ' · ' : ''}${addr}</div>
-              </div>
-            </div>`;
-          }).join('');
+          showKakaoResults(placeDocs);
+        } else if (areaDocs.length > 0) {
+          // 주소 결과만 있을 때 → 지역 섹션으로 표시
+          if (!_sgResultShown) {
+            _sgResultShown = true;
+            const bx = document.getElementById('search-suggestions');
+            if (bx) {
+              const currentVal = document.getElementById('search-input')?.value.trim();
+              if (currentVal && currentVal.toLowerCase() === q) {
+                let aHtml = `<div class="sg-section-label">지역</div>`;
+                aHtml += areaDocs.slice(0, 3).map(d => {
+                  const name = d.address_name || query;
+                  const lat = parseFloat(d.y), lng = parseFloat(d.x);
+                  const safeNm = name.replace(/'/g, "\\'");
+                  return `<div class="sg-item" onmousedown="event.preventDefault()" onclick="selectAreaSuggestion('${safeNm}', ${lat}, ${lng}, 15)">
+                    <div class="sg-item-icon">🗺️</div>
+                    <div class="sg-item-main">
+                      <div class="sg-item-name">${name}</div>
+                      <div class="sg-item-sub">지도로 이동</div>
+                    </div>
+                  </div>`;
+                }).join('');
+                const stripped = bx.innerHTML.replace(/<div class="sg-empty[^>]*>[\s\S]*?<\/div>/, '');
+                bx.innerHTML = stripped + aHtml;
+                bx.classList.add('open');
+              }
+            }
+          }
+        } else {
+          showNoResult();
         }
-
-        // ── 지역(주소) 섹션 ──
-        if (areaDocs.length > 0) {
-          kakaoHtml += `<div class="sg-section-label">지역</div>`;
-          kakaoHtml += areaDocs.slice(0, 3).map(d => {
-            const name   = d.address_name || query;
-            const lat    = parseFloat(d.y), lng = parseFloat(d.x);
-            const safeNm = name.replace(/'/g, "\\'");
-            return `<div class="sg-item" onmousedown="event.preventDefault()" onclick="selectAreaSuggestion('${safeNm}', ${lat}, ${lng}, 15)">
-              <div class="sg-item-icon">🗺️</div>
-              <div class="sg-item-main">
-                <div class="sg-item-name">${name}</div>
-                <div class="sg-item-sub">지도로 이동</div>
-              </div>
-            </div>`;
-          }).join('');
-        }
-
-        // 장소 섹션 유지 + 카카오 섹션 추가
-        const existingPlaceHtml = matchedPlaces.length > 0
-          ? box.innerHTML.replace(/<div class="sg-empty[^>]*>.*?<\/div>/s, '')
-          : '';
-        box.innerHTML = existingPlaceHtml + kakaoHtml;
-        box.classList.add('open');
       } catch(e) {
-        const b = document.getElementById('search-suggestions');
-        if (b?.querySelector('#sg-searching')) {
-          b.innerHTML = `<div class="sg-empty">결과를 찾지 못했어요</div>`;
-        }
+        showNoResult();
       }
-      })(); // REST fallback async IIFE 닫기
-    }, 300);
-  }
+      })(); // REST async IIFE
+
+    // ── B. SDK keywordSearch (JS API 키, 병렬 실행) ──────────────────────────
+    if (window.kakao?.maps?.services?.Places) {
+      try {
+        const ps = new kakao.maps.services.Places();
+        ps.keywordSearch(query, (data, status) => {
+          if (status === kakao.maps.services.Status.OK && data?.length) {
+            showKakaoResults(data);
+          }
+          // SDK가 실패해도 REST 결과가 이미 처리 중이므로 별도 처리 불필요
+        }, { size: 15 }); // 위치 파라미터 없음 → 전국 검색
+      } catch(e) { /* SDK 오류 무시, REST가 처리 */ }
+    }
+
+  }, 300);
 }
 
 function hideSearchSuggestions() {
@@ -4755,8 +4752,10 @@ function selectKakaoPlaceSuggestion(idx) {
   const existing = places.find(p => p.kakaoId === d.id || p.name === d.place_name);
   if (existing) {
     filterPlaces();
-    map.flyTo([existing.lat, existing.lng], 17, { duration: 1.0 });
-    setTimeout(() => openPlace(existing), 800);
+    if (!map.getBounds().contains([existing.lat, existing.lng])) {
+      map.setView([existing.lat, existing.lng], map.getZoom(), { animate: true, duration: 0.5 });
+    }
+    openPlace(existing);
     return;
   }
 
@@ -4948,7 +4947,7 @@ function liveCardHtml(d) {
   // liveData에는 미등록 장소만 남아있으므로 항상 하늘색·등록중
   const reqBtn = `<span style="font-size:11px;color:#F59E0B;font-weight:600" id="lc-add-${d._idx}">⏳ 등록 중...</span>`;
   return `
-  <div class="place-card" style="border-left:3px solid #7BC74D" onclick="map.flyTo([${lat},${lng}],17,{duration:0.7});showLivePopup(liveData.find(x=>x.id==='${d.id}'),false)">
+  <div class="place-card" style="border-left:3px solid #7BC74D" onclick="if(!map.getBounds().contains([${lat},${lng}]))map.setView([${lat},${lng}],map.getZoom(),{animate:true,duration:0.5});showLivePopup(liveData.find(x=>x.id==='${d.id}'),false)">
     <div class="pc-top">
       <div class="pc-emoji" style="background:#F0FFF0;font-size:14px;color:#7BC74D">●</div>
       <div class="pc-info">
@@ -4997,9 +4996,9 @@ function openPlace(p) {
   if (activePlace) setMarkerActive(activePlace.id, false);
   activePlace = p;
   setMarkerActive(p.id, true);
-  // 좌표가 없는 장소는 flyTo 스킵 (flyTo에 null 전달 시 오류로 드로어 오픈 중단되는 버그 방지)
-  if (p.lat != null && p.lng != null) {
-    map.flyTo([p.lat, p.lng], 16, { duration:1 });
+  // 뷰포트 안에 있으면 지도 고정, 밖에 있을 때만 이동 (현재 줌 유지)
+  if (p.lat != null && p.lng != null && !map.getBounds().contains([p.lat, p.lng])) {
+    map.setView([p.lat, p.lng], map.getZoom(), { animate: true, duration: 0.5 });
   }
 
   // Log view
