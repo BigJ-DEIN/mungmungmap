@@ -533,6 +533,10 @@
     .rep-empty { text-align:center; padding:32px 0; color:#BDBDBD; font-size:13px; }
     .rep-kakao-link { display:inline-flex; align-items:center; gap:4px; font-size:12px; color:#1976D2; text-decoration:none; margin-top:4px; }
     .lc-req-btn { display:inline-block; margin-top:8px; padding:6px 14px; background:#E04E14; color:white; border:none; border-radius:20px; font-size:12px; font-weight:700; font-family:inherit; cursor:pointer; }
+    /* Leaflet 팝업 내 버튼 초기화 */
+    .leaflet-popup-content button { font-family:inherit; }
+    .leaflet-popup-content-wrapper { border-radius:14px !important; box-shadow:0 4px 20px rgba(0,0,0,.18) !important; }
+    #live-popup-add-btn:disabled { opacity:.6; cursor:not-allowed; }
 
     /* ── ADMIN PANEL ── */
     #admin-panel {
@@ -1474,12 +1478,15 @@
       <!-- STEP 2: Pet Conditions -->
       <div class="rep-step" id="rep-step-2">
         <div class="rep-step-header">
-          <span style="font-size:13px;color:#888">반려동물 조건을 알려주세요</span>
+          <span style="font-size:13px;color:#888">반려동물 조건을 확인·수정해주세요</span>
           <div class="rep-step-dots">
             <div class="rep-step-dot"></div><div class="rep-step-dot on"></div><div class="rep-step-dot"></div>
           </div>
         </div>
-        <div id="rep-selected-preview" class="rep-selected-card" style="margin-bottom:16px"></div>
+        <div id="rep-selected-preview" class="rep-selected-card" style="margin-bottom:12px"></div>
+        <div id="rep-api-hint" style="display:none;font-size:11px;color:#1976D2;background:#EFF6FF;border-radius:8px;padding:7px 10px;margin-bottom:12px">
+          ✨ 카카오 정보를 자동으로 불러왔어요. 내용을 확인하고 맞지 않으면 수정해주세요.
+        </div>
 
         <div class="rep-cond-section">
           <label>🐕 입장 가능 견종</label>
@@ -3264,22 +3271,93 @@ function flyToLive(lat, lng, idx) {
   map.flyTo([lat, lng], 17, { animate:true, duration:0.7 });
 }
 
+let _livePopupPlace = null; // 팝업에 표시 중인 장소 데이터 임시 저장
+
 function showLivePopup(d, inDB) {
+  _livePopupPlace = d;
   const lat = parseFloat(d.y), lng = parseFloat(d.x);
   const phone = d.phone ? `<div style="margin-top:6px;font-size:12px;color:#555">📞 ${d.phone}</div>` : '';
   const kakaoLink = d.place_url ? `<a href="${d.place_url}" target="_blank" style="display:inline-block;margin-top:8px;padding:6px 12px;background:#FFEB00;color:#3C1E1E;border-radius:8px;font-size:12px;font-weight:700;text-decoration:none;">카카오맵에서 보기</a>` : '';
+  const addBtn = !inDB
+    ? `<div style="margin-top:10px">
+         <button id="live-popup-add-btn"
+           style="width:100%;padding:9px;background:#E04E14;color:white;border:none;border-radius:10px;font-size:13px;font-weight:700;font-family:inherit;cursor:pointer;"
+           onclick="openReportWithFetch()">🐾 장소 추가 요청</button>
+       </div>`
+    : '';
   const status = inDB
     ? `<div style="margin-top:6px;font-size:12px;color:#4CAF50;font-weight:700;">✅ 이미 앱에 등록된 장소입니다</div>`
-    : `<div style="margin-top:6px;font-size:12px;color:#1976D2;font-weight:700;">🔵 앱에 미등록된 장소 — 제보 가능!</div>`;
-  const popup = L.popup({ maxWidth: 220, className:'live-popup' })
+    : '';
+  L.popup({ maxWidth: 240, className:'live-popup' })
     .setLatLng([lat, lng])
     .setContent(`
       <div style="font-size:13px;font-weight:700;color:#2D2D2D">${d.place_name}</div>
-      <div style="font-size:11px;color:#E04E14;margin-top:2px">${d.category_name.split(' > ').pop()}</div>
+      <div style="font-size:11px;color:#E04E14;margin-top:2px">${(d.category_name||'').split(' > ').pop()}</div>
       <div style="font-size:11px;color:#888;margin-top:3px">${d.road_address_name || d.address_name}</div>
-      ${phone}${status}${kakaoLink}
+      ${phone}${status}${kakaoLink}${addBtn}
     `)
     .openOn(map);
+}
+
+async function openReportWithFetch() {
+  const d = _livePopupPlace;
+  if (!d) return;
+
+  // 버튼을 로딩 상태로 변경
+  const btn = document.getElementById('live-popup-add-btn');
+  if (btn) { btn.textContent = '⏳ 정보 불러오는 중...'; btn.disabled = true; }
+
+  // Kakao place-api에서 반려동물 상세 정보 수집
+  let petDetails = { large: null, small: null, indoor: null, outdoor: null };
+  try {
+    const result = await fetchKakaoPagePetSignal(d.place_url, d.id);
+    if (result?.petDetails) petDetails = result.petDetails;
+  } catch(e) { /* 실패해도 사용자가 직접 입력 가능 */ }
+
+  map.closePopup();
+
+  // _repSelected 세팅
+  _repSelected = {
+    place_name:        d.place_name,
+    address_name:      d.address_name || '',
+    road_address_name: d.road_address_name || '',
+    phone:             d.phone || '',
+    place_url:         d.place_url || '',
+    category_name:     d.category_name || '',
+    x: d.x, y: d.y,
+    id: d.id || ''
+  };
+
+  // 수집된 petDetails로 조건 버튼 프리셋
+  _repConds = { large: null, indoor: null, cage: null, fee: null };
+  // 대형견: large=true → 대형견 OK / large=false or (small=true & large=null) → 소형견만
+  if (petDetails.large === true)                          _repConds.large = true;
+  else if (petDetails.large === false)                    _repConds.large = false;
+  else if (petDetails.small === true && petDetails.large === null) _repConds.large = false; // 소형견 태그만 있음
+
+  // 실내/야외: indoor=true → 실내 가능 / (outdoor=true & indoor=null) → 테라스만
+  if (petDetails.indoor === true)                         _repConds.indoor = true;
+  else if (petDetails.indoor === false)                   _repConds.indoor = false;
+  else if (petDetails.outdoor === true && petDetails.indoor === null) _repConds.indoor = false; // 야외만
+
+  // 조건 버튼 UI 업데이트
+  _clearCondBtns();
+  if (_repConds.large === true)   document.getElementById('rco-large-y')?.classList.add('active');
+  if (_repConds.large === false)  document.getElementById('rco-large-n')?.classList.add('active');
+  if (_repConds.indoor === true)  document.getElementById('rco-indoor-y')?.classList.add('active');
+  if (_repConds.indoor === false) document.getElementById('rco-indoor-n')?.classList.add('active');
+
+  document.getElementById('rep-note').value = '';
+  _repRenderSelected();
+
+  // 카카오 자동 수집 여부에 따라 힌트 표시
+  const hasApiData = petDetails.large !== null || petDetails.small !== null
+                  || petDetails.indoor !== null || petDetails.outdoor !== null;
+  if (hasApiData) _showApiHint(); else _hideApiHint();
+
+  // Step 2 바로 열기 (조건 확인/수정 단계)
+  _repGotoStep(2);
+  document.getElementById('submit-modal').classList.add('open');
 }
 
 function clearLiveSearch() {
@@ -4514,17 +4592,33 @@ async function refreshDrawerMemories(placeId) {
 let _repSelected = null;   // selected Kakao place object
 let _repConds = { large: null, indoor: null, cage: null, fee: null };
 
+function _hideApiHint() {
+  const el = document.getElementById('rep-api-hint');
+  if (el) el.style.display = 'none';
+}
+function _showApiHint() {
+  const el = document.getElementById('rep-api-hint');
+  if (el) el.style.display = 'block';
+}
+function _clearCondBtns() {
+  ['large','indoor','cage','fee'].forEach(f => {
+    ['y','n','u'].forEach(s => document.getElementById(`rco-${f}-${s}`)?.classList.remove('active'));
+  });
+}
+
 function openSubmitModal() {
   _repSelected = null;
   _repConds = { large: null, indoor: null, cage: null, fee: null };
   document.getElementById('rep-search-input').value = '';
   document.getElementById('rep-result-list').innerHTML = '<div class="rep-empty">검색어를 입력하면 카카오맵 결과가 나와요 🗺️</div>';
   document.getElementById('rep-note').value = '';
+  _clearCondBtns();
+  _hideApiHint();
   _repGotoStep(1);
   document.getElementById('submit-modal').classList.add('open');
 }
 
-// Open report modal pre-filled from live search result
+// Open report modal pre-filled from live card "추가 요청" button (no API fetch)
 function openReportWithPlace(d) {
   _repSelected = {
     place_name: d.place_name,
@@ -4538,6 +4632,8 @@ function openReportWithPlace(d) {
   };
   _repConds = { large: null, indoor: null, cage: null, fee: null };
   document.getElementById('rep-note').value = '';
+  _clearCondBtns();
+  _hideApiHint();
   _repRenderSelected();
   _repGotoStep(2);
   document.getElementById('submit-modal').classList.add('open');
