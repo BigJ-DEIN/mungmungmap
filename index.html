@@ -701,14 +701,32 @@
       }
       #sidebar.mobile-open { transform:translateY(0); }
 
+      /* ── 지도 줌 +/- 버튼 모바일 숨김 ── */
+      .leaflet-control-zoom { display:none !important; }
+
+      /* ── 드로어 헤더 (목록 제목 + 닫기 X) ── */
+      #drawer-header {
+        display:flex; align-items:center; justify-content:space-between;
+        padding:14px 16px 10px; border-bottom:1px solid #F2F2F2; flex-shrink:0;
+      }
+      #drawer-header .drawer-title {
+        font-size:15px; font-weight:700; color:#2D2D2D;
+      }
+      #drawer-close-btn {
+        width:32px; height:32px; border:none; background:#F5F5F5;
+        border-radius:50%; cursor:pointer; display:flex; align-items:center;
+        justify-content:center; font-size:15px; color:#666;
+        touch-action:manipulation;
+      }
+
       /* ── 필터 접기/펼치기 (모바일 전용) ── */
       #filter-toggle-btn {
-        display:flex; align-items:center; justify-content:space-between;
+        display:flex; align-items:center;
         width:100%; padding:10px 12px 8px; border:none; background:none;
         cursor:pointer; font-family:inherit; touch-action:manipulation;
       }
       #filter-toggle-btn .ftb-left {
-        display:flex; align-items:center; gap:8px;
+        display:flex; align-items:center; gap:6px;
         font-size:13px; font-weight:700; color:#333;
       }
       #filter-toggle-btn .ftb-summary {
@@ -716,7 +734,7 @@
         background:#FDF5F2; border-radius:10px; padding:2px 8px;
       }
       #filter-toggle-btn .ftb-arrow {
-        font-size:11px; color:#AAA; transition:transform .25s;
+        font-size:10px; color:#AAA; transition:transform .25s;
       }
       #filter-toggle-btn.expanded .ftb-arrow { transform:rotate(180deg); }
 
@@ -1005,8 +1023,9 @@
       /* 데스크탑: FAB 2배 크기 */
       #feedback-fab-img { width:100px; height:100px; border-width:4px; }
       #feedback-fab-label { font-size:13px; padding:4px 12px; }
-      /* 데스크탑: 필터 토글 버튼 숨기고 패널 항상 표시 */
+      /* 데스크탑: 필터 토글 버튼·드로어 헤더 숨기고 패널 항상 표시 */
       #filter-toggle-btn { display:none; }
+      #drawer-header { display:none; }
       #filter-panel-body { max-height:none !important; overflow:visible !important; padding:0 !important; }
     }
 
@@ -1280,15 +1299,21 @@
 
   <!-- Desktop Sidebar -->
   <div id="sidebar">
+    <!-- 모바일 드로어 헤더 (데스크탑에서 숨김) -->
+    <div id="drawer-header">
+      <span class="drawer-title">목록</span>
+      <button id="drawer-close-btn" onclick="setMobileTab('map')" aria-label="닫기">✕</button>
+    </div>
+
     <div id="quick-filters">
       <!-- 모바일 필터 토글 버튼 (데스크탑에선 CSS로 숨김) -->
       <button id="filter-toggle-btn" onclick="toggleFilterPanel()" aria-expanded="false">
         <span class="ftb-left">
           <i class="fa fa-sliders" style="font-size:13px;color:#E04E14"></i>
           필터
+          <span class="ftb-arrow">▼</span>
           <span class="ftb-summary" id="filter-active-count" style="display:none"></span>
         </span>
-        <span class="ftb-arrow">▼</span>
       </button>
 
       <!-- 필터 내용 (모바일: 기본 접힘 / 데스크탑: 항상 표시) -->
