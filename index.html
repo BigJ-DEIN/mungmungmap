@@ -3279,10 +3279,10 @@ function showLivePopup(d, inDB) {
   const phone = d.phone ? `<div style="margin-top:6px;font-size:12px;color:#555">📞 ${d.phone}</div>` : '';
   const kakaoLink = d.place_url ? `<a href="${d.place_url}" target="_blank" style="display:inline-block;margin-top:8px;padding:6px 12px;background:#FFEB00;color:#3C1E1E;border-radius:8px;font-size:12px;font-weight:700;text-decoration:none;">카카오맵에서 보기</a>` : '';
   const addBtn = !inDB
-    ? `<div style="margin-top:10px">
+    ? `<div style="margin-top:10px" id="live-popup-add-wrap">
          <button id="live-popup-add-btn"
            style="width:100%;padding:9px;background:#E04E14;color:white;border:none;border-radius:10px;font-size:13px;font-weight:700;font-family:inherit;cursor:pointer;"
-           onclick="openReportWithFetch()">🐾 장소 추가 요청</button>
+           onclick="autoAddLivePlace()">🐾 바로 등록하기</button>
        </div>`
     : '';
   const status = inDB
@@ -3299,65 +3299,103 @@ function showLivePopup(d, inDB) {
     .openOn(map);
 }
 
-async function openReportWithFetch() {
-  const d = _livePopupPlace;
+// 라이브 검색 결과에서 장소를 자동으로 수집·레이블링·등록하는 함수
+// (파이프라인과 동일한 프로세스: place-api 호출 → petDetails 추출 → Firestore 저장)
+async function autoAddLivePlace(dOverride) {
+  const d = dOverride || _livePopupPlace;
   if (!d) return;
 
-  // 버튼을 로딩 상태로 변경
-  const btn = document.getElementById('live-popup-add-btn');
-  if (btn) { btn.textContent = '⏳ 정보 불러오는 중...'; btn.disabled = true; }
+  // 이미 등록된 장소면 스킵
+  if (d._inDB) { showToast('이미 등록된 장소예요'); return; }
 
-  // Kakao place-api에서 반려동물 상세 정보 수집
+  // 버튼 로딩 상태
+  const btn = document.getElementById('live-popup-add-btn');
+  if (btn) { btn.textContent = '⏳ 정보 수집 중...'; btn.disabled = true; }
+
+  // 1) place-api로 반려동물 상세 정보 수집 (파이프라인 동일 채널)
   let petDetails = { large: null, small: null, indoor: null, outdoor: null };
+  let petStatus = 'confirmed'; // 애견동반 키워드 검색 결과 = 최소 confirmed
   try {
     const result = await fetchKakaoPagePetSignal(d.place_url, d.id);
     if (result?.petDetails) petDetails = result.petDetails;
-  } catch(e) { /* 실패해도 사용자가 직접 입력 가능 */ }
+    // 공식 시설 태그(strong) 확인 → confirmed / 최근 반려견 리뷰 → verified
+    if (result?.recentReview)      petStatus = 'verified';
+    else if (result?.strong === true) petStatus = 'confirmed';
+    // strong:false (키워드만) — 검색 자체가 애견동반 쿼리이므로 confirmed 유지
+  } catch(e) { /* place-api 실패 → petStatus=confirmed, petDetails 전부 null */ }
 
-  map.closePopup();
+  // 2) 카테고리·지역 매핑
+  const cat  = impMapCat(d.category_name || '');
+  const area = impGuessArea(d.road_address_name || '', d.address_name || '');
+  const nextId = Math.max(...places.filter(p => p && typeof p.id === 'number').map(p => p.id), 10000) + 1;
 
-  // _repSelected 세팅
-  _repSelected = {
-    place_name:        d.place_name,
-    address_name:      d.address_name || '',
-    road_address_name: d.road_address_name || '',
-    phone:             d.phone || '',
-    place_url:         d.place_url || '',
-    category_name:     d.category_name || '',
-    x: d.x, y: d.y,
-    id: d.id || ''
+  // 3) large/indoor/outdoor 필드 결정
+  const largeFinal   = petDetails.large !== null ? petDetails.large
+                     : (petDetails.small === true ? false : null); // 소형견 태그만 → large:false
+  const indoorFinal  = petDetails.indoor !== null ? petDetails.indoor
+                     : (petDetails.outdoor === true ? false : null); // 야외만 → indoor:false
+  const outdoorFinal = petDetails.outdoor !== null ? petDetails.outdoor
+                     : (petDetails.indoor === false ? true : null);
+
+  const newPlace = {
+    id:        nextId,
+    name:      d.place_name,
+    addr:      d.road_address_name || d.address_name || '',
+    phone:     d.phone || '',
+    kakaoUrl:  d.place_url || '',
+    kakaoId:   d.id || '',
+    cat:       cat,
+    emoji:     impCatEmoji(cat),
+    area:      area,
+    province:  '',
+    petStatus: petStatus,
+    large:     largeFinal,
+    small:     null,
+    indoor:    indoorFinal,
+    outdoor:   outdoorFinal,
+    cage:      null,
+    entryFee:  null,
+    stroller:  null,
+    note:      '',
+    hours:     [{ d: '영업시간', t: '카카오맵 확인' }],
+    active:    true,
+    source:    'live_search',
+    addedAt:   new Date().toISOString(),
   };
 
-  // 수집된 petDetails로 조건 버튼 프리셋
-  _repConds = { large: null, indoor: null, cage: null, fee: null };
-  // 대형견: large=true → 대형견 OK / large=false or (small=true & large=null) → 소형견만
-  if (petDetails.large === true)                          _repConds.large = true;
-  else if (petDetails.large === false)                    _repConds.large = false;
-  else if (petDetails.small === true && petDetails.large === null) _repConds.large = false; // 소형견 태그만 있음
+  // 4) Firestore 저장
+  if (firebaseReady && db) {
+    const ref = db.collection('places').doc();
+    newPlace.firestoreId = ref.id;
+    await ref.set(newPlace);
+  }
 
-  // 실내/야외: indoor=true → 실내 가능 / (outdoor=true & indoor=null) → 테라스만
-  if (petDetails.indoor === true)                         _repConds.indoor = true;
-  else if (petDetails.indoor === false)                   _repConds.indoor = false;
-  else if (petDetails.outdoor === true && petDetails.indoor === null) _repConds.indoor = false; // 야외만
+  // 5) 로컬 배열 + 지도 마커 즉시 반영
+  places.push(newPlace);
+  if (_allKakaoIds && d.id) _allKakaoIds.add(d.id); // 파이프라인 중복 방지 캐시 갱신
+  filterPlaces();
+  if (typeof addMarker === 'function') addMarker(newPlace);
 
-  // 조건 버튼 UI 업데이트
-  _clearCondBtns();
-  if (_repConds.large === true)   document.getElementById('rco-large-y')?.classList.add('active');
-  if (_repConds.large === false)  document.getElementById('rco-large-n')?.classList.add('active');
-  if (_repConds.indoor === true)  document.getElementById('rco-indoor-y')?.classList.add('active');
-  if (_repConds.indoor === false) document.getElementById('rco-indoor-n')?.classList.add('active');
+  // 6) liveData에서 해당 항목 _inDB 플래그 업데이트 → 카드 버튼 즉시 갱신
+  const liveItem = liveData.find(x => x.id === d.id || x.place_name === d.place_name);
+  if (liveItem) {
+    liveItem._inDB = true;
+    // 리스트 카드 버튼 즉시 교체
+    const cardBtn = document.getElementById(`lc-add-${liveItem._idx}`);
+    if (cardBtn) cardBtn.outerHTML = `<span style="font-size:11px;color:#4CAF50;font-weight:700">✅ 등록됨</span>`;
+  }
+  filterPlaces(); // 목록 재렌더
 
-  document.getElementById('rep-note').value = '';
-  _repRenderSelected();
+  // 7) 팝업·버튼 완료 상태 업데이트
+  const wrap = document.getElementById('live-popup-add-wrap');
+  if (wrap) {
+    wrap.innerHTML = `<div style="margin-top:8px;padding:8px;background:#F0FFF4;border-radius:8px;text-align:center;font-size:12px;font-weight:700;color:#15803D">✅ 지도에 등록됐어요!</div>`;
+  }
 
-  // 카카오 자동 수집 여부에 따라 힌트 표시
-  const hasApiData = petDetails.large !== null || petDetails.small !== null
-                  || petDetails.indoor !== null || petDetails.outdoor !== null;
-  if (hasApiData) _showApiHint(); else _hideApiHint();
-
-  // Step 2 바로 열기 (조건 확인/수정 단계)
-  _repGotoStep(2);
-  document.getElementById('submit-modal').classList.add('open');
+  const statusLabels = { large: largeFinal === true ? '대형견 OK' : largeFinal === false ? '소형견만' : null,
+                         indoor: indoorFinal === true ? '실내 가능' : indoorFinal === false ? '테라스만' : null };
+  const labelStr = [statusLabels.large, statusLabels.indoor].filter(Boolean).join(' · ');
+  showToast(`✅ ${d.place_name} 등록 완료!${labelStr ? ' (' + labelStr + ')' : ''}`);
 }
 
 function clearLiveSearch() {
@@ -3541,8 +3579,8 @@ function liveCardHtml(d) {
   const addr = d.road_address_name || d.address_name || '';
   const color = d._inDB ? '#4CAF50' : '#87CEEB';
   const reqBtn = !d._inDB
-    ? `<button class="lc-req-btn" onclick="event.stopPropagation();openReportWithPlace(liveData[${d._idx}])">+ 추가 요청</button>`
-    : '';
+    ? `<button class="lc-req-btn" id="lc-add-${d._idx}" onclick="event.stopPropagation();autoAddLivePlace(liveData[${d._idx}])">+ 바로 등록</button>`
+    : `<span style="font-size:11px;color:#4CAF50;font-weight:700">✅ 등록됨</span>`;
   return `
   <div class="place-card" style="border-left:3px solid ${color}" onclick="map.flyTo([${lat},${lng}],17,{duration:0.7});showLivePopup(liveData[${d._idx}],${d._inDB})">
     <div class="pc-top">
@@ -5496,13 +5534,29 @@ const NW_PIPELINE_KEY = 'nw_pipeline'; // Firestore meta doc key
 // → nwCollectRegion에서 249개 지역마다 places.map() 재빌드 대신 이 Set 사용
 let _allKakaoIds = null; // null = 아직 로드 안됨
 
+// ── 격자 페이즈 오프셋 테이블 ──────────────────────────────────────────────
+// 각 수집 회차마다 3×3 격자 전체를 다른 방향으로 반 칸 이동.
+// 한 칸 = 0.025°(≈2.8km), 반 칸 = 0.0125°(≈1.4km)
+// Phase 0: 기준(현재와 동일)
+// Phase 1: NE +0.0125°  → 기존에 45위 밖이었던 장소가 중심과 가까워짐
+// Phase 2: SE (+0.0125°, -0.0125°)
+// Phase 3: NW (-0.0125°, +0.0125°)
+// Phase 4: SW -0.0125°  (5회차 이후 다시 Phase 0 순환)
+const COLLECT_GRID_PHASES = [
+  [  0,       0     ],  // Phase 0: 기준
+  [+0.0125, +0.0125],   // Phase 1: NE
+  [+0.0125, -0.0125],   // Phase 2: SE
+  [-0.0125, +0.0125],   // Phase 3: NW
+  [-0.0125, -0.0125],   // Phase 4: SW
+];
+
 let nwPipeline = {
   running: false,
   stop: false,
   phase: 'idle',        // idle | collect | verify1 | verify2 | done
   regionIdx: 0,         // NATIONWIDE_REGIONS 현재 인덱스
   totalRegions: NATIONWIDE_REGIONS.length,
-  regionStatus: {},     // { 'province_name': { lastCollect, lastV1, lastV2, placeCount } }
+  regionStatus: {},     // { 'province_name': { lastCollect, lastV1, lastV2, placeCount, collectCount } }
   stats: { collected: 0, v1Done: 0, v2Done: 0, v2Skipped: 0, upgraded: 0, rejected: 0 },
   log: [],
 };
@@ -6479,10 +6533,10 @@ async function nwCollectRegion(region) {
     }
   }
 
-  // ── 2단계: 카테고리 검색 (CE7=카페, FD6=음식점) — 3×3 그리드 ──────────────
+  // ── 2단계: 카테고리 검색 (CE7=카페, FD6=음식점) — 3×3 그리드 + 페이즈 오프셋 ──
   // 지역 중심점 1개 → 반경 8km 45개 한계 극복:
   // 중심점 기준 3×3=9개 격자점 × 반경 4km × 45개 = 최대 405개/카테고리
-  // 격자 간격 0.025°(≈2.8km), 중복은 existingKakaoIds로 자동 제거
+  // ★ 수집 회차(collectCount)마다 격자 전체를 반 칸씩 이동 → 누락 장소 보완
   const CAT_GROUP_CODES = ['CE7', 'FD6', 'AD5', 'AT4'];
   // CE7=카페, FD6=음식점, AD5=숙박(펜션/호텔), AT4=관광명소(공원/수목원)
   const CAT_GRID_STEP   = 0.025; // ≈2.8km
@@ -6492,11 +6546,16 @@ async function nwCollectRegion(region) {
     [ 1,-1],[ 1,0],[ 1,1],
   ]; // 3×3 = 9개 격자점
 
+  // 현재 수집 회차에 따른 페이즈 오프셋 결정
+  const rKey_phase = region.province + '_' + region.name;
+  const collectCount = nwPipeline.regionStatus[rKey_phase]?.collectCount ?? 0;
+  const [phaseOffY, phaseOffX] = COLLECT_GRID_PHASES[collectCount % COLLECT_GRID_PHASES.length];
+
   for (const code of CAT_GROUP_CODES) {
     for (const [dy, dx] of CAT_GRID_OFFSETS) {
       if (nwPipeline.stop) return newFound;
-      const gx = region.x + dx * CAT_GRID_STEP;
-      const gy = region.y + dy * CAT_GRID_STEP;
+      const gx = region.x + dx * CAT_GRID_STEP + phaseOffX;
+      const gy = region.y + dy * CAT_GRID_STEP + phaseOffY;
 
       for (let pg = 1; pg <= 3; pg++) {
         if (nwPipeline.stop) return newFound;
@@ -6869,8 +6928,13 @@ async function runNationwidePipeline() {
     nwUpdateLog(`  ✅ 수집 ${newPlaces.length}개`);
 
     if (!nwPipeline.regionStatus[rKey]) nwPipeline.regionStatus[rKey] = {};
-    nwPipeline.regionStatus[rKey].lastCollect = new Date().toISOString();
-    nwPipeline.regionStatus[rKey].collected   = (nwPipeline.regionStatus[rKey].collected || 0) + newPlaces.length;
+    const prevCount = nwPipeline.regionStatus[rKey].collectCount ?? 0;
+    nwPipeline.regionStatus[rKey].lastCollect  = new Date().toISOString();
+    nwPipeline.regionStatus[rKey].collected    = (nwPipeline.regionStatus[rKey].collected || 0) + newPlaces.length;
+    nwPipeline.regionStatus[rKey].collectCount = prevCount + 1;  // ★ 다음 회차 페이즈 계산용
+    const nextPhase = (prevCount + 1) % COLLECT_GRID_PHASES.length;
+    nwUpdateLog(`  🔄 격자 페이즈 ${prevCount % COLLECT_GRID_PHASES.length} → 다음 ${nextPhase} (회차 ${prevCount + 1})`);
+    await nwSaveState(); // collectCount 즉시 저장
 
     await new Promise(r => setTimeout(r, 300));
     if (nwPipeline.stop) break;
@@ -7063,6 +7127,22 @@ function renderNationwidePipelineUI() {
     </div>`;
   }).join('');
 
+  // 주요 지역별 수집 회차 + 다음 페이즈 표시
+  const phaseNames = ['기준','NE','SE','NW','SW'];
+  const topRegions = NATIONWIDE_REGIONS.slice(0, 12); // 분당/용인/서울 주요 지역만 표시
+  const phaseHtml = topRegions.map(r => {
+    const k = r.province + '_' + r.name;
+    const cnt  = nwPipeline.regionStatus[k]?.collectCount ?? 0;
+    const cur  = cnt === 0 ? '미수집' : `${cnt}회 완료`;
+    const next = phaseNames[(cnt) % COLLECT_GRID_PHASES.length];
+    const color = cnt === 0 ? '#9CA3AF' : cnt >= 4 ? '#22C55E' : '#F07030';
+    return `<div style="display:flex;justify-content:space-between;font-size:11px;padding:3px 0;border-bottom:1px solid #F3F4F6">
+      <span style="color:#374151;font-weight:600">${r.name}</span>
+      <span style="color:${color}">${cur}</span>
+      <span style="color:#9CA3AF">다음 격자: <b style="color:#3B82F6">${next}</b></span>
+    </div>`;
+  }).join('');
+
   el.innerHTML = `
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
       <div style="font-size:13px;font-weight:800;color:#1F2937">🌍 전국 자동 파이프라인</div>
@@ -7120,6 +7200,15 @@ function renderNationwidePipelineUI() {
     <div style="margin-bottom:12px">
       <div style="font-size:12px;font-weight:700;color:#374151;margin-bottom:8px">시/도별 진행현황</div>
       ${provHtml}
+    </div>
+
+    <div style="margin-bottom:12px;background:#F0F7FF;border-radius:10px;padding:10px 12px">
+      <div style="font-size:12px;font-weight:700;color:#1D4ED8;margin-bottom:6px">🔄 격자 페이즈 현황 (상위 12개 지역)</div>
+      <div style="font-size:10px;color:#6B7280;margin-bottom:8px">파이프라인 재실행 때마다 격자를 비틀어 누락 장소 보완. 4회 완료 시 전체 커버.</div>
+      <div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap">
+        ${phaseNames.map((n,i)=>`<span style="font-size:10px;padding:2px 8px;border-radius:10px;background:${i===0?'#DBEAFE':i===1?'#DCFCE7':i===2?'#FEF3C7':i===3?'#FCE7F3':'#F3F4F6'};color:#374151;font-weight:600">P${i}: ${n}</span>`).join('')}
+      </div>
+      ${phaseHtml}
     </div>
 
     <div style="background:#1F2937;border-radius:8px;padding:10px;max-height:160px;overflow-y:auto">
