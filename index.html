@@ -2461,13 +2461,14 @@ async function applyCorrectionRequest(docId, placeId, field, suggestedValue) {
   if (!confirm(`"${p.name}" - ${FIELD_META[field]?.label||field} 수정을 반영할까요?`)) return;
   try {
     const batch = db.batch();
-    batch.update(db.collection('places').doc(p.firestoreId), { [field]: suggestedValue });
+    batch.update(db.collection('places').doc(p.firestoreId), { [field]: suggestedValue, manuallyEdited: true });
     batch.update(db.collection('correctionRequests').doc(docId), {
       status: 'approved',
       reviewedAt: firebase.firestore.FieldValue.serverTimestamp()
     });
     await batch.commit();
     p[field] = suggestedValue;
+    p.manuallyEdited = true;
     invalidatePlacesCache();
     showToast('✅ 반영 완료');
     renderAdminCorrections();
@@ -3223,10 +3224,8 @@ function initKakaoSearch() {
 
 function toggleLiveSearch() {
   const btn = document.getElementById('live-search-btn');
-  if (btn.classList.contains('active')) {
-    clearLiveSearch();
-    return;
-  }
+  // 작업 중이면 중복 실행 방지
+  if (btn.classList.contains('loading')) return;
   const key = window.KAKAO_JS_KEY;
   if (!key || key === 'YOUR_KAKAO_JS_KEY') {
     showKakaoKeyGuide();
@@ -3352,7 +3351,6 @@ async function renderLiveResults(rawData) {
     if (d.id) liveMarkers[d.id] = m;
   });
   filterPlaces();
-  btn.classList.add('active');
 
   // ── 미등록 장소 자동 처리 시작 ──────────────────────────────────────────
   const total = liveData.length;
@@ -3391,9 +3389,14 @@ async function renderLiveResults(rawData) {
   const skipMsg = skipped > 0 ? ` · 미확인 ${skipped}개 제외` : '';
   showToast(`✅ ${registered}개 등록 완료${skipMsg}`);
 
-  // ── 잘못 등록된 live_search 장소 자동 정리 ──────────────────────────────
-  const removed = await cleanupInvalidLivePlaces(btn);
-  if (removed > 0) showToast(`🗑 오등록 ${removed}개 자동 제거됨`);
+  // ── 기존 live_search 장소 자동 제거 + 교정 ──────────────────────────────
+  const { removed, corrected } = await cleanupInvalidLivePlaces(btn);
+  const cleanParts = [];
+  if (removed > 0)   cleanParts.push(`오등록 ${removed}개 제거`);
+  if (corrected > 0) cleanParts.push(`${corrected}개 정보 교정`);
+  if (cleanParts.length > 0) showToast(`🔄 ${cleanParts.join(' · ')}`);
+  // 작업 완료 — 버튼을 초기 상태로 완전히 복귀 (재실행 가능)
+  btn.classList.remove('active', 'loading');
   btn.textContent = '🔄 지도 정보 업데이트';
 }
 
@@ -3550,9 +3553,9 @@ async function cleanupInvalidLivePlaces(btn) {
     bounds.contains([p.lat, p.lng])
   );
 
-  if (toCheck.length === 0) return 0;
+  if (toCheck.length === 0) return { removed: 0, corrected: 0 };
 
-  let removed = 0;
+  let removed = 0, corrected = 0;
   for (let i = 0; i < toCheck.length; i++) {
     const p = toCheck[i];
     if (btn) btn.textContent = `🔍 기존 장소 재확인 ${i+1}/${toCheck.length}...`;
@@ -3560,24 +3563,46 @@ async function cleanupInvalidLivePlaces(btn) {
       const result = await fetchKakaoPagePetSignal(p.kakaoUrl, p.kakaoId)
         .catch(() => null);
 
-      // 오류(프록시 전체 실패) → 삭제 안 함. 명확히 found:false인 경우만 제거
-      if (result && !result.error && result.found === false) {
-        // places 배열에서 제거
+      // 오류(프록시 전체 실패) → 건너뜀. 명확한 결과가 있을 때만 처리
+      if (!result || result.error) continue;
+
+      if (result.found === false) {
+        // ── 제거 ──────────────────────────────────────────────────────────
         const idx = places.indexOf(p);
         if (idx > -1) places.splice(idx, 1);
-
-        // 마커 제거
         if (markers[p.id]) {
           (clusterGroup || map).removeLayer(markers[p.id].marker || markers[p.id]);
           delete markers[p.id];
         }
-
-        // Firestore 삭제
         if (firebaseReady && db && p.firestoreId) {
           db.collection('places').doc(p.firestoreId).delete()
             .catch(e => console.warn('cleanup 삭제 실패:', p.name, e));
         }
         removed++;
+
+      } else if (result.found === true && !p.manuallyEdited) {
+        // ── 교정 (manuallyEdited 플래그 없는 경우만) ─────────────────────
+        // 수동으로 수정한 장소는 건드리지 않음
+        const pd = result.petDetails || {};
+        const newLarge   = pd.large   !== undefined ? pd.large   : null;
+        const newSmall   = pd.small   !== undefined ? pd.small   : null;
+        const newIndoor  = pd.indoor  !== undefined ? pd.indoor  : null;
+        const newOutdoor = pd.outdoor !== undefined ? pd.outdoor : null;
+
+        const changed = p.large !== newLarge || p.small !== newSmall ||
+                        p.indoor !== newIndoor || p.outdoor !== newOutdoor;
+        if (changed) {
+          p.large   = newLarge;
+          p.small   = newSmall;
+          p.indoor  = newIndoor;
+          p.outdoor = newOutdoor;
+          if (firebaseReady && db && p.firestoreId) {
+            db.collection('places').doc(p.firestoreId)
+              .update({ large: newLarge, small: newSmall, indoor: newIndoor, outdoor: newOutdoor })
+              .catch(e => console.warn('cleanup 교정 실패:', p.name, e));
+          }
+          corrected++;
+        }
       }
     } catch(e) {
       console.warn('cleanupInvalidLivePlaces 오류:', p.name, e);
@@ -3585,8 +3610,8 @@ async function cleanupInvalidLivePlaces(btn) {
     await new Promise(r => setTimeout(r, 100));
   }
 
-  if (removed > 0) filterPlaces();
-  return removed;
+  if (removed > 0 || corrected > 0) filterPlaces();
+  return { removed, corrected };
 }
 
 function clearLiveSearch() {
@@ -4030,8 +4055,9 @@ async function adminEditField(placeId, field) {
   if (meta.type === 'bool') {
     const newVal = !p[field];
     try {
-      await db.collection('places').doc(p.firestoreId).update({ [field]: newVal });
+      await db.collection('places').doc(p.firestoreId).update({ [field]: newVal, manuallyEdited: true });
       p[field] = newVal; // 로컬 반영
+      p.manuallyEdited = true;
       invalidatePlacesCache();
       // 셀 UI 즉시 갱신
       const el = document.getElementById(`ic-${placeId}-${field}`);
@@ -4176,9 +4202,10 @@ async function applyUserDirectEdit(placeId, field, newVal) {
   if (!p || !p.firestoreId) { showToast('Firestore ID 없음'); return; }
   const oldVal = p[field];
   try {
-    await db.collection('places').doc(p.firestoreId).update({ [field]: newVal });
+    await db.collection('places').doc(p.firestoreId).update({ [field]: newVal, manuallyEdited: true });
     await logPlaceEdit(p, field, oldVal, newVal);
     p[field] = newVal;
+    p.manuallyEdited = true;
     invalidatePlacesCache();
     const meta = FIELD_META[field];
     const el = document.getElementById(`ic-${placeId}-${field}`);
@@ -4557,6 +4584,7 @@ function toggleMapPickMode() {
 }
 
 function exitMapPickMode() {
+  const wasInPickMode = mapPickMode; // 맵픽 모드에서 나오는 건지 여부 저장
   mapPickMode = false;
 
   // 힌트 바 숨기기
@@ -4568,16 +4596,17 @@ function exitMapPickMode() {
   const locBtn = document.getElementById('btn-locate');
   if (locBtn) locBtn.style.display = '';
 
-  // 지도 클릭 핸들러 복원 (모달 복원 전에 먼저)
+  // 지도 클릭 핸들러 복원
   map.off('click');
   map.on('click', () => { if (activePlace) closeDrawer(); });
 
-  // 모달 복원
+  // 모달 복원 — 맵픽 모드에서 빠져나올 때만 재오픈
+  // (closeModal이 exitMapPickMode를 호출하는 경우엔 재오픈 방지)
   const modal = document.getElementById('memory-modal');
   if (modal) {
     modal.style.pointerEvents = '';
     modal.style.opacity = '';
-    modal.classList.add('open');
+    if (wasInPickMode) modal.classList.add('open');
   }
 }
 
