@@ -1266,8 +1266,22 @@
             <input type="text" id="dog-name" placeholder="예) 메리, 나무, 앙꼬, 베일리..." autocomplete="off"/>
           </div>
           <div class="form-group" style="margin-bottom:0">
-            <label>나이</label>
-            <input type="text" id="dog-age" placeholder="3살 / 2022년생" autocomplete="off"/>
+            <label>몇 년생</label>
+            <input type="number" id="dog-age" placeholder="예) 2022" min="2000" max="2026" autocomplete="off"/>
+          </div>
+          <div class="form-group" style="margin-bottom:0">
+            <label>성별</label>
+            <div style="display:flex;gap:8px;margin-top:4px">
+              <button type="button" id="dog-gender-m" onclick="setDogGender('m')"
+                style="flex:1;padding:8px 0;border:1.5px solid #EEE;border-radius:10px;background:#FAFAFA;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;color:#888;transition:all .15s">
+                🐶 남아
+              </button>
+              <button type="button" id="dog-gender-f" onclick="setDogGender('f')"
+                style="flex:1;padding:8px 0;border:1.5px solid #EEE;border-radius:10px;background:#FAFAFA;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;color:#888;transition:all .15s">
+                🐩 여아
+              </button>
+            </div>
+            <input type="hidden" id="dog-gender" value="">
           </div>
           <div class="form-group" style="margin-bottom:0">
             <label>견종</label>
@@ -2010,15 +2024,17 @@ async function doAuth() {
       credential = await auth.createUserWithEmailAndPassword(email, pw);
       await credential.user.updateProfile({ displayName: name });
       // Upload dog photo if provided
-      const dogName  = document.getElementById('dog-name').value.trim();
-      const dogAge   = document.getElementById('dog-age').value.trim();
-      const dogBreed = document.getElementById('dog-breed')?.value.trim() || '';
+      const dogName      = document.getElementById('dog-name').value.trim();
+      const dogBirthYear = document.getElementById('dog-age').value.trim();
+      const dogBreed     = document.getElementById('dog-breed')?.value.trim() || '';
+      const dogGender    = document.getElementById('dog-gender')?.value || '';
       let dogPhotoURL = null;
       if (dogRegBlob) {
-        try { dogPhotoURL = await uploadDogPhoto(credential.user.uid, dogRegBlob); }
+        const compressed = await compressDogPhoto(dogRegBlob);
+        try { dogPhotoURL = await uploadDogPhoto(credential.user.uid, compressed); }
         catch(photoErr) { console.warn('강아지 사진 업로드 실패 (무시하고 계속):', photoErr); }
       }
-      const dogProfile = dogName ? { name: dogName, age: dogAge || '', breed: dogBreed, photoURL: dogPhotoURL || '' } : null;
+      const dogProfile = dogName ? { name: dogName, birthYear: dogBirthYear || '', breed: dogBreed, gender: dogGender, photoURL: dogPhotoURL || '' } : null;
       if (dogProfile) currentDog = dogProfile;
       // Save to Firestore — 실패해도 앱 진입은 허용 (ensureUserDocument가 복구)
       try {
@@ -2086,6 +2102,19 @@ async function doAuth() {
   } finally {
     _doAuthInProgress = false; // 완료 후 잠금 해제
   }
+}
+
+/* 강아지 성별 선택 (가입 + 프로필 모달 공용) */
+function setDogGender(g, prefix) {
+  const pfx = prefix || '';
+  const mBtn = document.getElementById(pfx + 'dog-gender-m');
+  const fBtn = document.getElementById(pfx + 'dog-gender-f');
+  const inp  = document.getElementById(pfx + 'dog-gender');
+  const activeStyle = 'background:#FFF3EE;border-color:#E04E14;color:#E04E14;';
+  const inactiveStyle = 'background:#FAFAFA;border-color:#EEE;color:#888;';
+  if (mBtn) mBtn.style.cssText = mBtn.style.cssText.replace(/background:[^;]+;border-color:[^;]+;color:[^;]+;/g,'') + (g==='m' ? activeStyle : inactiveStyle);
+  if (fBtn) fBtn.style.cssText = fBtn.style.cssText.replace(/background:[^;]+;border-color:[^;]+;color:[^;]+;/g,'') + (g==='f' ? activeStyle : inactiveStyle);
+  if (inp)  inp.value = g;
 }
 
 /* 강아지 사진 선택 핸들러 (회원가입) */
@@ -2199,8 +2228,19 @@ async function showUserMenu() {
           value="${dog?.name||''}" style="${inpStyle}">
         <input id="profile-dog-breed" type="text" placeholder="견종 (예: 말티즈)"
           value="${dog?.breed||''}" style="${inpStyle}">
-        <input id="profile-dog-age" type="number" min="0" max="30" placeholder="나이 (숫자)"
-          value="${dog?.age||''}" style="${inpStyle}">
+        <input id="profile-dog-age" type="number" min="2000" max="2026" placeholder="몇 년생 (예: 2022)"
+          value="${dog?.birthYear||''}" style="${inpStyle}">
+        <div style="display:flex;gap:8px">
+          <button type="button" id="profile-dog-gender-m" onclick="setDogGender('m','profile-')"
+            style="flex:1;padding:8px 0;border:1.5px solid #EEE;border-radius:10px;background:#FAFAFA;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;color:#888;transition:all .15s">
+            🐶 남아
+          </button>
+          <button type="button" id="profile-dog-gender-f" onclick="setDogGender('f','profile-')"
+            style="flex:1;padding:8px 0;border:1.5px solid #EEE;border-radius:10px;background:#FAFAFA;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;color:#888;transition:all .15s">
+            🐩 여아
+          </button>
+          <input type="hidden" id="profile-dog-gender" value="${dog?.gender||''}">
+        </div>
       </div>
     </div>
     <div id="profile-photo-status" style="font-size:12px;color:#E04E14;margin-bottom:8px;display:none"></div>
@@ -2220,6 +2260,8 @@ async function showUserMenu() {
     </button>
   `;
   openModal('profile-modal');
+  // 저장된 성별 버튼 상태 복원
+  if (dog?.gender) setTimeout(() => setDogGender(dog.gender, 'profile-'), 0);
 }
 
 async function saveProfileChanges() {
@@ -2242,11 +2284,11 @@ async function saveProfileChanges() {
   // 문서가 없는 경우(가입 시 Firestore 오류) 먼저 기본 문서 보장
   await ensureUserDocument(currentUser).catch(() => {});
   try {
-    const newName  = (document.getElementById('profile-display-name')?.value || '').trim();
-    const dogName  = (document.getElementById('profile-dog-name')?.value || '').trim();
-    const dogBreed = (document.getElementById('profile-dog-breed')?.value || '').trim();
-    const dogAgeRaw = document.getElementById('profile-dog-age')?.value;
-    const dogAge   = dogAgeRaw !== '' ? Number(dogAgeRaw) : null;
+    const newName       = (document.getElementById('profile-display-name')?.value || '').trim();
+    const dogName       = (document.getElementById('profile-dog-name')?.value || '').trim();
+    const dogBreed      = (document.getElementById('profile-dog-breed')?.value || '').trim();
+    const dogBirthYear  = (document.getElementById('profile-dog-age')?.value || '').trim();
+    const dogGender     = document.getElementById('profile-dog-gender')?.value || '';
 
     if (newName && newName !== currentUser.displayName) {
       await firebase.auth().currentUser.updateProfile({ displayName: newName });
@@ -2255,22 +2297,26 @@ async function saveProfileChanges() {
       if (initial) initial.textContent = newName.charAt(0).toUpperCase();
     }
 
-    // set({merge:true}) 사용 — 문서가 없어도 생성, 있으면 덮어쓰지 않고 필드만 갱신
+    // update() — 도트 경로로 중첩 필드만 개별 갱신 (다른 필드 날아가지 않음)
     const updateData = {};
-    if (newName)  updateData.displayName = newName;
-    const dogData = {};
-    if (dogName)  dogData.name  = dogName;
-    if (dogBreed) dogData.breed = dogBreed;
-    if (dogAge !== null && !isNaN(dogAge)) dogData.age = dogAge;
-    if (Object.keys(dogData).length > 0) updateData.dog = { ...(currentDog || {}), ...dogData };
+    if (newName) updateData.displayName = newName;
+    // 강아지 필드는 도트 경로로 각각 저장 (photoURL 보존)
+    if (dogName)      updateData['dog.name']      = dogName;
+    if (dogBreed)     updateData['dog.breed']     = dogBreed;
+    if (dogBirthYear) updateData['dog.birthYear'] = dogBirthYear;
+    if (dogGender)    updateData['dog.gender']    = dogGender;
+    // 현재 photoURL 항상 포함 — 덮어쓰기 방지
+    if (currentDog?.photoURL) updateData['dog.photoURL'] = currentDog.photoURL;
+
     if (Object.keys(updateData).length > 0) {
-      await db.collection('users').doc(currentUser.uid).set(updateData, { merge: true });
+      await db.collection('users').doc(currentUser.uid).update(updateData);
     }
 
     if (!currentDog) currentDog = {};
-    if (dogName)  currentDog.name  = dogName;
-    if (dogBreed) currentDog.breed = dogBreed;
-    if (dogAge !== null && !isNaN(dogAge)) currentDog.age = dogAge;
+    if (dogName)      currentDog.name      = dogName;
+    if (dogBreed)     currentDog.breed     = dogBreed;
+    if (dogBirthYear) currentDog.birthYear = dogBirthYear;
+    if (dogGender)    currentDog.gender    = dogGender;
     updateUserBadge(); // 강아지 이름 첫 글자 / 사진 반영
 
     showToast('✅ 저장됐어요!');
@@ -2308,8 +2354,8 @@ async function onProfileDogPhotoSelected(e) {
     try {
       const photoURL = await uploadDogPhoto(currentUser.uid, compressed);
       if (!photoURL) throw new Error('URL 없음');
-      // Firestore 즉시 반영
-      if (db) await db.collection('users').doc(currentUser.uid).set({ 'dog': { ...(currentDog||{}), photoURL } }, { merge: true });
+      // Firestore 즉시 반영 — 도트 경로로 photoURL만 업데이트 (다른 dog 필드 보존)
+      if (db) await db.collection('users').doc(currentUser.uid).update({ 'dog.photoURL': photoURL });
       if (!currentDog) currentDog = {};
       currentDog.photoURL = photoURL;
       updateUserBadge();
@@ -4619,24 +4665,33 @@ async function showSearchSuggestions(query) {
   box.innerHTML = html;
   box.classList.add('open');
 
-  // ── 4. Kakao 전국 장소 검색 (지도 위치 무관) ─────────────────────────────
-  // REST keyword.json (위치 파라미터 없음) + SDK 동시 실행 → 먼저 오는 결과 사용
-  // 카카오맵 앱과 동일: 상호명 입력 → 전국 어디든 검색 → 클릭하면 해당 위치로 이동
+  // ── 4. Kakao 전국 장소 검색 ────────────────────────────────────────────────
+  // kakaoPS (홍시야 찾아줘와 동일한 초기화된 인스턴스) 사용 — 위치 무관 전국 검색
   clearTimeout(_sgKakaoTimer);
-  let _sgResultShown = false; // 중복 표시 방지
-  _sgKakaoTimer = setTimeout(() => {
-    // 검색어가 바뀌었으면 중단
+  _sgKakaoTimer = setTimeout(async () => {
+    // 검색어 변경 확인
     const current = document.getElementById('search-input')?.value.trim();
     if (!current || current.toLowerCase() !== q) return;
 
-    // 결과를 드롭다운에 표시하는 공통 함수
-    function showKakaoResults(data) {
-      if (_sgResultShown) return; // 이미 표시됨
-      _sgResultShown = true;
+    // SDK 아직 준비 안 됐으면 초기화 요청 후 최대 3초 대기
+    if (!kakaoReady) {
+      initKakaoSearch();
+      for (let i = 0; i < 30; i++) {
+        await new Promise(r => setTimeout(r, 100));
+        if (kakaoReady) break;
+      }
+    }
+
+    // 검색어 다시 확인 (대기 중 변경됐을 수 있음)
+    const cur2 = document.getElementById('search-input')?.value.trim();
+    if (!cur2 || cur2.toLowerCase() !== q) return;
+
+    // ── 공통: 결과 드롭다운 업데이트 ────────────────────────────────────────
+    function renderKakaoResults(data) {
       const bx = document.getElementById('search-suggestions');
       if (!bx) return;
-      const currentVal = document.getElementById('search-input')?.value.trim();
-      if (!currentVal || currentVal.toLowerCase() !== q) return;
+      const chk = document.getElementById('search-input')?.value.trim();
+      if (!chk || chk.toLowerCase() !== q) return;
 
       _sgKakaoPlaces = data;
       let kakaoHtml = `<div class="sg-section-label">카카오맵 장소</div>`;
@@ -4652,7 +4707,6 @@ async function showSearchSuggestions(query) {
           </div>
         </div>`;
       }).join('');
-      // 기존 DB 장소/지역 결과는 유지하고 카카오 결과 추가
       const stripped = bx.innerHTML
         .replace(/<div class="sg-empty[^>]*>[\s\S]*?<\/div>/, '')
         .replace(/<div class="sg-section-label">카카오맵 장소<\/div>[\s\S]*$/, '');
@@ -4660,106 +4714,54 @@ async function showSearchSuggestions(query) {
       bx.classList.add('open');
     }
 
-    function showNoResult() {
-      if (_sgResultShown) return;
+    // ── A. kakaoPS SDK 검색 (홍시야 찾아줘와 동일한 방식) ───────────────────
+    if (kakaoReady && kakaoPS) {
+      kakaoPS.keywordSearch(query, (data, status) => {
+        const chk = document.getElementById('search-input')?.value.trim();
+        if (!chk || chk.toLowerCase() !== q) return;
+        if (status === kakao.maps.services.Status.OK && data?.length) {
+          renderKakaoResults(data);
+        } else {
+          // SDK 결과 없음 → REST fallback 시도
+          _sgRestFallback(query, q, renderKakaoResults);
+        }
+      }, { size: 15 }); // 위치 파라미터 없음 → 전국 검색
+    } else {
+      // SDK 준비 안 됐으면 REST로
+      _sgRestFallback(query, q, renderKakaoResults);
+    }
+
+  }, 300);
+}
+
+// REST keyword.json fallback (SDK 실패 또는 미준비 시)
+async function _sgRestFallback(query, q, renderFn) {
+  try {
+    const resp = await fetch(
+      `https://dapi.kakao.com/v2/local/search/keyword.json?query=${encodeURIComponent(query)}&size=15`,
+      { headers: { 'Authorization': `KakaoAK ${KAKAO_REST_KEY}` } }
+    );
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const json = await resp.json();
+    const docs = (json.documents || []).filter(d => d.y && d.x && d.place_name);
+
+    const chk = document.getElementById('search-input')?.value.trim();
+    if (!chk || chk.toLowerCase() !== q) return;
+
+    if (docs.length > 0) {
+      renderFn(docs);
+    } else {
       const bx = document.getElementById('search-suggestions');
       if (bx?.querySelector('#sg-searching')) {
         bx.innerHTML = `<div class="sg-empty">결과 없음</div>`;
       }
     }
-
-    // ── A. REST keyword.json (가장 안정적인 전국 검색) ───────────────────────
-    ;(async () => {
-    try {
-      const [kwResp, addrResp] = await Promise.allSettled([
-        fetch(
-          `https://dapi.kakao.com/v2/local/search/keyword.json?query=${encodeURIComponent(query)}&size=15`,
-          { headers: { 'Authorization': `KakaoAK ${KAKAO_REST_KEY}` }, signal: AbortSignal.timeout(5000) }
-        ),
-        fetch(
-          `https://dapi.kakao.com/v2/local/search/address.json?query=${encodeURIComponent(query)}&size=5`,
-          { headers: { 'Authorization': `KakaoAK ${KAKAO_REST_KEY}` }, signal: AbortSignal.timeout(5000) }
-        )
-      ]);
-
-        let kwDocs = [], addrDocs = [];
-        if (kwResp.status === 'fulfilled' && kwResp.value.ok) {
-          const j = await kwResp.value.json();
-          kwDocs = (j.documents || []).filter(d => d.y && d.x && d.place_name);
-        }
-        if (addrResp.status === 'fulfilled' && addrResp.value.ok) {
-          const j = await addrResp.value.json();
-          addrDocs = (j.documents || []).filter(d => d.y && d.x);
-        }
-
-        const seenKeys = new Set();
-        let docs = [...kwDocs, ...addrDocs].filter(d => {
-          const k = (d.place_name || d.address_name || '') + '|' + d.x + '|' + d.y;
-          if (seenKeys.has(k)) return false;
-          seenKeys.add(k); return true;
-        });
-
-        // 검색어가 바뀌었으면 중단
-        const now = document.getElementById('search-input')?.value.trim();
-        if (!now || now.toLowerCase() !== q) return;
-
-        if (!docs.length) { showNoResult(); return; }
-
-        // 장소(place_name 있음)와 주소(지역)를 분리
-        const placeDocs = docs.filter(d => d.place_name);
-        const areaDocs  = docs.filter(d => !d.place_name);
-
-        if (placeDocs.length > 0) {
-          showKakaoResults(placeDocs);
-        } else if (areaDocs.length > 0) {
-          // 주소 결과만 있을 때 → 지역 섹션으로 표시
-          if (!_sgResultShown) {
-            _sgResultShown = true;
-            const bx = document.getElementById('search-suggestions');
-            if (bx) {
-              const currentVal = document.getElementById('search-input')?.value.trim();
-              if (currentVal && currentVal.toLowerCase() === q) {
-                let aHtml = `<div class="sg-section-label">지역</div>`;
-                aHtml += areaDocs.slice(0, 3).map(d => {
-                  const name = d.address_name || query;
-                  const lat = parseFloat(d.y), lng = parseFloat(d.x);
-                  const safeNm = name.replace(/'/g, "\\'");
-                  return `<div class="sg-item" onmousedown="event.preventDefault()" onclick="selectAreaSuggestion('${safeNm}', ${lat}, ${lng}, 15)">
-                    <div class="sg-item-icon">🗺️</div>
-                    <div class="sg-item-main">
-                      <div class="sg-item-name">${name}</div>
-                      <div class="sg-item-sub">지도로 이동</div>
-                    </div>
-                  </div>`;
-                }).join('');
-                const stripped = bx.innerHTML.replace(/<div class="sg-empty[^>]*>[\s\S]*?<\/div>/, '');
-                bx.innerHTML = stripped + aHtml;
-                bx.classList.add('open');
-              }
-            }
-          }
-        } else {
-          showNoResult();
-        }
-      } catch(e) {
-        showNoResult();
-      }
-      })(); // REST async IIFE
-
-    // ── B. SDK keywordSearch (JS API 키, 병렬 실행) ──────────────────────────
-    if (window.kakao?.maps?.services?.Places) {
-      try {
-        const ps = new kakao.maps.services.Places();
-        ps.keywordSearch(query, (data, status) => {
-          if (status === kakao.maps.services.Status.OK && data?.length) {
-            showKakaoResults(data);
-          }
-          // SDK가 실패해도 REST 결과가 이미 처리 중이므로 별도 처리 불필요
-        }, { size: 15 }); // 위치 파라미터 없음 → 전국 검색
-      } catch(e) { /* SDK 오류 무시, REST가 처리 */ }
+  } catch(e) {
+    const bx = document.getElementById('search-suggestions');
+    if (bx?.querySelector('#sg-searching')) {
+      bx.innerHTML = `<div class="sg-empty">결과 없음</div>`;
     }
-
-  }, 300);
+  }
 }
 
 function hideSearchSuggestions() {
