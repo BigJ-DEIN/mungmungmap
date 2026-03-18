@@ -2833,21 +2833,13 @@ async function toggleLikedPlace(placeId) {
   if (isNaN(id)) return;
 
   if (userLikedPlaceIds.has(id)) {
-    // ── 좋아요 취소 ──
+    // ── 관심 장소 취소 ──
     userLikedPlaceIds.delete(id);
     try {
       await db.collection('users').doc(currentUser.uid).set(
         { likedPlaceIds: firebase.firestore.FieldValue.arrayRemove(id) }, { merge:true }
       );
     } catch(e) { userLikedPlaceIds.add(id); console.warn('unlike failed:', e); return; }
-    // 마커 색상 원상복귀 (하트 아닌 경우만)
-    if (markers[id] && !markers[id].isHeart) {
-      const place = places.find(p => p.id === id);
-      const origColor = place ? (STATUS_COLORS[getPlaceStatus(place)] || STATUS_COLORS.unverified) : STATUS_COLORS.unverified;
-      const el  = markers[id].marker.getElement();
-      const dot = el?.querySelector('.m-dot');
-      if (dot) { dot.style.background = origColor; markers[id].color = origColor; }
-    }
     showToast('관심 장소에서 제거됐어요');
   } else {
     // ── 관심 장소 추가 ──
@@ -2857,20 +2849,31 @@ async function toggleLikedPlace(placeId) {
         { likedPlaceIds: firebase.firestore.FieldValue.arrayUnion(id) }, { merge:true }
       );
     } catch(e) { userLikedPlaceIds.delete(id); console.warn('like failed:', e); return; }
-    const place = places.find(p => p.id === id);
-    if (place && clusterGroup) {
-      if (!markers[id]) {
-        addMarker(place); // 지도에 없으면 추가
-      } else if (!markers[id].isHeart) {
-        // 기존 dot 마커 → 노란 원형으로 색상 변경
-        const el  = markers[id].marker.getElement();
-        const dot = el?.querySelector('.m-dot');
-        if (dot) { dot.style.background = '#F07030'; markers[id].color = '#F07030'; }
-      }
-    }
     showToast('💛 관심 장소에 추가됐어요! 접속할 때마다 지도에 표시돼요');
   }
-  // 모든 좋아요 버튼 UI 동기화
+
+  // ── 마커 재생성 (클러스터 내 마커도 정확히 반영) ──────────────────────────
+  // getElement()로 DOM 직접 수정하면 클러스터 안에 있을 때 null 반환으로 실패함.
+  // 올바른 방법: clusterGroup에서 완전 제거 → markers 캐시 삭제 → addMarker 재호출.
+  // addMarker가 최신 userLikedPlaceIds 기준으로 올바른 우선순위/색상 마커를 새로 생성.
+  const place = places.find(p => p.id === id);
+  if (place && clusterGroup) {
+    const info = markers[id];
+    if (info) {
+      if (!info.isHeart) {
+        // dot 마커 → 제거 후 재생성 (관심 장소 추가/취소 모두)
+        clusterGroup.removeLayer(info.marker);
+        delete markers[id];
+        addMarker(place);
+      }
+      // isHeart(추억 마커)인 경우 — 추억이 더 높은 우선순위이므로 마커 유형 유지
+    } else {
+      // 아직 지도에 마커 없음 → 관심 장소 추가 시 새로 생성
+      if (userLikedPlaceIds.has(id)) addMarker(place);
+    }
+  }
+
+  // ── 모든 관심 장소 버튼 UI 동기화 ──
   document.querySelectorAll(`.like-btn[data-id="${id}"]`).forEach(btn => {
     const liked = userLikedPlaceIds.has(id);
     btn.textContent = liked ? '♥' : '♡';
@@ -3569,10 +3572,13 @@ function doLiveSearch() {
   const pages    = [1, 2, 3]; // 카테고리별 최대 3페이지 (최대 45개)
 
   // ── 2) 키워드 검색: CE7/FD6/AT4/AD5 외 카테고리 누락 방지
-  const keywords = ['애견동반', '반려견동반', '애견카페', '펫카페', '반려동물동반'];
+  // 반려견동반 시설 태그가 있는 장소는 카카오 검색에 인덱싱되어 있으나
+  // 밀집 지역에서는 1페이지(15개)에 포함 안 될 수 있으므로 3페이지까지 수집
+  const keywords = ['애견동반', '반려견동반', '애견카페', '펫카페', '반려동물동반', '강아지카페', '도그카페'];
+  const kwPages  = [1, 2, 3]; // 카테고리 검색과 동일하게 3페이지
 
   let allResults = [];
-  let pending = catCodes.length * pages.length + keywords.length;
+  let pending = catCodes.length * pages.length + keywords.length * kwPages.length;
 
   function onAllDone() {
     renderLiveResults(allResults);
@@ -3590,15 +3596,17 @@ function doLiveSearch() {
     });
   });
 
-  // 키워드 검색 (누락 보완) — 카카오가 반려동물 키워드로 직접 필터한 결과이므로 신뢰도 높음
+  // 키워드 검색 (3페이지) — 카카오가 반려동물 키워드로 직접 필터한 결과이므로 신뢰도 높음
   keywords.forEach(kw => {
-    kakaoPS.keywordSearch(kw, (data, status) => {
-      if (status === kakao.maps.services.Status.OK && data?.length) {
-        // 키워드 검색 결과임을 표시 → autoAddLivePlace에서 place-api 이중 검증 생략
-        allResults = allResults.concat(data.map(d => ({ ...d, _fromPetKeyword: true })));
-      }
-      if (--pending === 0) onAllDone();
-    }, locOpts);
+    kwPages.forEach(page => {
+      kakaoPS.keywordSearch(kw, (data, status) => {
+        if (status === kakao.maps.services.Status.OK && data?.length) {
+          // 키워드 검색 결과임을 표시 → autoAddLivePlace에서 place-api 이중 검증 생략
+          allResults = allResults.concat(data.map(d => ({ ...d, _fromPetKeyword: true })));
+        }
+        if (--pending === 0) onAllDone();
+      }, { ...locOpts, page });
+    });
   });
 }
 
@@ -3606,12 +3614,20 @@ async function renderLiveResults(rawData) {
   _setLiveFabState(false);
 
   // Deduplicate by place_name + address
-  const seen = new Set();
-  const data = rawData.filter(d => {
+  // Map 방식으로 중복 병합 — _fromPetKeyword:true 를 어느 쪽 결과에서든 보존
+  const seen = new Map(); // key → index in data[]
+  const data = [];
+  rawData.forEach(d => {
     const key = d.place_name + '|' + d.road_address_name;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
+    if (seen.has(key)) {
+      // 키워드 검색 태그가 있으면 기존 항목에 병합 (카테고리 결과가 먼저 왔어도 태그 유지)
+      if (d._fromPetKeyword && !data[seen.get(key)]._fromPetKeyword) {
+        data[seen.get(key)] = { ...data[seen.get(key)], _fromPetKeyword: true };
+      }
+    } else {
+      seen.set(key, data.length);
+      data.push(d);
+    }
   });
 
   clearLiveMarkers();
@@ -3758,8 +3774,15 @@ async function autoAddLivePlace(dOverride) {
         if (result.petDetails) petDetails = result.petDetails;
         if (result.recentReview) petStatus = 'verified';
       } else if (result?.error) {
-        // 프록시 네트워크 오류 → 불확실하므로 등록하지 않고 건너뜀 (하늘색 마커 유지)
-        return false;
+        // 프록시 네트워크 오류 처리:
+        // - 키워드 검색 결과(_fromPetKeyword): 카카오가 이미 반려동물 키워드로 필터했으므로 신뢰 → confirmed 등록
+        // - 카테고리 검색만으로 온 결과: 불확실 → 제외
+        if (d._fromPetKeyword) {
+          petStatus = 'confirmed'; // 카카오 키워드 필터를 신뢰
+          // fall through → 등록 진행
+        } else {
+          return false;
+        }
       } else {
         // place-api 명확한 거부 (found: false, error 아님) → 반려동물 비적합 → 제외
         return false;
