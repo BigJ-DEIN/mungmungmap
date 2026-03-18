@@ -3862,25 +3862,54 @@ async function renderLiveResults(rawData) {
 
   showToast(`${data.length}개 발견${alreadyMsg} · 신규 ${total}개 반려동물 확인 중...`);
   let registered = 0;
-  let skipped = 0;
-  let processed = 0;
+  let skipped    = 0;
+  let processed  = 0;
 
-  for (const d of liveData.slice()) {   // slice()로 복사 — 순회 중 liveData 변경 대비
-    processed++;
-    const fabLabel = document.getElementById('feedback-fab-label');
-    if (fabLabel) fabLabel.textContent = `확인 중 ${processed}/${total}...`;
+  // ── 병렬 처리 (최대 PARALLEL 개 동시 검증) ──────────────────────────────
+  // 프록시 큐(maxConcurrent:8)와 Kakao SDK 부하를 고려해 6으로 설정
+  const PARALLEL = 6;
+  // 중복 등록 방지: 병렬 처리 중 동일 ID가 동시에 진입하지 않도록 in-flight 세트
+  const _inFlight = new Set();
 
-    try {
-      const added = await autoAddLivePlace(d);
-      if (added) registered++;
-      else skipped++;
-    } catch(e) {
-      console.warn('autoAddLivePlace 실패:', d.place_name, e);
-      skipped++;
-    }
-    // 짧은 딜레이로 프록시 과부하 방지 (category search → 장소 많아져 100ms로 단축)
-    await new Promise(r => setTimeout(r, 100));
+  function _updateLabel() {
+    const el = document.getElementById('feedback-fab-label');
+    if (el) el.textContent = `확인 중 ${processed}/${total}...`;
   }
+
+  const snapshot   = liveData.slice();
+  const _executing = new Set();
+
+  for (const d of snapshot) {
+    const key = d.id || d.place_name;
+    if (_inFlight.has(key)) { processed++; skipped++; _updateLabel(); continue; }
+    _inFlight.add(key);
+
+    const p = (async () => {
+      try {
+        const added = await autoAddLivePlace(d);
+        if (added) registered++;
+        else       skipped++;
+      } catch(e) {
+        console.warn('autoAddLivePlace 실패:', d.place_name, e);
+        skipped++;
+      } finally {
+        processed++;
+        _inFlight.delete(key);
+        _updateLabel();
+      }
+    })();
+
+    _executing.add(p);
+    p.then(() => _executing.delete(p));
+
+    // PARALLEL 한도 도달 시 가장 빠른 하나가 끝날 때까지 대기
+    if (_executing.size >= PARALLEL) {
+      await Promise.race(_executing);
+    }
+  }
+
+  // 남은 모든 작업 완료 대기
+  if (_executing.size > 0) await Promise.all(_executing);
 
   // 완료 — liveData가 비었으면 라이브 섹션 자체가 사라짐
   _setLiveFabState(false);
