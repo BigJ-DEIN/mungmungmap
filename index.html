@@ -1206,12 +1206,13 @@
         <button class="filter-chip" data-cat="grooming"          onclick="setCatFilter(this,'grooming')">✂️ 미용</button>
         <button class="filter-chip" data-cat="other"             onclick="setCatFilter(this,'other')">📍 기타</button>
       </div>
-      <!-- 지역 필터 토글 -->
-      <div class="qf-row">
+      <!-- 지역 필터 토글 + 지도 범위 연동 버튼 -->
+      <div class="qf-row" style="gap:6px">
         <button class="area-toggle-btn" id="area-toggle-btn" onclick="toggleAreaFilter()">
           <span id="area-toggle-label">지역 전체</span>
           <span class="arrow">▼</span>
         </button>
+        <button class="filter-chip" id="viewport-sync-btn" onclick="toggleViewportSync()" title="지도에 보이는 장소만 목록에 표시" style="white-space:nowrap;font-size:11px">🗺 지도 범위</button>
       </div>
       <!-- 접을 수 있는 지역 칩 -->
       <div class="area-chips-wrap" id="area-chips-wrap">
@@ -1778,6 +1779,7 @@ let map           = null;
 let clusterGroup  = null;
 let markers       = {};
 let activeFilters = { area:'all', largeDog:false, indoor:false, outdoor:false, noCage:false, hasFee:false, noFee:false, catType:'all' };
+let viewportSync  = false;  // 지도 범위 연동 모드
 let activePlace   = null;
 let searchText    = '';
 let mobileTab     = 'map';   // map | list | filter
@@ -2803,9 +2805,79 @@ async function migratePlacesToFirestore() {
 // ══════════════════════════════════════════════════════
 //  INIT APP
 // ══════════════════════════════════════════════════════
+// lat/lng 없는 live_search 장소 Kakao API로 좌표 패치
+async function patchMissingCoords(p) {
+  if (!p.kakaoId && !p.name) return;
+  try {
+    // Kakao Places keywordSearch로 장소 검색 → 좌표 획득
+    const query = encodeURIComponent(p.name + (p.addr ? ' ' + p.addr.split(' ').slice(0,2).join(' ') : ''));
+    const resp = await fetch(`https://dapi.kakao.com/v2/local/search/keyword.json?query=${query}&size=5`, {
+      headers: { 'Authorization': `KakaoAK ${window.KAKAO_JS_KEY || ''}` }
+    });
+    if (!resp.ok) return;
+    const data = await resp.json();
+    const hit = p.kakaoId
+      ? data.documents?.find(d => d.id === p.kakaoId)
+      : data.documents?.[0];
+    if (!hit) return;
+    const lat = parseFloat(hit.y), lng = parseFloat(hit.x);
+    if (isNaN(lat) || isNaN(lng)) return;
+    // 로컬 업데이트
+    p.lat = lat; p.lng = lng;
+    // 주소/province도 보완
+    if (!p.addr || p.addr === '') p.addr = hit.road_address_name || hit.address_name || '';
+    if (!p.province) {
+      const a = p.addr;
+      const pm = [['서울','서울'],['경기','경기'],['인천','인천'],['강원','강원'],['충북','충북'],['충남','충남'],['세종','세종'],['대전','대전'],['전북','전북'],['전남','전남'],['광주','광주'],['경북','경북'],['경남','경남'],['대구','대구'],['울산','울산'],['부산','부산'],['제주','제주']];
+      p.province = pm.find(([k]) => a.includes(k))?.[1] || '';
+    }
+    // Firestore 패치 (백그라운드)
+    if (firebaseReady && db && p.firestoreId) {
+      db.collection('places').doc(p.firestoreId).update({ lat, lng, addr: p.addr, province: p.province }).catch(()=>{});
+    }
+    // 마커 추가
+    if (clusterGroup && !markers[p.id]) addMarker(p);
+  } catch(e) { /* 조회 실패 → 무시 */ }
+}
+
+// 타일 쿼리에서 누락되는 live_search/user_report 장소를 별도 로딩
+async function loadNonPipelinePlaces() {
+  if (!firebaseReady || !db) return;
+  try {
+    const snap = await db.collection('places')
+      .where('source', 'in', ['live_search', 'user_report'])
+      .get();
+    const existingFsIds = new Set(places.map(p => p.firestoreId).filter(Boolean));
+    const toAdd = [];
+    snap.docs.forEach(doc => {
+      if (existingFsIds.has(doc.id)) return;
+      const p = { ...doc.data(), firestoreId: doc.id };
+      if (p.active === false) return;
+      places.push(p);
+      toAdd.push(p);
+    });
+    // 좌표 있는 건 마커 즉시 추가, 없는 건 Kakao API로 패치
+    const noCoords = [];
+    toAdd.forEach(p => {
+      if (p.lat != null && p.lng != null && clusterGroup) addMarker(p);
+      else noCoords.push(p);
+    });
+    if (toAdd.length > 0) filterPlaces();
+    // 좌표 누락분: REST API 키 있으면 패치, 없으면 스킵
+    if (noCoords.length > 0 && window.KAKAO_JS_KEY) {
+      for (const p of noCoords) {
+        await patchMissingCoords(p);
+        await new Promise(r => setTimeout(r, 200));
+      }
+      filterPlaces();
+    }
+  } catch(e) { console.warn('[loadNonPipelinePlaces] 실패:', e); }
+}
+
 async function initApp() {
   initMap();                        // 지도 먼저 → viewport bounds 확보
   await loadViewportPlaces();       // 현재 뷰포트 타일만 로딩
+  loadNonPipelinePlaces();          // live_search/user_report 장소 별도 로딩 (비동기)
   filterPlaces();
   loadNotices();
   // Deep link — 뷰포트 밖 장소일 수 있으므로 Firestore fallback 포함
@@ -2897,6 +2969,8 @@ function initMap() {
   map.on('zoomend', updateAllMarkerSizes);
   map.on('moveend', _scheduleVpLoad);   // 지도 이동 시 새 타일 로딩
   map.on('zoomend', _scheduleVpLoad);   // 줌 변경 시도 새 타일 로딩
+  // 지도 범위 연동: 이동/줌 완료 시 목록 갱신
+  map.on('moveend zoomend', () => { if (viewportSync) filterPlaces(); });
   setTimeout(updateAllMarkerSizes, 200);
 
   // 현재 위치로 이동 (구 단위 줌 = 13)
@@ -3354,17 +3428,32 @@ async function autoAddLivePlace(dOverride) {
     const outdoorFinal = petDetails.outdoor !== null ? petDetails.outdoor
                        : (petDetails.indoor === false ? true : null);
 
+    // 좌표 파싱 (d.y = lat, d.x = lng — Kakao API 규격)
+    const placeLat = parseFloat(d.y);
+    const placeLng = parseFloat(d.x);
+    // 주소에서 광역시도 추출
+    const addrStr = d.road_address_name || d.address_name || '';
+    const provinceMap = [
+      ['서울','서울'],['경기','경기'],['인천','인천'],['강원','강원'],
+      ['충북','충북'],['충남','충남'],['세종','세종'],['대전','대전'],
+      ['전북','전북'],['전남','전남'],['광주','광주'],['경북','경북'],
+      ['경남','경남'],['대구','대구'],['울산','울산'],['부산','부산'],['제주','제주']
+    ];
+    const province = provinceMap.find(([k]) => addrStr.includes(k))?.[1] || '';
+
     const newPlace = {
       id:        nextId,
       name:      d.place_name,
-      addr:      d.road_address_name || d.address_name || '',
+      addr:      addrStr,
       phone:     d.phone || '',
       kakaoUrl:  d.place_url || '',
       kakaoId:   d.id || '',
+      lat:       placeLat,
+      lng:       placeLng,
       cat:       cat,
       emoji:     impCatEmoji(cat),
       area:      area,
-      province:  '',
+      province:  province,
       petStatus: petStatus,
       large:     largeFinal,
       small:     null,
@@ -3437,6 +3526,13 @@ function showKakaoKeyGuide() {
 // ══════════════════════════════════════════════════════
 //  FILTER & RENDER
 // ══════════════════════════════════════════════════════
+function toggleViewportSync() {
+  viewportSync = !viewportSync;
+  const btn = document.getElementById('viewport-sync-btn');
+  if (btn) btn.classList.toggle('active', viewportSync);
+  filterPlaces();
+}
+
 function setAreaFilter(btn, area) {
   document.querySelectorAll('[data-area]').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
@@ -3487,6 +3583,8 @@ function setCatFilter(btn, catKey) {
 }
 
 function getFiltered() {
+  // 뷰포트 범위 (지도 범위 연동 모드일 때만 계산)
+  const vpBounds = (viewportSync && map) ? map.getBounds() : null;
   return places.filter(p => {
     if (!p || p.id == null || !p.name) return false; // null 안전
     if (getPlaceStatus(p) === 'rejected') return false; // 펫 비적합 판정 제외
@@ -3494,6 +3592,10 @@ function getFiltered() {
     if (p.source === 'auto_pipeline_cat') {
       const st = getPlaceStatus(p);
       if (st !== 'confirmed' && st !== 'verified') return false;
+    }
+    // 지도 범위 연동: 현재 뷰포트 밖의 장소 제외
+    if (vpBounds && p.lat != null && p.lng != null) {
+      if (!vpBounds.contains([p.lat, p.lng])) return false;
     }
     if (activeFilters.area !== 'all' && p.province !== activeFilters.area) return false;
     if (activeFilters.largeDog && p.large !== true) return false;   // null(미확인) 포함 제외
