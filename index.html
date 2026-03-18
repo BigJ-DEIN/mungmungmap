@@ -3781,11 +3781,25 @@ async function autoAddLivePlace(dOverride) {
           petStatus = 'confirmed'; // 카카오 키워드 필터를 신뢰
           // fall through → 등록 진행
         } else {
-          return false;
+          // 카테고리 검색 + 프록시 전부 실패 (카카오 서버가 외부 프록시 차단)
+          // → SDK로 직접 재확인: 해당 좌표 50m 반경 "반려견동반" 검색에 나오는지 체크
+          const sdkFound = await verifySdkPetKeyword(d);
+          if (sdkFound) {
+            petStatus = 'confirmed'; // 카카오 SDK가 직접 반려견동반 확인
+            // fall through → 등록 진행
+          } else {
+            return false; // SDK도 못 찾으면 진짜 반려동물 비적합
+          }
         }
       } else {
         // place-api 명확한 거부 (found: false, error 아님) → 반려동물 비적합 → 제외
-        return false;
+        // 하지만 SDK로 한 번 더 크로스체크 (place-api 오탐 방지)
+        const sdkFound = await verifySdkPetKeyword(d);
+        if (sdkFound) {
+          petStatus = 'confirmed';
+        } else {
+          return false;
+        }
       }
     }
 
@@ -6965,6 +6979,39 @@ function _isQuotaExceeded() {
 }
 
 /* CORS 프록시를 통해 카카오맵 페이지 HTML 가져오기 */
+/**
+ * 카카오 Places SDK로 반려견동반 여부를 직접 확인 (프록시 불필요)
+ * 해당 장소 좌표 50m 반경에서 "반려견동반" 키워드 검색 → 동일 장소 포함 여부로 판정
+ * place-api 프록시가 카카오 서버에 의해 차단될 때의 fallback
+ */
+function verifySdkPetKeyword(d) {
+  return new Promise(resolve => {
+    try {
+      if (!window.kakao?.maps?.services?.Places) { resolve(false); return; }
+      const ps = new kakao.maps.services.Places();
+      const timer = setTimeout(() => resolve(false), 4000);
+      const PET_KWS = ['반려견동반', '애견동반', '반려동물동반'];
+      let found = false;
+      let remaining = PET_KWS.length;
+      PET_KWS.forEach(kw => {
+        ps.keywordSearch(kw, (data, status) => {
+          if (!found && status === kakao.maps.services.Status.OK && data?.length) {
+            // 좌표 50m 이내 + 같은 place id 또는 같은 이름인 항목이 있으면 반려견동반 확인
+            const match = data.some(r =>
+              r.id === d.id ||
+              (r.place_name === d.place_name &&
+               Math.abs(parseFloat(r.y) - parseFloat(d.y)) < 0.0005 &&
+               Math.abs(parseFloat(r.x) - parseFloat(d.x)) < 0.0005)
+            );
+            if (match) found = true;
+          }
+          if (--remaining === 0) { clearTimeout(timer); resolve(found); }
+        }, { x: d.x, y: d.y, radius: 50, size: 15 }); // 50m 극소 반경 — 오탐 원천 차단
+      });
+    } catch(e) { resolve(false); }
+  });
+}
+
 async function fetchKakaoPagePetSignal(url, kakaoId) {
   const PROXIES = [
     u => `https://mungmungmap-proxy.jaypark.workers.dev/?url=${encodeURIComponent(u)}`,
