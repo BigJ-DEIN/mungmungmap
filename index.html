@@ -4808,10 +4808,14 @@ function _scheduleVpLoad() {
   _vpLoadTimer = setTimeout(loadViewportPlaces, 600);
 }
 
-function invalidatePlacesCache() {
+function invalidatePlacesCache(forceTiles = false) {
   localStorage.removeItem(PLACES_CACHE_KEY);
   localStorage.removeItem(PLACES_CACHE_TS_KEY);
-  _loadedTiles.clear();   // 타일 캐시도 초기화 → 다음 뷰포트 이동 시 재로딩
+  // 파이프라인 실행 중엔 _loadedTiles를 초기화하지 않음
+  // → batch flush마다 뷰포트 전체 재로딩(~50K reads/회)이 발생하는 것 방지
+  if (!nwPipeline.running || forceTiles) {
+    _loadedTiles.clear();
+  }
 }
 
 /* 폐업 신고 (관리자 전용) — 장소 데이터/추억 유지, isClosed 플래그만 추가 */
@@ -7232,6 +7236,10 @@ const NATIONWIDE_REGIONS = [
 
 // ── 전국 자동 파이프라인 상태 ──────────────────────────────────────────
 const NW_PIPELINE_KEY = 'nw_pipeline'; // Firestore meta doc key
+// 파이프라인 시작 전 Firestore에서 1회 로드하는 전체 kakaoId 캐시
+// → nwCollectRegion에서 249개 지역마다 places.map() 재빌드 대신 이 Set 사용
+let _allKakaoIds = null; // null = 아직 로드 안됨
+
 let nwPipeline = {
   running: false,
   stop: false,
@@ -8026,7 +8034,9 @@ async function nwSaveState() {
 
 /* 특정 지역에서 장소 수집 (Kakao REST) */
 async function nwCollectRegion(region) {
-  const existingKakaoIds = new Set(places.map(p => p.kakaoId).filter(Boolean));
+  // _allKakaoIds: 파이프라인 시작 시 Firestore 전체 1회 로드한 캐시 사용
+  // 없으면 places 배열 폴백 (뷰포트 밖 장소 누락 가능)
+  const existingKakaoIds = _allKakaoIds || new Set(places.map(p => p.kakaoId).filter(Boolean));
   const newFound = [];
   for (const kw of IMP_KWS) {
     for (let pg = 1; pg <= 3; pg++) {
@@ -8046,6 +8056,7 @@ async function nwCollectRegion(region) {
           const _excCat = item.category_name || '';
           if (['동물병원','수의','반려동물 용품','반려동물용품','애견용품','반려동물 미용','애견미용','펫샵','pet shop'].some(x => _excCat.includes(x))) continue;
           existingKakaoIds.add(item.id);
+          if (_allKakaoIds) _allKakaoIds.add(item.id); // 전역 캐시도 갱신
           const _cat = impMapCat(item.category_name);
           const _confirmed = impCatConfirmed(item.category_name);
           newFound.push({
@@ -8112,6 +8123,7 @@ async function nwCollectRegion(region) {
             const _excCatCheck = item.category_name || '';
             if (['동물병원','수의','반려동물 용품','반려동물용품','애견용품','애견미용','펫샵'].some(x => _excCatCheck.includes(x))) continue;
             existingKakaoIds.add(item.id);
+            if (_allKakaoIds) _allKakaoIds.add(item.id); // 전역 캐시도 갱신
             const _cat = impMapCat(item.category_name);
             newFound.push({
               name:      item.place_name,
@@ -8388,6 +8400,21 @@ async function runNationwidePipeline() {
   nwPipeline.phase   = 'collect';
   renderNationwidePipelineUI();
 
+  // ── kakaoId 전체 캐시 1회 로드 (중복 체크용) ──────────────────────────────
+  // 기존: 249개 지역마다 places.map(p=>p.kakaoId) 재빌드 (뷰포트 미로딩 장소 누락)
+  // 개선: Firestore에서 전체 kakaoId를 한 번에 읽어 Set으로 캐시 → reads 대폭 감소
+  if (!_allKakaoIds) {
+    nwUpdateLog('📦 기존 장소 kakaoId 캐시 로딩 중...');
+    try {
+      const snap = await db.collection('places').get();
+      _allKakaoIds = new Set(snap.docs.map(d => d.data().kakaoId).filter(Boolean));
+      nwUpdateLog(`  ✅ ${_allKakaoIds.size}개 kakaoId 캐시 완료`);
+    } catch(e) {
+      nwUpdateLog('  ⚠️ kakaoId 캐시 실패 — places 배열로 폴백');
+      _allKakaoIds = new Set(places.map(p => p.kakaoId).filter(Boolean));
+    }
+  }
+
   const total = NATIONWIDE_REGIONS.length;
 
   for (let i = nwPipeline.regionIdx; i < total; i++) {
@@ -8461,9 +8488,10 @@ async function runNationwidePipeline() {
     await nwSaveState();
     nwUpdateLog(`🎉 전국 파이프라인 완료! 수집 ${nwPipeline.stats.collected}개 / 업그레이드 ${nwPipeline.stats.upgraded}개`);
     showToast('🎉 전국 파이프라인 완료!', 5000);
-    invalidatePlacesCache();
+    invalidatePlacesCache(true); // forceTiles=true: 파이프라인 완료 후 타일 캐시 갱신
   } else {
     nwUpdateLog(`⏸ 일시 중단됨 (${nwPipeline.regionIdx}/${total} 완료)`);
+    invalidatePlacesCache(true); // 중단 시에도 tiles 갱신
   }
 
   nwPipeline.running = false;
@@ -8487,6 +8515,7 @@ function resetNationwidePipeline() {
   nwPipeline.stats = { collected: 0, v1Done: 0, v2Done: 0, v2Skipped: 0, upgraded: 0, rejected: 0 };
   nwPipeline.regionStatus = {};
   nwPipeline.log = [];
+  _allKakaoIds = null; // 처음부터 시작 시 kakaoId 캐시 초기화 → 재로드
   nwSaveState();
   renderNationwidePipelineUI();
 }
