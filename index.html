@@ -689,15 +689,47 @@
 
       /* No sidebar on mobile - it's a bottom sheet */
       #sidebar {
-        top:auto; bottom:calc(var(--tabs-h) + env(safe-area-inset-bottom, 0px)); left:0; right:0; width:100%;
-        height:50vh; transform:translateY(100%);
+        top:auto;
+        bottom:calc(var(--tabs-h) + env(safe-area-inset-bottom, 0px));
+        left:0; right:0; width:100%;
+        /* 헤더 ~ 탭 사이 전체 공간을 꽉 채움 */
+        height:calc(100dvh - var(--hdr-h) - var(--tabs-h) - env(safe-area-inset-bottom, 0px));
+        transform:translateY(100%);
         border-radius:20px 20px 0 0;
         box-shadow:0 -4px 30px rgba(0,0,0,.15);
         z-index:700; overflow:hidden;
       }
       #sidebar.mobile-open { transform:translateY(0); }
-      /* 지역 칩이 많이 펼쳐져도 quick-filters가 place-list 공간을 다 잡아먹지 않도록 */
-      #sidebar.mobile-open #quick-filters { max-height:55%; overflow-y:auto; flex-shrink:0; }
+
+      /* ── 필터 접기/펼치기 (모바일 전용) ── */
+      #filter-toggle-btn {
+        display:flex; align-items:center; justify-content:space-between;
+        width:100%; padding:10px 12px 8px; border:none; background:none;
+        cursor:pointer; font-family:inherit; touch-action:manipulation;
+      }
+      #filter-toggle-btn .ftb-left {
+        display:flex; align-items:center; gap:8px;
+        font-size:13px; font-weight:700; color:#333;
+      }
+      #filter-toggle-btn .ftb-summary {
+        font-size:11px; font-weight:500; color:#E04E14;
+        background:#FDF5F2; border-radius:10px; padding:2px 8px;
+      }
+      #filter-toggle-btn .ftb-arrow {
+        font-size:11px; color:#AAA; transition:transform .25s;
+      }
+      #filter-toggle-btn.expanded .ftb-arrow { transform:rotate(180deg); }
+
+      #filter-panel-body {
+        max-height:0; overflow:hidden;
+        transition:max-height .3s ease;
+        padding:0 10px;
+      }
+      #filter-panel-body.expanded {
+        max-height:400px; overflow-y:auto;
+        padding:0 10px 6px;
+      }
+      /* 데스크탑: 필터 토글 버튼 숨김, 패널 항상 표시 */
 
       /* Map fills screen */
       #map { left:0; top:var(--hdr-h); bottom:calc(var(--tabs-h) + env(safe-area-inset-bottom, 0px)); right:0; }
@@ -939,12 +971,8 @@
     .btn-act.like-btn { font-size:14px; color:#888; gap:4px; display:flex; align-items:center; }
     .btn-act.like-btn.liked { color:#F07030; border-color:#F07030; }
 
-    /* ── FAB (Map floating action) ── */
-    #fab-list {
-      position:fixed; right:14px; bottom:calc(var(--tabs-h) + env(safe-area-inset-bottom, 0px) + 14px);
-      z-index:710; display:none; flex-direction:column; gap:8px;
-    }
-    @media (max-width:767px) { #fab-list { display:flex; } }
+    /* ── FAB (목록 버튼 — 하단 탭으로 대체됐으므로 숨김) ── */
+    #fab-list { display:none !important; }
     .fab {
       width:46px; height:46px; border-radius:50%; border:none; cursor:pointer;
       display:flex; align-items:center; justify-content:center;
@@ -955,19 +983,20 @@
     .fab-primary { background:#E04E14; color:#fff; }
     .fab-secondary { background:#fff; color:#E04E14; }
 
-    /* ── 내 위치 버튼 ── */
+    /* ── 내 위치 버튼 — 홍시야 찾아줘(feedback-fab) 위에 위치 ── */
     #btn-locate {
       position:fixed; right:14px;
-      bottom:calc(var(--tabs-h) + env(safe-area-inset-bottom,0px) + 68px);
+      /* 홍시야FAB: tabs+14px, FAB 높이~78px, 간격10px → tabs+102px */
+      bottom:calc(var(--tabs-h) + env(safe-area-inset-bottom,0px) + 102px);
       z-index:711;
-      width:46px; height:46px; border-radius:50%; border:none; cursor:pointer;
-      background:#fff; color:#4285F4; font-size:20px;
-      box-shadow:0 4px 14px rgba(0,0,0,.22);
+      width:42px; height:42px; border-radius:50%; border:1.5px solid #D0D0D0; cursor:pointer;
+      background:#fff; color:#4285F4; font-size:18px;
+      box-shadow:0 2px 10px rgba(0,0,0,.18);
       display:flex; align-items:center; justify-content:center;
       transition:transform .2s, background .2s, color .2s;
     }
     #btn-locate:hover { transform:scale(1.08); }
-    #btn-locate.tracking { background:#4285F4; color:#fff; }
+    #btn-locate.tracking { background:#4285F4; color:#fff; border-color:#4285F4; }
     /* 데스크탑: 탭바 없으므로 위치 조정 */
     @media (min-width:768px) {
       #btn-locate { bottom:24px; right:20px; }
@@ -976,6 +1005,9 @@
       /* 데스크탑: FAB 2배 크기 */
       #feedback-fab-img { width:100px; height:100px; border-width:4px; }
       #feedback-fab-label { font-size:13px; padding:4px 12px; }
+      /* 데스크탑: 필터 토글 버튼 숨기고 패널 항상 표시 */
+      #filter-toggle-btn { display:none; }
+      #filter-panel-body { max-height:none !important; overflow:visible !important; padding:0 !important; }
     }
 
     /* ── 내 위치 파란 점 (Google Maps 스타일) ── */
@@ -1002,11 +1034,10 @@
       100% { transform:translate(-50%,-50%) scale(1.6); opacity:0; }
     }
 
-    /* ── 홍시야 도와줘! 피드백 버튼 ── */
+    /* ── 홍시야 도와줘! 피드백 버튼 — 하단 탭 바로 위 ── */
     #feedback-fab {
       position:fixed; right:14px;
-      /* btn-locate(44px) + gap(10px) = +54px above btn-locate's bottom(68px) → 122px */
-      bottom:calc(var(--tabs-h) + env(safe-area-inset-bottom,0px) + 122px);
+      bottom:calc(var(--tabs-h) + env(safe-area-inset-bottom,0px) + 14px);
       z-index:720;
       display:flex; flex-direction:column; align-items:center; gap:3px;
       cursor:pointer; user-select:none;
@@ -1250,7 +1281,19 @@
   <!-- Desktop Sidebar -->
   <div id="sidebar">
     <div id="quick-filters">
-      <!-- 조건 필터 (항상 표시) -->
+      <!-- 모바일 필터 토글 버튼 (데스크탑에선 CSS로 숨김) -->
+      <button id="filter-toggle-btn" onclick="toggleFilterPanel()" aria-expanded="false">
+        <span class="ftb-left">
+          <i class="fa fa-sliders" style="font-size:13px;color:#E04E14"></i>
+          필터
+          <span class="ftb-summary" id="filter-active-count" style="display:none"></span>
+        </span>
+        <span class="ftb-arrow">▼</span>
+      </button>
+
+      <!-- 필터 내용 (모바일: 기본 접힘 / 데스크탑: 항상 표시) -->
+      <div id="filter-panel-body">
+      <!-- 조건 필터 -->
       <div class="qf-row">
         <button class="filter-chip" data-cond="대형견"       onclick="toggleFilter(this,'대형견')">대형견 OK</button>
         <button class="filter-chip" data-cond="실내"         onclick="toggleFilter(this,'실내')">실내 가능</button>
@@ -1303,6 +1346,7 @@
           <button class="filter-chip" data-area="제주"  onclick="setAreaFilter(this,'제주')">제주</button>
         </div>
       </div>
+      </div><!-- /filter-panel-body -->
     </div>
     <div id="place-list"></div>
     <button class="submit-cta" onclick="openSubmitModal()">새 장소 제보하기</button>
@@ -1427,7 +1471,7 @@
 
   <!-- 내 위치 버튼 (모바일+데스크탑 공통) -->
   <button id="btn-locate" onclick="toggleLocationTracking()" title="내 위치">
-    <i class="fa fa-location-arrow"></i>
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="8"/><line x1="12" y1="2" x2="12" y2="5"/><line x1="12" y1="19" x2="12" y2="22"/><line x1="2" y1="12" x2="5" y2="12"/><line x1="19" y1="12" x2="22" y2="12"/><circle cx="12" cy="12" r="2" fill="currentColor" stroke="none"/></svg>
   </button>
 
 </div>
@@ -4061,6 +4105,33 @@ function setAreaFilter(btn, area) {
     }
   }
   filterPlaces();
+}
+
+// 모바일 필터 패널 접기/펼치기
+function toggleFilterPanel() {
+  const body = document.getElementById('filter-panel-body');
+  const btn  = document.getElementById('filter-toggle-btn');
+  if (!body) return;
+  const isExpanded = body.classList.toggle('expanded');
+  if (btn) {
+    btn.classList.toggle('expanded', isExpanded);
+    btn.setAttribute('aria-expanded', isExpanded);
+  }
+}
+
+// 활성 필터 수를 토글 버튼 배지에 표시
+function updateFilterBadge() {
+  const badge = document.getElementById('filter-active-count');
+  if (!badge) return;
+  const count = activeFilters.conditions.length +
+    (activeFilters.cat && activeFilters.cat !== 'all' ? 1 : 0) +
+    (activeFilters.area && activeFilters.area !== 'all' ? 1 : 0);
+  if (count > 0) {
+    badge.textContent = count + '개 적용';
+    badge.style.display = 'inline-block';
+  } else {
+    badge.style.display = 'none';
+  }
 }
 
 function toggleAreaFilter() {
