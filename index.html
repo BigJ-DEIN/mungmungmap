@@ -3773,7 +3773,7 @@ function doLiveSearch() {
 
   // ── 캐시 확인: 동일 뷰포트 15분 내 재검색이면 API 호출 없이 바로 표시 ──────
   const _ctr = map.getCenter();
-  const _cacheKey = `${Math.round(_ctr.getLat()*100)}_${Math.round(_ctr.getLng()*100)}_${map.getLevel()}`;
+  const _cacheKey = `${Math.round(_ctr.lat*100)}_${Math.round(_ctr.lng*100)}_${map.getZoom()}`;
   const _cached = _liveCache.get(_cacheKey);
   if (_cached && Date.now() - _cached.ts < 15 * 60 * 1000) {
     showToast('📦 캐시된 결과로 표시합니다');
