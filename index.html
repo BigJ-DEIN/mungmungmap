@@ -3344,7 +3344,7 @@ function initMap() {
     );
   }
 
-  // Kakao SDK 미리 초기화 — 검색창·제보 모달이 즉시 사용 가능하도록
+  // Kakao SDK 미리 초기화 — '홍시야 찾아줘' 클릭 시 즉시 사용 가능하도록
   setTimeout(initKakaoSearch, 500);
 }
 
@@ -4551,7 +4551,6 @@ const AREA_COORDS = {
 };
 
 function onSearchFocus() {
-  initKakaoSearch(); // SDK 아직 로드 안 됐으면 지금 시작
   const val = document.getElementById('search-input').value.trim();
   if (val.length >= 1) showSearchSuggestions(val);
 }
@@ -4683,22 +4682,36 @@ async function showSearchSuggestions(query) {
     const current = document.getElementById('search-input')?.value.trim();
     if (!current || current.toLowerCase() !== q) return;
 
+    const _sgClear = () => {
+      const bx = document.getElementById('search-suggestions');
+      if (!bx) return;
+      bx.innerHTML = bx.innerHTML.replace(/<div class="sg-empty[^>]*>[\s\S]*?<\/div>/, '');
+      if (!bx.innerHTML.includes('sg-item')) bx.innerHTML = `<div class="sg-empty">결과 없음</div>`;
+    };
     try {
       const mc = (typeof map !== 'undefined') ? map.getCenter() : null;
       const locParam = mc ? `&x=${mc.lng}&y=${mc.lat}` : '';
       const resp = await fetch(
         `https://dapi.kakao.com/v2/local/search/keyword.json?query=${encodeURIComponent(query)}&size=10${locParam}`,
         { headers: { 'Authorization': `KakaoAK ${KAKAO_REST_KEY}` },
-          signal: AbortSignal.timeout(6000) }
+          signal: AbortSignal.timeout(8000) }
       );
-      if (!resp.ok) return; // 429 등 오류 시 조용히 종료
+
+      // 검색어 다시 확인 (대기 중 변경됐을 수 있음)
+      const chk = document.getElementById('search-input')?.value.trim();
+      if (!chk || chk.toLowerCase() !== q) return;
+
+      if (!resp.ok) {
+        const bx = document.getElementById('search-suggestions');
+        if (bx) bx.innerHTML = bx.innerHTML.replace(/<div class="sg-empty[^>]*>[\s\S]*?<\/div>/, '')
+          + `<div class="sg-empty">검색 오류 (${resp.status})</div>`;
+        return;
+      }
 
       const json = await resp.json();
       const docs = (json.documents || []).filter(d => d.y && d.x && d.place_name);
 
-      // 검색어 다시 확인 (대기 중 변경됐을 수 있음)
-      const chk = document.getElementById('search-input')?.value.trim();
-      if (!chk || chk.toLowerCase() !== q || !docs.length) return;
+      if (!docs.length) { _sgClear(); return; }
 
       const bx = document.getElementById('search-suggestions');
       if (!bx) return;
@@ -4722,7 +4735,12 @@ async function showSearchSuggestions(query) {
         .replace(/<div class="sg-section-label">카카오맵 장소<\/div>[\s\S]*$/, '');
       bx.innerHTML = stripped + kakaoHtml;
       bx.classList.add('open');
-    } catch(e) { /* 타임아웃·오류 시 조용히 종료 */ }
+    } catch(e) {
+      // timeout 또는 네트워크 오류
+      const bx = document.getElementById('search-suggestions');
+      if (bx) bx.innerHTML = bx.innerHTML.replace(/<div class="sg-empty[^>]*>[\s\S]*?<\/div>/, '')
+        + `<div class="sg-empty">검색 오류 (${e?.name || 'ERR'})</div>`;
+    }
 
   }, 300);
 }
@@ -6112,41 +6130,24 @@ async function repSearch() {
   const list = document.getElementById('rep-result-list');
   list.innerHTML = '<div class="rep-empty">검색 중...</div>';
 
-  // SDK 준비 안 됐으면 초기화 요청 후 잠깐 대기
-  if (!kakaoReady) {
-    initKakaoSearch();
-    await new Promise(r => setTimeout(r, 800));
-  }
-
-  // Use Kakao Places SDK if ready
-  if (window.kakao && window.kakao.maps && window.kakao.maps.services && kakaoReady) {
-    const ps = new kakao.maps.services.Places();
-    const rMc = (typeof map !== 'undefined') ? map.getCenter() : null;
-    const rOpts = rMc ? { x: rMc.lng, y: rMc.lat, size: 15 } : { size: 15 };
-    ps.keywordSearch(q, (data, status) => {
-      if (status !== kakao.maps.services.Status.OK || !data.length) {
-        list.innerHTML = '<div class="rep-empty">결과가 없어요. 다른 검색어를 시도해봐요.</div>';
-        return;
-      }
-      _repRenderResults(data.slice(0, 10));
-    }, rOpts);
-  } else {
-    // SDK 미준비 시 REST fallback (REST 키 사용)
-    try {
-      const rMcR = (typeof map !== 'undefined') ? map.getCenter() : null;
-      const rLocP = rMcR ? `&x=${rMcR.lng}&y=${rMcR.lat}` : '';
-      const url = `https://dapi.kakao.com/v2/local/search/keyword.json?query=${encodeURIComponent(q)}&size=10${rLocP}`;
-      const res = await fetch(url, { headers: { Authorization: `KakaoAK ${KAKAO_REST_KEY}` },
-                                     signal: AbortSignal.timeout(5000) });
-      const json = await res.json();
-      if (!json.documents || !json.documents.length) {
-        list.innerHTML = '<div class="rep-empty">결과가 없어요. 다른 검색어를 시도해봐요.</div>';
-        return;
-      }
-      _repRenderResults(json.documents);
-    } catch(e) {
-      list.innerHTML = '<div class="rep-empty">검색 중 오류가 발생했어요. 다시 시도해주세요.</div>';
+  // Kakao REST API 직접 호출 — kakaoPS/kakaoReady와 완전히 독립
+  try {
+    const mc = (typeof map !== 'undefined') ? map.getCenter() : null;
+    const locParam = mc ? `&x=${mc.lng}&y=${mc.lat}` : '';
+    const url = `https://dapi.kakao.com/v2/local/search/keyword.json?query=${encodeURIComponent(q)}&size=15${locParam}`;
+    const res = await fetch(url, {
+      headers: { Authorization: `KakaoAK ${KAKAO_REST_KEY}` },
+      signal: AbortSignal.timeout(6000)
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const json = await res.json();
+    if (!json.documents || !json.documents.length) {
+      list.innerHTML = '<div class="rep-empty">결과가 없어요. 다른 검색어를 시도해봐요.</div>';
+      return;
     }
+    _repRenderResults(json.documents);
+  } catch(e) {
+    list.innerHTML = '<div class="rep-empty">검색 중 오류가 발생했어요. 다시 시도해주세요.</div>';
   }
 }
 
