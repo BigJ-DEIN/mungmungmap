@@ -1251,7 +1251,7 @@
           <span style="font-size:20px;line-height:1;filter:drop-shadow(0 1px 2px rgba(0,0,0,.2));flex-shrink:0;margin-top:1px">♥</span>
           <div>
             <div class="lh-title">다녀온 곳</div>
-            <div class="lh-desc">내가 홍시와 함께 방문하고 추억을 남긴 장소예요. 동그라미 대신 하트로 표시돼요.</div>
+            <div class="lh-desc">내가 방문하고 추억을 남긴 장소에요. 동그라미 대신 하트로 표시돼요.</div>
           </div>
         </div>
 
@@ -6253,8 +6253,10 @@ async function nwVerifyStage2Region(regionName) {
           ? await fetchKakaoPagePetSignal(p.kakaoUrl, p.kakaoId)
           : { found: false };
         // verified: 카카오 최근 3개월 리뷰에 반려견 키워드 있을 때만
-        if (kakaoPageRes?.recentReview)   newStatus = pickBetter(newStatus, 'verified');
-        else if (kakaoPageRes?.found)     newStatus = pickBetter(newStatus, 'confirmed');
+        if (kakaoPageRes?.recentReview)        newStatus = pickBetter(newStatus, 'verified');
+        // confirmed: 카카오 공식 시설 태그(strong)가 있을 때만
+        // ★ strong:false(단순 키워드 매칭)는 카테고리 수집 장소에서 false positive가 많아 제외
+        else if (kakaoPageRes?.strong === true) newStatus = pickBetter(newStatus, 'confirmed');
       } else {
         // 키워드 수집 장소: 4채널 병렬
         [memRes, sdkRes, naverRes, kakaoPageRes] = await Promise.all([
