@@ -1337,7 +1337,7 @@
     </div>
     <!-- Kakao Live Search -->
     <button id="live-search-btn" onclick="toggleLiveSearch()">
-      🔍 근처 한번 더 검색하기
+      🔄 지도 정보 업데이트
     </button>
     <div id="live-results-panel" style="display:none">
       <div class="lrp-list" id="lrp-list"></div>
@@ -3316,7 +3316,7 @@ async function renderLiveResults(rawData) {
 
   if (data.length === 0) {
     showToast('주변에서 추가 장소를 찾지 못했어요');
-    btn.textContent = '근처 한번 더 검색하기';
+    btn.textContent = '🔄 지도 정보 업데이트';
     liveData = [];
     filterPlaces();
     return;
@@ -3390,6 +3390,11 @@ async function renderLiveResults(rawData) {
   filterPlaces();
   const skipMsg = skipped > 0 ? ` · 미확인 ${skipped}개 제외` : '';
   showToast(`✅ ${registered}개 등록 완료${skipMsg}`);
+
+  // ── 잘못 등록된 live_search 장소 자동 정리 ──────────────────────────────
+  const removed = await cleanupInvalidLivePlaces(btn);
+  if (removed > 0) showToast(`🗑 오등록 ${removed}개 자동 제거됨`);
+  btn.textContent = '🔄 지도 정보 업데이트';
 }
 
 function flyToLive(lat, lng, idx) {
@@ -3536,13 +3541,63 @@ async function autoAddLivePlace(dOverride) {
   }
 }
 
+/* ── 지도 뷰포트 내 live_search 장소 재검증 → 펫 신호 없으면 자동 제거 ── */
+async function cleanupInvalidLivePlaces(btn) {
+  const bounds = map.getBounds();
+
+  // 현재 뷰포트 내, source='live_search', kakaoId 있는 장소만 대상
+  const toCheck = places.filter(p =>
+    p && p.source === 'live_search' && (p.kakaoUrl || p.kakaoId) &&
+    p.lat != null && p.lng != null &&
+    bounds.contains([p.lat, p.lng])
+  );
+
+  if (toCheck.length === 0) return 0;
+
+  let removed = 0;
+  for (let i = 0; i < toCheck.length; i++) {
+    const p = toCheck[i];
+    if (btn) btn.textContent = `🔍 기존 장소 재확인 ${i+1}/${toCheck.length}...`;
+    try {
+      const result = await fetchKakaoPagePetSignal(p.kakaoUrl, p.kakaoId)
+        .catch(() => null);
+
+      // 오류(프록시 전체 실패) → 삭제 안 함. 명확히 found:false인 경우만 제거
+      if (result && !result.error && result.found === false) {
+        // places 배열에서 제거
+        const idx = places.indexOf(p);
+        if (idx > -1) places.splice(idx, 1);
+
+        // 마커 제거
+        if (markers[p.id]) {
+          (clusterGroup || map).removeLayer(markers[p.id].marker || markers[p.id]);
+          delete markers[p.id];
+        }
+
+        // Firestore 삭제
+        if (firebaseReady && db && p.firestoreId) {
+          db.collection('places').doc(p.firestoreId).delete()
+            .catch(e => console.warn('cleanup 삭제 실패:', p.name, e));
+        }
+        removed++;
+      }
+    } catch(e) {
+      console.warn('cleanupInvalidLivePlaces 오류:', p.name, e);
+    }
+    await new Promise(r => setTimeout(r, 100));
+  }
+
+  if (removed > 0) filterPlaces();
+  return removed;
+}
+
 function clearLiveSearch() {
   clearLiveMarkers();
   liveData = [];
   filterPlaces();
   const btn = document.getElementById('live-search-btn');
   btn.classList.remove('active','loading');
-  btn.textContent = '근처 한번 더 검색하기';
+  btn.textContent = '🔄 지도 정보 업데이트';
 }
 
 function clearLiveMarkers() {
@@ -6433,11 +6488,9 @@ async function fetchKakaoPagePetSignal(url, kakaoId) {
         return { found: true, strong: true, recentReview: hasRecentPetReview, petDetails };
       }
 
-      // ── 3) 전체 JSON에서 펫 리뷰 키워드 검색 ──
-      const fullStrLower = fullStr.toLowerCase();
-      if (PET_REVIEW_KW.some(kw => fullStrLower.includes(kw))) {
-        return { found: true, strong: false, recentReview: hasRecentPetReview, petDetails };
-      }
+      // ── 3) 전체 JSON 스캔은 제거 ──
+      // 이유: 리뷰에 "강아지 안됩니다" 같은 부정 문맥이 있어도 found=true가 되어 오등록 발생
+      // 공식 시설 아이콘(1)·태그(2)만 신뢰하는 것으로 변경
 
       return { found: false, recentReview: false, petDetails };
     } catch (e) {
