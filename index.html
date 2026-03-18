@@ -1228,7 +1228,7 @@
     <div id="search-wrap">
       <i class="fa fa-magnifying-glass search-icon"></i>
       <input type="text" id="search-input" placeholder="카페, 동네, 지역 검색..."
-             oninput="onSearch()" onfocus="onSearchFocus()" autocomplete="off">
+             oninput="onSearch()" onfocus="onSearchFocus()" onkeydown="onSearchKeydown(event)" autocomplete="off">
       <button id="search-clear" onclick="clearSearch()" title="검색어 지우기" aria-label="검색어 지우기">✕</button>
       <div id="search-suggestions"></div>
     </div>
@@ -1347,7 +1347,8 @@
       <div class="legend-item"><span style="font-size:14px;color:#F07030;line-height:1">♥</span><span>나의 추억</span></div>
       <div class="legend-item"><span style="font-size:14px;color:#7BC74D;line-height:1">♥</span><span>친구 추억</span></div>
       <div class="legend-item"><div class="legend-dot" style="background:#F07030"></div><span>관심 장소</span></div>
-      <div class="legend-item"><div class="legend-dot" style="background:#7BC74D"></div><span>검증 완료</span></div>
+      <div class="legend-item"><div class="legend-dot" style="background:#8B8B4A"></div><span>검증 완료</span></div>
+      <div class="legend-item"><div class="legend-dot" style="background:#7BC74D"></div><span>검색 완료</span></div>
     </div>
 
     <!-- 범례 도움말 오버레이 -->
@@ -1359,7 +1360,7 @@
         <div class="lh-row">
           <span style="font-size:20px;color:#F07030;line-height:1;flex-shrink:0;margin-top:1px">♥</span>
           <div>
-            <div class="lh-title">나의 추억 (홍시 하트)</div>
+            <div class="lh-title">나의 추억</div>
             <div class="lh-desc">내가 방문하고 추억을 남긴 장소예요. 접속할 때마다 지도에 표시돼요.</div>
           </div>
         </div>
@@ -1367,24 +1368,32 @@
         <div class="lh-row">
           <span style="font-size:20px;color:#7BC74D;line-height:1;flex-shrink:0;margin-top:1px">♥</span>
           <div>
-            <div class="lh-title">친구 추억 (연두 하트)</div>
-            <div class="lh-desc">다른 사용자가 추억을 남긴 장소예요. 접속할 때마다 지도에 표시돼요.</div>
+            <div class="lh-title">친구 추억</div>
+            <div class="lh-desc">다른 사용자가 방문하고 추억을 남긴 장소예요.</div>
           </div>
         </div>
 
         <div class="lh-row">
           <div class="lh-dot" style="background:#F07030"></div>
           <div>
-            <div class="lh-title">관심 장소 (홍시 원)</div>
-            <div class="lh-desc">내가 관심 장소로 저장한 곳이에요. 접속할 때마다 지도에 표시돼요.</div>
+            <div class="lh-title">관심 장소</div>
+            <div class="lh-desc">목록·마커·드로어에서 좋아요를 누른 장소예요. 접속할 때마다 지도에 표시돼요.</div>
+          </div>
+        </div>
+
+        <div class="lh-row">
+          <div class="lh-dot" style="background:#8B8B4A"></div>
+          <div>
+            <div class="lh-title">검증 완료</div>
+            <div class="lh-desc">최근 3개월 리뷰에 반려동물 관련 내용이 있거나, 대형견·소형견·테라스·실내 여부 등 상세 정보가 확인된 장소예요.</div>
           </div>
         </div>
 
         <div class="lh-row">
           <div class="lh-dot" style="background:#7BC74D"></div>
           <div>
-            <div class="lh-title">검증 완료 (연두 원)</div>
-            <div class="lh-desc">'홍시야 찾아줘' 버튼을 눌렀을 때 현재 지도 화면에서 카카오맵 검색 + 반려동물 동반 검증이 완료된 장소예요. 이번 방문에만 표시돼요.</div>
+            <div class="lh-title">검색 완료</div>
+            <div class="lh-desc">키워드·카테고리 검색 후 1단계 반려동물 동반 검증이 완료된 장소예요. '홍시야 찾아줘'로 찾은 장소가 여기에 해당해요.</div>
           </div>
         </div>
 
@@ -1752,13 +1761,14 @@ const _excludedKakaoIds = new Set();
 // ═════════════════════════════════
 // PET STATUS — 4단계 색상 시스템
 // verified   = 검증 완료 (2단계) → 홍시 주황빨강
-// confirmed  = 확인 완료 (1단계) → 연두색
-// unverified = 확인 필요         → 옅은 회색
-// search     = 검색 결과         → 하늘색
+// verified   = 검증 완료 (최근 3개월 리뷰 + 상세 정보 확인) → 카키색
+// confirmed  = 검색 완료 (키워드+카테고리 1단계 검증)       → 연두색
+// unverified = 확인 필요                                     → 옅은 회색
+// search     = 검색 결과                                     → 하늘색
 // ═════════════════════════════════
 const STATUS_COLORS = {
-  verified:   '#7BC74D', // 검증 완료 = 연두색 (범례 일치)
-  confirmed:  '#7BC74D', // 검증 완료 = 연두색 (범례 일치)
+  verified:   '#8B8B4A', // 검증 완료 = 카키색 (최근 리뷰·상세 정보 확인)
+  confirmed:  '#7BC74D', // 검색 완료 = 연두색 (1단계 검증 완료)
   unverified: '#C8C8C8',
   search:     '#87CEEB',
   rejected:   '#EEEEEE', // 카테고리 수집 후 펫 비적합 판정 — 앱 노출 제외
@@ -3557,55 +3567,87 @@ function toggleLiveSearch() {
 function doLiveSearch() {
   _setLiveFabState(true);
 
-  const center = map.getCenter();
   const bounds = map.getBounds();
-  const latDiff = bounds.getNorth() - bounds.getSouth();
-  const lngDiff = bounds.getEast() - bounds.getWest();
-  // 현재 지도 뷰 기준 반경 (최소 500m, 최대 5km)
-  const radiusM = Math.min(Math.max((latDiff * 111 + lngDiff * 88) / 4 * 1000, 500), 5000);
+  const N = bounds.getNorth(), S = bounds.getSouth();
+  const E = bounds.getEast(),  W = bounds.getWest();
+  const latDiff = N - S;
+  const lngDiff = E - W;
 
-  const locOpts = { x: center.lng, y: center.lat, radius: Math.round(radiusM), size: 15 };
+  // ── 뷰포트 크기(km) 기준 그리드 밀도 결정 ────────────────────────────────
+  // 카카오 검색은 한 포인트당 최대 45개(3페이지×15) → 밀집 지역에서 누락 방지
+  // 각 셀이 대략 1.5km 이하가 되도록 그리드 분할
+  const viewKmW = lngDiff * 88;   // 경도 1° ≈ 88km (위도 37° 기준)
+  const viewKmH = latDiff * 111;  // 위도 1° ≈ 111km
+  const viewMaxKm = Math.max(viewKmW, viewKmH);
 
-  // ── 1) 카테고리 검색: 시설태그만 있는 장소(콩카세 등) 포함
-  //    CE7=카페, FD6=음식점, AT4=관광명소(공원), AD5=숙박
+  // gridN × gridN 포인트로 뷰포트 전체를 균등 분할
+  const gridN = viewMaxKm <= 1.5 ? 1
+              : viewMaxKm <= 3.0 ? 2
+              : 3; // 3×3 = 9포인트 (최대)
+
+  // 그리드 중심 좌표 배열
+  const gridPoints = [];
+  for (let i = 0; i < gridN; i++) {
+    for (let j = 0; j < gridN; j++) {
+      gridPoints.push({
+        lat: S + latDiff * (i + 0.5) / gridN,
+        lng: W + lngDiff * (j + 0.5) / gridN,
+      });
+    }
+  }
+
+  // 각 셀의 검색 반경: 셀 대각선의 절반 + 30% 겹침 (인접 셀 경계 누락 방지)
+  const cellDiagM = Math.sqrt(
+    Math.pow((viewKmW / gridN) * 1000, 2) +
+    Math.pow((viewKmH / gridN) * 1000, 2)
+  ) / 2;
+  const cellRadiusM = Math.min(Math.max(cellDiagM * 1.3, 300), 5000);
+
+  if (gridN > 1) {
+    showToast(`🔍 뷰포트를 ${gridN}×${gridN} 구역으로 나눠 검색합니다...`);
+  }
+
+  // ── 검색 설정 ──────────────────────────────────────────────────────────────
+  // CE7=카페, FD6=음식점, AT4=관광명소(공원), AD5=숙박
   const catCodes = ['CE7', 'FD6', 'AT4', 'AD5'];
-  const pages    = [1, 2, 3]; // 카테고리별 최대 3페이지 (최대 45개)
+  const pages    = [1, 2, 3]; // 포인트당 최대 45개
 
-  // ── 2) 키워드 검색: CE7/FD6/AT4/AD5 외 카테고리 누락 방지
-  // 반려견동반 시설 태그가 있는 장소는 카카오 검색에 인덱싱되어 있으나
-  // 밀집 지역에서는 1페이지(15개)에 포함 안 될 수 있으므로 3페이지까지 수집
+  // 반려견동반 시설 태그 장소 보완용 키워드 (카카오가 직접 필터)
   const keywords = ['애견동반', '반려견동반', '애견카페', '펫카페', '반려동물동반', '강아지카페', '도그카페'];
-  const kwPages  = [1, 2, 3]; // 카테고리 검색과 동일하게 3페이지
+  const kwPages  = [1, 2, 3];
 
   let allResults = [];
-  let pending = catCodes.length * pages.length + keywords.length * kwPages.length;
+  let pending = gridPoints.length * (catCodes.length * pages.length + keywords.length * kwPages.length);
 
   function onAllDone() {
     renderLiveResults(allResults);
   }
 
-  // 카테고리 검색
-  catCodes.forEach(code => {
-    pages.forEach(page => {
-      kakaoPS.categorySearch(code, (data, status) => {
-        if (status === kakao.maps.services.Status.OK && data?.length) {
-          allResults = allResults.concat(data);
-        }
-        if (--pending === 0) onAllDone();
-      }, { ...locOpts, page });
-    });
-  });
+  gridPoints.forEach(pt => {
+    const locOpts = { x: pt.lng, y: pt.lat, radius: Math.round(cellRadiusM), size: 15 };
 
-  // 키워드 검색 (3페이지) — 카카오가 반려동물 키워드로 직접 필터한 결과이므로 신뢰도 높음
-  keywords.forEach(kw => {
-    kwPages.forEach(page => {
-      kakaoPS.keywordSearch(kw, (data, status) => {
-        if (status === kakao.maps.services.Status.OK && data?.length) {
-          // 키워드 검색 결과임을 표시 → autoAddLivePlace에서 place-api 이중 검증 생략
-          allResults = allResults.concat(data.map(d => ({ ...d, _fromPetKeyword: true })));
-        }
-        if (--pending === 0) onAllDone();
-      }, { ...locOpts, page });
+    // 카테고리 검색
+    catCodes.forEach(code => {
+      pages.forEach(page => {
+        kakaoPS.categorySearch(code, (data, status) => {
+          if (status === kakao.maps.services.Status.OK && data?.length) {
+            allResults = allResults.concat(data);
+          }
+          if (--pending === 0) onAllDone();
+        }, { ...locOpts, page });
+      });
+    });
+
+    // 키워드 검색 — 카카오가 반려동물 키워드로 직접 필터한 결과이므로 신뢰도 높음
+    keywords.forEach(kw => {
+      kwPages.forEach(page => {
+        kakaoPS.keywordSearch(kw, (data, status) => {
+          if (status === kakao.maps.services.Status.OK && data?.length) {
+            allResults = allResults.concat(data.map(d => ({ ...d, _fromPetKeyword: true })));
+          }
+          if (--pending === 0) onAllDone();
+        }, { ...locOpts, page });
+      });
     });
   });
 }
@@ -4166,6 +4208,36 @@ function onSearch() {
   }, 400);
 }
 
+// Enter 키: 카카오 장소 결과가 있으면 첫 번째 선택, 없으면 직접 검색 후 선택
+function onSearchKeydown(e) {
+  if (e.key !== 'Enter') return;
+  e.preventDefault();
+
+  // 이미 로드된 카카오 장소 결과가 있으면 바로 첫 번째 선택
+  if (_sgKakaoPlaces.length > 0) {
+    selectKakaoPlaceSuggestion(0);
+    return;
+  }
+
+  // 로드 중이면 REST API로 직접 검색
+  const query = document.getElementById('search-input')?.value.trim();
+  if (!query) return;
+
+  hideSearchSuggestions();
+  fetch(
+    `https://dapi.kakao.com/v2/local/search/keyword.json?query=${encodeURIComponent(query)}&size=1`,
+    { headers: { 'Authorization': `KakaoAK ${KAKAO_REST_KEY}` } }
+  )
+  .then(r => r.json())
+  .then(json => {
+    const docs = (json.documents || []).filter(d => d.y && d.x && d.place_name);
+    if (!docs.length) { showToast('검색 결과를 찾지 못했어요'); return; }
+    _sgKakaoPlaces = docs;
+    selectKakaoPlaceSuggestion(0);
+  })
+  .catch(() => showToast('검색 중 오류가 발생했어요'));
+}
+
 function clearSearch() {
   const inp = document.getElementById('search-input');
   if (inp) inp.value = '';
@@ -4179,6 +4251,8 @@ function clearSearch() {
 }
 
 let _sgKakaoTimer = null;
+let _sgKakaoPlaces = [];    // 드롭다운 카카오 장소 결과 임시 저장 (인덱스로 참조)
+let _searchResultMarker = null; // 검색창에서 선택한 장소의 임시 핀 마커
 
 async function showSearchSuggestions(query) {
   const box = document.getElementById('search-suggestions');
@@ -4257,21 +4331,51 @@ async function showSearchSuggestions(query) {
         // 검색어가 바뀌지 않았으면 드롭다운 업데이트
         const now = document.getElementById('search-input')?.value.trim();
         if (!now || now.toLowerCase() !== q) return;
-        const kakaoHtml = `<div class="sg-section-label">지역</div>` +
-          docs.slice(0, 5).map(d => {
-            const name   = d.place_name || d.address_name || query;
-            const addr   = d.road_address_name || d.address_name || '';
+
+        // 장소(place_name 있음)와 주소(지역)를 분리
+        const placeDocs = docs.filter(d => d.place_name);
+        const areaDocs  = docs.filter(d => !d.place_name);
+
+        // 카카오맵 장소 결과 → 전역 배열에 저장 (인덱스로 onclick 참조)
+        _sgKakaoPlaces = placeDocs;
+
+        let kakaoHtml = '';
+
+        // ── 카카오맵 장소 섹션 ──
+        if (placeDocs.length > 0) {
+          kakaoHtml += `<div class="sg-section-label">카카오맵 장소</div>`;
+          kakaoHtml += placeDocs.slice(0, 5).map((d, idx) => {
+            const addr = d.road_address_name || d.address_name || '';
+            const cat  = (d.category_name || '').split(' > ').pop();
+            const inDB = places.some(p => p.kakaoId === d.id || p.name === d.place_name);
+            return `<div class="sg-item" onmousedown="event.preventDefault()" onclick="selectKakaoPlaceSuggestion(${idx})">
+              <div class="sg-item-icon">${inDB ? '📍' : '🔍'}</div>
+              <div class="sg-item-main">
+                <div class="sg-item-name">${d.place_name}${inDB ? ' <span style="font-size:10px;color:#7BC74D">등록됨</span>' : ''}</div>
+                <div class="sg-item-sub">${cat ? cat + ' · ' : ''}${addr}</div>
+              </div>
+            </div>`;
+          }).join('');
+        }
+
+        // ── 지역(주소) 섹션 ──
+        if (areaDocs.length > 0) {
+          kakaoHtml += `<div class="sg-section-label">지역</div>`;
+          kakaoHtml += areaDocs.slice(0, 3).map(d => {
+            const name   = d.address_name || query;
             const lat    = parseFloat(d.y), lng = parseFloat(d.x);
             const safeNm = name.replace(/'/g, "\\'");
             return `<div class="sg-item" onmousedown="event.preventDefault()" onclick="selectAreaSuggestion('${safeNm}', ${lat}, ${lng}, 15)">
               <div class="sg-item-icon">🗺️</div>
               <div class="sg-item-main">
                 <div class="sg-item-name">${name}</div>
-                <div class="sg-item-sub">${addr || '지도로 이동'}</div>
+                <div class="sg-item-sub">지도로 이동</div>
               </div>
             </div>`;
           }).join('');
-        // 장소 섹션 유지 + 지역 섹션 추가
+        }
+
+        // 장소 섹션 유지 + 카카오 섹션 추가
         const existingPlaceHtml = matchedPlaces.length > 0
           ? box.innerHTML.replace(/<div class="sg-empty[^>]*>.*?<\/div>/s, '')
           : '';
@@ -4290,6 +4394,139 @@ async function showSearchSuggestions(query) {
 function hideSearchSuggestions() {
   const box = document.getElementById('search-suggestions');
   if (box) box.classList.remove('open');
+}
+
+// ── 카카오맵 장소 검색 결과 선택 → 핀 마커 + 팝업 ─────────────────────────
+function selectKakaoPlaceSuggestion(idx) {
+  const d = _sgKakaoPlaces[idx];
+  if (!d) return;
+  hideSearchSuggestions();
+
+  const lat = parseFloat(d.y), lng = parseFloat(d.x);
+
+  // 검색창 업데이트
+  const inp = document.getElementById('search-input');
+  if (inp) inp.value = d.place_name;
+  searchText = d.place_name.toLowerCase();
+  document.getElementById('search-clear')?.classList.add('visible');
+
+  // 이미 DB에 있는 장소면 기존 마커·드로어 열기
+  const existing = places.find(p => p.kakaoId === d.id || p.name === d.place_name);
+  if (existing) {
+    filterPlaces();
+    map.flyTo([existing.lat, existing.lng], 17, { duration: 1.0 });
+    setTimeout(() => openPlace(existing), 800);
+    return;
+  }
+
+  // 이전 검색 핀 마커 제거
+  if (_searchResultMarker) { map.removeLayer(_searchResultMarker); _searchResultMarker = null; }
+
+  // 검색 결과 핀 마커 생성 (주황 핀, 위로 튀어나오는 스타일)
+  const pinHtml = `
+    <div style="position:relative;width:30px;height:42px;filter:drop-shadow(0 2px 6px rgba(0,0,0,.35))">
+      <div style="position:absolute;bottom:6px;left:50%;transform:translateX(-50%);
+                  width:26px;height:26px;background:#E04E14;border-radius:50% 50% 50% 50% / 55% 55% 45% 45%;
+                  border:2.5px solid white;display:flex;align-items:center;justify-content:center;font-size:13px">🔍</div>
+      <div style="position:absolute;bottom:0;left:50%;transform:translateX(-50%);
+                  width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;
+                  border-top:8px solid #E04E14"></div>
+    </div>`;
+  const icon = L.divIcon({ html: pinHtml, className:'', iconSize:[30,42], iconAnchor:[15,42] });
+  _searchResultMarker = L.marker([lat, lng], { icon, zIndexOffset:2000 })
+    .addTo(map)
+    .on('click', () => showKakaoSearchPopup(d));
+
+  map.flyTo([lat, lng], 17, { duration: 1.0 });
+  setTimeout(() => showKakaoSearchPopup(d), 800);
+}
+
+// 카카오 검색 결과 팝업 — 관심장소 추가 버튼 포함
+function showKakaoSearchPopup(d) {
+  const phone    = d.phone    ? `<div style="font-size:11px;color:#555;margin-top:4px">📞 ${d.phone}</div>` : '';
+  const kakaoLnk = d.place_url ? `<a href="${d.place_url}" target="_blank"
+    style="display:inline-block;margin-top:8px;padding:5px 10px;background:#FFEB00;color:#3C1E1E;
+           border-radius:7px;font-size:11px;font-weight:700;text-decoration:none">카카오맵에서 보기</a>` : '';
+  const cat = (d.category_name || '').split(' > ').pop();
+
+  // 관심장소 버튼
+  const alreadyLiked = (() => {
+    const p = places.find(x => x.kakaoId === d.id || x.name === d.place_name);
+    return p && userLikedPlaceIds.has(p.id);
+  })();
+  const likeBtn = `<button onclick="addKakaoSearchPlaceToFavorite()"
+    style="margin-top:8px;padding:6px 12px;border:none;border-radius:8px;cursor:pointer;font-size:12px;font-weight:700;
+           background:${alreadyLiked ? '#FFE0E0' : '#FFF3E0'};color:${alreadyLiked ? '#E53935' : '#E04E14'}">
+    ${alreadyLiked ? '♥ 관심 장소에 있어요' : '♡ 관심 장소에 추가'}</button>`;
+
+  // 현재 팝업 장소를 전역에 저장 (버튼 onclick에서 참조)
+  window._kakaoSearchPopupPlace = d;
+
+  L.popup({ maxWidth: 250, className: 'live-popup' })
+    .setLatLng([parseFloat(d.y), parseFloat(d.x)])
+    .setContent(`
+      <div style="font-size:13px;font-weight:700;color:#2D2D2D">${d.place_name}</div>
+      ${cat ? `<div style="font-size:11px;color:#E04E14;margin-top:2px">${cat}</div>` : ''}
+      <div style="font-size:11px;color:#888;margin-top:3px">${d.road_address_name || d.address_name || ''}</div>
+      ${phone}${likeBtn}${kakaoLnk}
+    `)
+    .openOn(map);
+}
+
+// 카카오 검색 결과 장소를 관심장소에 추가 (반려동물 검증 생략 — 사용자 직접 선택)
+async function addKakaoSearchPlaceToFavorite() {
+  const d = window._kakaoSearchPopupPlace;
+  if (!d) return;
+
+  // 이미 DB에 있으면 liked 토글만
+  let place = places.find(p => p.kakaoId === d.id || p.name === d.place_name);
+
+  if (!place) {
+    showToast('📍 장소 등록 중...');
+    // autoAddLivePlace 와 동일한 저장 로직 (pet 검증 생략 — 사용자가 직접 선택)
+    const cat  = impMapCat(d.category_name || '');
+    const area = impGuessArea(d.road_address_name || '', d.address_name || '');
+    const nextId = Math.max(...places.filter(p => p && typeof p.id === 'number').map(p => p.id), 10000) + 1;
+    const addrStr = d.road_address_name || d.address_name || '';
+    const provinceMap = [
+      ['서울','서울'],['경기','경기'],['인천','인천'],['강원','강원'],
+      ['충북','충북'],['충남','충남'],['세종','세종'],['대전','대전'],
+      ['전북','전북'],['전남','전남'],['광주','광주'],['경북','경북'],
+      ['경남','경남'],['대구','대구'],['울산','울산'],['부산','부산'],['제주','제주']
+    ];
+    const province = provinceMap.find(([k]) => addrStr.includes(k))?.[1] || '';
+    place = {
+      id: nextId, name: d.place_name, addr: addrStr,
+      phone: d.phone || '', kakaoUrl: d.place_url || '', kakaoId: d.id || '',
+      lat: parseFloat(d.y), lng: parseFloat(d.x),
+      cat, emoji: impCatEmoji(cat), area, province,
+      petStatus: 'confirmed', large: null, small: null,
+      indoor: null, outdoor: null, cage: null, entryFee: null, stroller: null,
+      note: '', hours: [{ d: '영업시간', t: '카카오맵 확인' }],
+      active: true, source: 'user_search', addedAt: new Date().toISOString(),
+    };
+    places.push(place);
+    if (_allKakaoIds && d.id) _allKakaoIds.add(d.id);
+    if (firebaseReady && db) {
+      const ref = db.collection('places').doc();
+      place.firestoreId = ref.id;
+      await ref.set(place).catch(e => console.warn('Firestore 저장 실패:', d.place_name, e));
+    }
+    // 검색 핀 마커 제거 → 정식 마커로 교체
+    if (_searchResultMarker) { map.removeLayer(_searchResultMarker); _searchResultMarker = null; }
+    addMarker(place);
+    filterPlaces();
+  }
+
+  // 관심장소 토글
+  if (!userLikedPlaceIds.has(place.id)) {
+    await toggleLikedPlace(place.id);
+  } else {
+    showToast('이미 관심 장소에 있어요 ♥');
+  }
+
+  // 팝업 닫기
+  map.closePopup();
 }
 
 function selectPlaceSuggestion(placeId) {
@@ -6980,36 +7217,64 @@ function _isQuotaExceeded() {
 
 /* CORS 프록시를 통해 카카오맵 페이지 HTML 가져오기 */
 /**
- * 카카오 Places SDK로 반려견동반 여부를 직접 확인 (프록시 불필요)
- * 해당 장소 좌표 50m 반경에서 "반려견동반" 키워드 검색 → 동일 장소 포함 여부로 판정
+ * 카카오 Places SDK + REST API 이중으로 반려견동반 여부 확인 (프록시 불필요)
+ * ① SDK keywordSearch: 500m 반경 × 3페이지 × 3키워드 → 해당 place id 포함 여부 판정
+ * ② REST API fallback: SDK가 모두 실패할 경우 dapi.kakao.com으로 직접 확인
  * place-api 프록시가 카카오 서버에 의해 차단될 때의 fallback
  */
-function verifySdkPetKeyword(d) {
-  return new Promise(resolve => {
+async function verifySdkPetKeyword(d) {
+  const PET_KWS = ['반려견동반', '애견동반', '반려동물동반'];
+  const RADIUS  = 500; // 50m → 500m: 카카오 SDK 최소 유효 반경 이상으로 확대
+
+  function matchesPlace(r) {
+    return r.id === d.id ||
+      (r.place_name === d.place_name &&
+       Math.abs(parseFloat(r.y) - parseFloat(d.y)) < 0.005 &&
+       Math.abs(parseFloat(r.x) - parseFloat(d.x)) < 0.005);
+  }
+
+  // ── ① SDK keywordSearch (3키워드 × 3페이지 병렬) ──────────────────────
+  const sdkFound = await new Promise(resolve => {
     try {
       if (!window.kakao?.maps?.services?.Places) { resolve(false); return; }
-      const ps = new kakao.maps.services.Places();
-      const timer = setTimeout(() => resolve(false), 4000);
-      const PET_KWS = ['반려견동반', '애견동반', '반려동물동반'];
-      let found = false;
-      let remaining = PET_KWS.length;
+      const ps   = new kakao.maps.services.Places();
+      const pages = [1, 2, 3];
+      let found     = false;
+      let remaining = PET_KWS.length * pages.length;
+      const timer   = setTimeout(() => resolve(false), 8000);
       PET_KWS.forEach(kw => {
-        ps.keywordSearch(kw, (data, status) => {
-          if (!found && status === kakao.maps.services.Status.OK && data?.length) {
-            // 좌표 50m 이내 + 같은 place id 또는 같은 이름인 항목이 있으면 반려견동반 확인
-            const match = data.some(r =>
-              r.id === d.id ||
-              (r.place_name === d.place_name &&
-               Math.abs(parseFloat(r.y) - parseFloat(d.y)) < 0.0005 &&
-               Math.abs(parseFloat(r.x) - parseFloat(d.x)) < 0.0005)
-            );
-            if (match) found = true;
-          }
-          if (--remaining === 0) { clearTimeout(timer); resolve(found); }
-        }, { x: d.x, y: d.y, radius: 50, size: 15 }); // 50m 극소 반경 — 오탐 원천 차단
+        pages.forEach(page => {
+          ps.keywordSearch(kw, (data, status) => {
+            if (!found && status === kakao.maps.services.Status.OK && data?.length) {
+              if (data.some(matchesPlace)) found = true;
+            }
+            if (--remaining === 0) { clearTimeout(timer); resolve(found); }
+          }, { x: d.x, y: d.y, radius: RADIUS, size: 15, page });
+        });
       });
     } catch(e) { resolve(false); }
   });
+  if (sdkFound) return true;
+
+  // ── ② REST API fallback (SDK 실패 시) ───────────────────────────────────
+  try {
+    for (const kw of PET_KWS) {
+      for (let page = 1; page <= 3; page++) {
+        const resp = await fetch(
+          `https://dapi.kakao.com/v2/local/search/keyword.json` +
+          `?query=${encodeURIComponent(kw)}&x=${d.x}&y=${d.y}&radius=${RADIUS}&size=15&page=${page}`,
+          { headers: { 'Authorization': `KakaoAK ${KAKAO_REST_KEY}` },
+            signal: AbortSignal.timeout(5000) }
+        );
+        if (!resp.ok) break;
+        const json = await resp.json();
+        if ((json.documents || []).some(matchesPlace)) return true;
+        if (json.meta?.is_end) break;
+      }
+    }
+  } catch(e) { /* REST API 실패 → false 반환 */ }
+
+  return false;
 }
 
 async function fetchKakaoPagePetSignal(url, kakaoId) {
