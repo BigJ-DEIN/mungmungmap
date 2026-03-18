@@ -3259,19 +3259,24 @@ function doLiveSearch() {
   // 현재 지도 뷰 기준 반경 (최소 500m, 최대 5km)
   const radiusM = Math.min(Math.max((latDiff * 111 + lngDiff * 88) / 4 * 1000, 500), 5000);
 
-  const opts = { x: center.lng, y: center.lat, radius: Math.round(radiusM), size: 15 };
+  const locOpts = { x: center.lng, y: center.lat, radius: Math.round(radiusM), size: 15 };
 
-  // 카테고리 코드: CE7=카페, FD6=음식점, AT4=관광명소(공원/운동장), AD5=숙박
-  // 키워드 검색과 달리 이름에 '반려견' 없어도 시설태그만 있으면 수집 가능
+  // ── 1) 카테고리 검색: 시설태그만 있는 장소(콩카세 등) 포함
+  //    CE7=카페, FD6=음식점, AT4=관광명소(공원), AD5=숙박
   const catCodes = ['CE7', 'FD6', 'AT4', 'AD5'];
-  const pages    = [1, 2, 3]; // 카테고리별 최대 3페이지 (45개)
+  const pages    = [1, 2, 3]; // 카테고리별 최대 3페이지 (최대 45개)
+
+  // ── 2) 키워드 검색: CE7/FD6/AT4/AD5 외 카테고리 누락 방지
+  const keywords = ['애견동반', '반려견동반', '애견카페', '펫카페', '반려동물동반'];
+
   let allResults = [];
-  let pending    = catCodes.length * pages.length;
+  let pending = catCodes.length * pages.length + keywords.length;
 
   function onAllDone() {
     renderLiveResults(allResults);
   }
 
+  // 카테고리 검색
   catCodes.forEach(code => {
     pages.forEach(page => {
       kakaoPS.categorySearch(code, (data, status) => {
@@ -3279,8 +3284,18 @@ function doLiveSearch() {
           allResults = allResults.concat(data);
         }
         if (--pending === 0) onAllDone();
-      }, { ...opts, page });
+      }, { ...locOpts, page });
     });
+  });
+
+  // 키워드 검색 (누락 보완)
+  keywords.forEach(kw => {
+    kakaoPS.keywordSearch(kw, (data, status) => {
+      if (status === kakao.maps.services.Status.OK && data?.length) {
+        allResults = allResults.concat(data);
+      }
+      if (--pending === 0) onAllDone();
+    }, locOpts);
   });
 }
 
