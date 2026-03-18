@@ -5617,6 +5617,50 @@ const _proxyQueue = {
   }
 };
 
+/* ── 일일 Worker 할당량 관리 ─────────────────────────────────────────────
+   Cloudflare 무료 티어: 100,000 req/day → 80% = 80,000 req/day 제한
+   _dailyQuota는 Firestore meta/daily_quota 에 날짜별로 영속 저장됩니다.
+   날짜가 바뀌면 자동 리셋. 500건마다 Firestore 자동 저장.            */
+const DAILY_WORKER_QUOTA = 80000;
+let _dailyQuota = { date: '', used: 0 };
+
+function _todayStr() { return new Date().toISOString().slice(0, 10); }
+
+async function loadDailyQuota() {
+  if (!firebaseReady || !db) return;
+  try {
+    const doc = await db.collection('meta').doc('daily_quota').get();
+    if (doc.exists) {
+      const d = doc.data();
+      const today = _todayStr();
+      _dailyQuota = { date: today, used: d.date === today ? (d.used || 0) : 0 };
+    }
+  } catch(e) {}
+}
+
+async function saveDailyQuota() {
+  if (!firebaseReady || !db) return;
+  try {
+    await db.collection('meta').doc('daily_quota').set({
+      date: _dailyQuota.date,
+      used: _dailyQuota.used,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
+  } catch(e) {}
+}
+
+function _incWorkerCall() {
+  const today = _todayStr();
+  if (_dailyQuota.date !== today) { _dailyQuota.date = today; _dailyQuota.used = 0; }
+  _dailyQuota.used++;
+  if (_dailyQuota.used % 500 === 0) saveDailyQuota(); // 500건마다 자동 저장
+}
+
+function _isQuotaExceeded() {
+  if (_dailyQuota.date !== _todayStr()) return false; // 날짜 바뀌면 리셋
+  return _dailyQuota.used >= DAILY_WORKER_QUOTA;
+}
+
 /* CORS 프록시를 통해 카카오맵 페이지 HTML 가져오기 */
 async function fetchKakaoPagePetSignal(url, kakaoId) {
   const PROXIES = [
@@ -5632,18 +5676,13 @@ async function fetchKakaoPagePetSignal(url, kakaoId) {
   const id = kakaoId || (url && url.match(/\/(\d+)\/?$/)?.[1]);
   if (!id) return { found: false, error: true };
 
-  // ★ HTML 스크래핑 대신 Kakao JSON API 직접 호출
-  // place.map.kakao.com/main/v/{id} → 시설 태그 포함 JSON 반환
-  const jsonApiUrl = `https://place.map.kakao.com/main/v/${id}`;
-
-  // Unicode 이스케이프 디코딩 (\uXXXX → 실제 한국어)
-  function unicodeDecode(str) {
-    try { return str.replace(/\\u([0-9a-fA-F]{4})/g, (_, c) => String.fromCharCode(parseInt(c, 16))); }
-    catch(e) { return str; }
-  }
+  // ★ place-api.map.kakao.com/places/panel3/{id} JSON API 호출
+  // 필수 헤더: appVersion: "6.6.0", pf: "PC" → Worker 프록시에서 자동 주입
+  const jsonApiUrl = `https://place-api.map.kakao.com/places/panel3/${id}`;
 
   for (const proxyFn of PROXIES) {
     try {
+      if (proxyFn === PROXIES[0]) _incWorkerCall(); // Worker 호출 카운트
       await _proxyQueue.acquire();
       let res;
       try { res = await fetch(proxyFn(jsonApiUrl), { signal: AbortSignal.timeout(8000) }); }
@@ -5653,12 +5692,12 @@ async function fetchKakaoPagePetSignal(url, kakaoId) {
         continue;
       }
       const rawText = await res.text();
-      if (rawText.length < 100) {
+      if (rawText.length < 500) {
         if (autoV.running) autoV.proxyFail = (autoV.proxyFail||0)+1;
         continue;
       }
 
-      // JSON 파싱 시도
+      // JSON 파싱
       let data;
       try { data = JSON.parse(rawText); }
       catch(e) {
@@ -5668,17 +5707,25 @@ async function fetchKakaoPagePetSignal(url, kakaoId) {
       }
       if (autoV.running) autoV.proxyOk = (autoV.proxyOk||0)+1;
 
-      // JSON 전체를 문자열로 변환 후 키워드 검색 (한국어 유니코드 디코딩 포함)
-      const str = unicodeDecode(JSON.stringify(data));
+      const addInfo = data?.place_add_info;
 
-      // ── 1) 시설 태그 확인 (반려견동반, 반려동물동반 등) ──
-      // Kakao JSON에 facilityInfo.iconService 또는 유사 필드에 태그명이 포함됨
-      if (PET_FACILITY_KW.some(kw => str.includes(kw))) {
+      // ── 1) 시설 아이콘 텍스트 확인 (ai_mate.store_facility_icons[].text) ──
+      // 예: "반려동물 동반 가능", "소형견 동반 가능" 등 카카오 공식 시설 태그
+      const iconTexts = (addInfo?.ai_mate?.store_facility_icons || [])
+        .map(i => i?.text || '').join(' ');
+      if (PET_FACILITY_KW.some(kw => iconTexts.includes(kw))) {
         return { found: true, strong: true }; // 카카오 공식 시설 태그 → verified
       }
 
-      // ── 2) 리뷰/설명에 펫 키워드 포함 여부 ──
-      if (PET_REVIEW_KW.some(kw => str.includes(kw))) {
+      // ── 2) 태그 배열 확인 (place_add_info.tags[]) ──
+      const tagText = (addInfo?.tags || []).join(' ');
+      if (PET_FACILITY_KW.some(kw => tagText.includes(kw))) {
+        return { found: true, strong: true };
+      }
+
+      // ── 3) 전체 JSON에서 펫 리뷰 키워드 검색 (리뷰/설명 등) ──
+      const fullStr = JSON.stringify(data);
+      if (PET_REVIEW_KW.some(kw => fullStr.includes(kw))) {
         return { found: true, strong: false }; // 키워드 발견 → confirmed
       }
 
@@ -5758,6 +5805,7 @@ async function fetchNaverBlogSignal(placeName) {
 
   for (const proxyFn of PROXIES) {
     try {
+      if (proxyFn === PROXIES[0]) _incWorkerCall(); // Worker 호출 카운트
       await _proxyQueue.acquire();
       let res;
       try { res = await fetch(proxyFn(url), { signal: AbortSignal.timeout(5000) }); }
@@ -6142,6 +6190,14 @@ async function nwVerifyStage2Region(regionName) {
 
   async function processOne(p) {
     if (nwPipeline.stop) return;
+    // ── 일일 Worker 할당량 80% 도달 시 파이프라인 자동 중단 ──
+    if (_isQuotaExceeded()) {
+      nwPipeline.stop = true;
+      nwPipeline.phase = 'quota_stop';
+      nwUpdateLog(`⛔ 일일 Worker 할당량 도달 (${_dailyQuota.used.toLocaleString()}/${DAILY_WORKER_QUOTA.toLocaleString()}건). 내일 이어서 실행하세요.`);
+      saveDailyQuota();
+      return;
+    }
     const currentStatus = getPlaceStatus(p);
     let newStatus = null;
 
@@ -6226,6 +6282,14 @@ async function nwVerifyStage2Region(regionName) {
 async function runNationwidePipeline() {
   if (nwPipeline.running) return;
   await nwLoadState();
+  await loadDailyQuota(); // ← 오늘 누적 Worker 호출 수 로드
+
+  // ── 오늘 할당량 이미 소진 시 시작 자체를 막음 ──
+  if (_isQuotaExceeded()) {
+    showToast(`⛔ 오늘 Worker 할당량(${DAILY_WORKER_QUOTA.toLocaleString()}건) 초과. 내일 다시 실행하세요.`, 6000);
+    renderNationwidePipelineUI();
+    return;
+  }
 
   nwPipeline.running = true;
   nwPipeline.stop    = false;
@@ -6318,12 +6382,20 @@ async function runNationwidePipeline() {
     nwPipeline.phase = 'done';
     nwPipeline.regionIdx = 0; // 다음 실행 시 처음부터
     await nwSaveState();
+    await saveDailyQuota(); // 완료 시 할당량 저장
     nwUpdateLog(`🎉 전국 파이프라인 완료! 수집 ${nwPipeline.stats.collected}개 / 업그레이드 ${nwPipeline.stats.upgraded}개`);
     showToast('🎉 전국 파이프라인 완료!', 5000);
-    invalidatePlacesCache(true); // forceTiles=true: 파이프라인 완료 후 타일 캐시 갱신
+    invalidatePlacesCache(true);
+  } else if (nwPipeline.phase === 'quota_stop') {
+    // 할당량 초과 자동 중단
+    await nwSaveState(); // 진행 위치 저장
+    nwUpdateLog(`⛔ 할당량 80% 도달 — Worker ${_dailyQuota.used.toLocaleString()}건 사용. 내일 "이어서 실행"을 누르세요.`);
+    showToast(`⛔ 오늘 할당량 도달. 내일 이어서 실행하세요.`, 6000);
+    invalidatePlacesCache(true);
   } else {
+    await saveDailyQuota(); // 수동 중단 시도 저장
     nwUpdateLog(`⏸ 일시 중단됨 (${nwPipeline.regionIdx}/${total} 완료)`);
-    invalidatePlacesCache(true); // 중단 시에도 tiles 갱신
+    invalidatePlacesCache(true);
   }
 
   nwPipeline.running = false;
@@ -6440,7 +6512,7 @@ function renderNationwidePipelineUI() {
   const done    = nwPipeline.regionIdx;
   const pct     = Math.round(done / total * 100);
   const current = NATIONWIDE_REGIONS[Math.min(done, total-1)];
-  const phaseLabel = { idle:'대기', collect:'📍 수집 중', verify1:'🔍 1단계 검증', verify2:'🤖 2단계 검증', done:'✅ 완료' };
+  const phaseLabel = { idle:'대기', collect:'📍 수집 중', verify1:'🔍 1단계 검증', verify2:'🤖 2단계 검증', done:'✅ 완료', quota_stop:'⛔ 할당량 도달' };
 
   // 시/도별 진행 현황
   const provinceMap = {};
@@ -6488,6 +6560,23 @@ function renderNationwidePipelineUI() {
         <div style="height:100%;background:#F07030;width:${pct}%;transition:width .3s"></div>
       </div>
     </div>
+
+    ${(() => {
+      const qUsed = _dailyQuota.date === _todayStr() ? _dailyQuota.used : 0;
+      const qPct  = Math.min(100, Math.round(qUsed / DAILY_WORKER_QUOTA * 100));
+      const qColor = qPct >= 80 ? '#EF4444' : qPct >= 50 ? '#F59E0B' : '#22C55E';
+      const qRemain = Math.max(0, DAILY_WORKER_QUOTA - qUsed);
+      return `<div style="background:#F9FAFB;border-radius:10px;padding:10px 12px;margin-bottom:12px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">
+          <span style="font-size:12px;font-weight:700;color:#374151">☁️ 오늘 Worker 할당량</span>
+          <span style="font-size:11px;color:${qColor};font-weight:700">${qUsed.toLocaleString()} / ${DAILY_WORKER_QUOTA.toLocaleString()} (${qPct}%) · 잔여 ${qRemain.toLocaleString()}건</span>
+        </div>
+        <div style="height:6px;background:#E5E7EB;border-radius:3px;overflow:hidden">
+          <div style="height:100%;background:${qColor};width:${qPct}%;transition:width .3s"></div>
+        </div>
+        ${qPct >= 80 ? `<div style="font-size:11px;color:#EF4444;margin-top:4px;font-weight:600">⛔ 오늘 한도 도달 — 내일 이어서 실행하세요</div>` : ''}
+      </div>`;
+    })()}
 
     <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:6px;margin-bottom:12px">
       ${[['수집', nwPipeline.stats.collected,'#3B82F6'],['1단계↑',nwPipeline.stats.v1Done,'#A8D86E'],['2단계처리',nwPipeline.stats.v2Done,'#F07030'],['확정↑',nwPipeline.stats.upgraded,'#22C55E'],['거절✗',nwPipeline.stats.rejected,'#EF4444'],['스킵',nwPipeline.stats.v2Skipped,'#9CA3AF']].map(([l,v,c])=>
@@ -6578,6 +6667,13 @@ async function runAutoStage2Verify() {
 
   async function _processOnePlace(p) {
     if (autoV.stop) return;
+    // ── 일일 Worker 할당량 80% 도달 시 자동검증 중단 ──
+    if (_isQuotaExceeded()) {
+      autoV.stop = true;
+      showToast(`⛔ 일일 할당량 도달 (${_dailyQuota.used.toLocaleString()}건). 내일 이어서 실행하세요.`, 6000);
+      saveDailyQuota();
+      return;
+    }
     autoV.cur = p.name;
 
     const currentStatus = getPlaceStatus(p);
