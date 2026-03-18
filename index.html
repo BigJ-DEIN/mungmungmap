@@ -430,6 +430,36 @@
     .legend-item:last-child { margin-bottom:0; }
     .legend-dot { width:11px; height:11px; border-radius:50%; border:2px solid white; box-shadow:0 1px 4px rgba(0,0,0,.15); }
     .ld-fee { border:2px solid #FFD700; }
+
+    /* ── 홍시야 찾아줘 — 수집 중 홍시 마커 ── */
+    @keyframes hongsi-bob {
+      0%,100% { transform:translateY(0); }
+      45%     { transform:translateY(-5px); }
+    }
+    @keyframes hongsi-ring {
+      0%   { transform:translate(-50%,-50%) scale(1);   opacity:.55; }
+      100% { transform:translate(-50%,-50%) scale(2.4); opacity:0; }
+    }
+    .hongsi-search-pin {
+      position:relative; width:28px; height:28px; cursor:pointer;
+    }
+    .hongsi-search-pin img {
+      width:28px; height:28px; border-radius:50%;
+      border:2px solid white;
+      box-shadow:0 2px 8px rgba(240,112,48,.45);
+      object-fit:cover;
+      display:block;
+      animation:hongsi-bob 1.3s ease-in-out infinite;
+    }
+    .hongsi-search-pin::before,
+    .hongsi-search-pin::after {
+      content:''; position:absolute; top:50%; left:50%;
+      width:28px; height:28px; border-radius:50%;
+      border:2px solid #F07030; pointer-events:none;
+      animation:hongsi-ring 1.6s ease-out infinite;
+    }
+    .hongsi-search-pin::after { animation-delay:.8s; }
+
     /* 범례 도움말 */
     .legend-help-btn {
       width:15px; height:15px; border-radius:50%;
@@ -3841,11 +3871,11 @@ async function renderLiveResults(rawData) {
                  !_excludedKakaoIds.has(String(d.id))) // 블랙리스트 제외
     .map((d, i) => ({ ...d, _idx: i }));
 
-  // 즉시 목록·지도 표시 (처리 전 미리보기) — 하늘색 작은 원으로 수집 중 표시
+  // 즉시 목록·지도 표시 (처리 전 미리보기) — 홍시 프로필로 수집 중 표시
   liveData.forEach(d => {
     const lat = parseFloat(d.y), lng = parseFloat(d.x);
-    const dotHtml = `<div style="width:12px;height:12px;border-radius:50%;background:#87CEEB;border:2px solid white;box-shadow:0 1px 6px rgba(0,0,0,.3);cursor:pointer"></div>`;
-    const icon = L.divIcon({ html: dotHtml, className:'', iconSize:[12,12], iconAnchor:[6,6] });
+    const pinHtml = `<div class="hongsi-search-pin"><img src="icon-192.png" alt="홍시"></div>`;
+    const icon = L.divIcon({ html: pinHtml, className:'', iconSize:[28,28], iconAnchor:[14,14] });
     const m = L.marker([lat, lng], { icon }).addTo(map).on('click', () => showLivePopup(d, false));
     if (d.id) liveMarkers[d.id] = m;
   });
