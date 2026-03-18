@@ -1346,7 +1346,7 @@
       </div>
       <div class="legend-item"><span style="font-size:14px;color:#F07030;line-height:1">♥</span><span>나의 추억</span></div>
       <div class="legend-item"><span style="font-size:14px;color:#7BC74D;line-height:1">♥</span><span>친구 추억</span></div>
-      <div class="legend-item"><div class="legend-dot" style="background:#F07030"></div><span>좋아요</span></div>
+      <div class="legend-item"><div class="legend-dot" style="background:#F07030"></div><span>관심 장소</span></div>
       <div class="legend-item"><div class="legend-dot" style="background:#7BC74D"></div><span>검증 완료</span></div>
     </div>
 
@@ -1375,8 +1375,8 @@
         <div class="lh-row">
           <div class="lh-dot" style="background:#F07030"></div>
           <div>
-            <div class="lh-title">좋아요 (홍시 원)</div>
-            <div class="lh-desc">내가 좋아요를 누른 장소예요. 접속할 때마다 지도에 표시돼요.</div>
+            <div class="lh-title">관심 장소 (홍시 원)</div>
+            <div class="lh-desc">내가 관심 장소로 저장한 곳이에요. 접속할 때마다 지도에 표시돼요.</div>
           </div>
         </div>
 
@@ -1757,8 +1757,8 @@ const _excludedKakaoIds = new Set();
 // search     = 검색 결과         → 하늘색
 // ═════════════════════════════════
 const STATUS_COLORS = {
-  verified:   '#F07030',
-  confirmed:  '#A8D86E',
+  verified:   '#7BC74D', // 검증 완료 = 연두색 (범례 일치)
+  confirmed:  '#7BC74D', // 검증 완료 = 연두색 (범례 일치)
   unverified: '#C8C8C8',
   search:     '#87CEEB',
   rejected:   '#EEEEEE', // 카테고리 수집 후 펫 비적합 판정 — 앱 노출 제외
@@ -1861,7 +1861,7 @@ function switchAuthMode(toRegister) {
   document.getElementById('fg-name').style.display       = toRegister ? '' : 'none';
   document.getElementById('fg-dog').style.display        = toRegister ? '' : 'none';
   document.getElementById('fg-homescreen').style.display  = toRegister ? '' : 'none';
-  document.getElementById('auth-btn').textContent         = toRegister ? '🐾 시작하기' : '🐶 로그인하고 시작하기';
+  document.getElementById('auth-btn').textContent         = toRegister ? '🐾 회원가입하기' : '🐶 로그인하고 시작하기';
   document.getElementById('auth-subtitle').innerHTML      = toRegister
     ? '우리 강아지 소개도 같이 해줘요 🐾' : '함께 다녀온 곳들을 지도에 기록하고<br>좋아했던 순간을 모아두는 공간이에요 🐾';
   document.getElementById('auth-toggle-row').innerHTML    = toRegister
@@ -2757,24 +2757,9 @@ async function ensureUserDocument(user) {
 // ══════════════════════════════════════════════════════
 //  PLACES — Firestore 기반 데이터 관리
 // ══════════════════════════════════════════════════════
-const PLACES_CACHE_KEY    = 'hj_places_v4';
-const PLACES_CACHE_TS_KEY  = 'hj_places_ts_v4';
-const PLACES_CACHE_TTL     = 12 * 60 * 60 * 1000; // 12시간
-
-// 뷰포트 타일 로딩 — 타일 크기 2° × 2° (~222km)
-const VP_TILE_DEG  = 2.0;
-const _loadedTiles = new Set();   // "latFloor_lngFloor" 문자열
-let   _vpLoadTimer = null;        // debounce timer
-
-function _tileKey(lat, lng) {
-  return `${Math.floor(lat / VP_TILE_DEG)}_${Math.floor(lng / VP_TILE_DEG)}`;
-}
-function _markAllTilesLoaded() {
-  // 한국 전체 범위 (위도 33-39, 경도 124-130)를 타일로 마킹
-  for (let la = 33; la < 39; la += VP_TILE_DEG)
-    for (let lo = 124; lo < 130; lo += VP_TILE_DEG)
-      _loadedTiles.add(_tileKey(la, lo));
-}
+// 뷰포트 중복 로딩 방지용 area key 캐시 (0.05° 단위로 반올림한 bounds 문자열)
+const _loadedTiles = new Set();
+let   _vpLoadTimer = null;        // debounce timer (미사용, 호환성 유지)
 
 async function loadViewportPlaces() {
   if (!map || !firebaseReady || !db) return;
@@ -2830,21 +2815,7 @@ async function loadViewportPlaces() {
   } catch(e) { console.warn('[loadViewportPlaces] 쿼리 실패:', e); }
 }
 
-function _allKoreaTilesLoaded() {
-  for (let la = 33; la < 39; la += VP_TILE_DEG)
-    for (let lo = 124; lo < 130; lo += VP_TILE_DEG)
-      if (!_loadedTiles.has(_tileKey(la, lo))) return false;
-  return true;
-}
-
-function _scheduleVpLoad() {
-  clearTimeout(_vpLoadTimer);
-  _vpLoadTimer = setTimeout(loadViewportPlaces, 600);
-}
-
 function invalidatePlacesCache(forceTiles = false) {
-  localStorage.removeItem(PLACES_CACHE_KEY);
-  localStorage.removeItem(PLACES_CACHE_TS_KEY);
   // 파이프라인 실행 중엔 _loadedTiles를 초기화하지 않음
   // → batch flush마다 뷰포트 전체 재로딩(~50K reads/회)이 발생하는 것 방지
   if (!nwPipeline.running || forceTiles) {
@@ -2877,9 +2848,9 @@ async function toggleLikedPlace(placeId) {
       const dot = el?.querySelector('.m-dot');
       if (dot) { dot.style.background = origColor; markers[id].color = origColor; }
     }
-    showToast('좋아요 취소됐어요');
+    showToast('관심 장소에서 제거됐어요');
   } else {
-    // ── 좋아요 추가 ──
+    // ── 관심 장소 추가 ──
     userLikedPlaceIds.add(id);
     try {
       await db.collection('users').doc(currentUser.uid).set(
@@ -2897,14 +2868,14 @@ async function toggleLikedPlace(placeId) {
         if (dot) { dot.style.background = '#F07030'; markers[id].color = '#F07030'; }
       }
     }
-    showToast('💛 좋아요! 다음 방문에도 이 장소가 보여요');
+    showToast('💛 관심 장소에 추가됐어요! 접속할 때마다 지도에 표시돼요');
   }
   // 모든 좋아요 버튼 UI 동기화
   document.querySelectorAll(`.like-btn[data-id="${id}"]`).forEach(btn => {
     const liked = userLikedPlaceIds.has(id);
     btn.textContent = liked ? '♥' : '♡';
     btn.classList.toggle('liked', liked);
-    btn.title = liked ? '좋아요 취소' : '좋아요';
+    btn.title = liked ? '관심 장소 취소' : '관심 장소 추가';
   });
 }
 
@@ -3033,7 +3004,7 @@ async function patchMissingCoords(p) {
     // Kakao Places keywordSearch로 장소 검색 → 좌표 획득
     const query = encodeURIComponent(p.name + (p.addr ? ' ' + p.addr.split(' ').slice(0,2).join(' ') : ''));
     const resp = await fetch(`https://dapi.kakao.com/v2/local/search/keyword.json?query=${query}&size=5`, {
-      headers: { 'Authorization': `KakaoAK ${window.KAKAO_JS_KEY || ''}` }
+      headers: { 'Authorization': `KakaoAK ${KAKAO_REST_KEY}` }
     });
     if (!resp.ok) return;
     const data = await resp.json();
@@ -3059,40 +3030,6 @@ async function patchMissingCoords(p) {
     // 마커 추가
     if (clusterGroup && !markers[p.id]) addMarker(p);
   } catch(e) { /* 조회 실패 → 무시 */ }
-}
-
-// 타일 쿼리에서 누락되는 live_search/user_report 장소를 별도 로딩
-async function loadNonPipelinePlaces() {
-  if (!firebaseReady || !db) return;
-  try {
-    const snap = await db.collection('places')
-      .where('source', 'in', ['live_search', 'user_report'])
-      .get();
-    const existingFsIds = new Set(places.map(p => p.firestoreId).filter(Boolean));
-    const toAdd = [];
-    snap.docs.forEach(doc => {
-      if (existingFsIds.has(doc.id)) return;
-      const p = { ...doc.data(), firestoreId: doc.id };
-      if (p.active === false) return;
-      places.push(p);
-      toAdd.push(p);
-    });
-    // 좌표 있는 건 마커 즉시 추가, 없는 건 Kakao API로 패치
-    const noCoords = [];
-    toAdd.forEach(p => {
-      if (p.lat != null && p.lng != null && clusterGroup) addMarker(p);
-      else noCoords.push(p);
-    });
-    if (toAdd.length > 0) filterPlaces();
-    // 좌표 누락분: REST API 키 있으면 패치, 없으면 스킵
-    if (noCoords.length > 0 && window.KAKAO_JS_KEY) {
-      for (const p of noCoords) {
-        await patchMissingCoords(p);
-        await new Promise(r => setTimeout(r, 200));
-      }
-      filterPlaces();
-    }
-  } catch(e) { console.warn('[loadNonPipelinePlaces] 실패:', e); }
 }
 
 async function initApp() {
@@ -3336,7 +3273,7 @@ async function loadUserVisitedPlaces(uid) {
     const snap = await db.collection('memories').where('userId', '==', uid).get();
     snap.docs.forEach(doc => {
       const pid = doc.data().placeId;
-      if (pid != null) userVisitedPlaceIds.add(pid);
+      if (pid != null) userVisitedPlaceIds.add(Number(pid));
     });
     // 로드 후 기존 dot 마커를 하트로 교체
     userVisitedPlaceIds.forEach(pid => upgradeToHeartMarker(pid));
@@ -3364,23 +3301,6 @@ async function batchLoadPlacesByIds(ids) {
       });
     } catch(e) { console.warn('[batchLoadPlacesByIds]', e); }
   }
-}
-
-/* 검증 완료(verified) 장소 로딩 — 항상 지도에 표시 */
-async function loadVerifiedPlaces() {
-  if (!firebaseReady || !db) return;
-  try {
-    const snap = await db.collection('places').where('petStatus', '==', 'verified').get();
-    const newBatch = [];
-    snap.docs.forEach(doc => {
-      const p = { ...doc.data(), firestoreId: doc.id };
-      if (!places.find(x => x.id === p.id)) {
-        places.push(p);
-        newBatch.push(p);
-      }
-    });
-    if (clusterGroup) newBatch.forEach(p => { try { addMarker(p); } catch(e) {} });
-  } catch(e) { console.warn('[loadVerifiedPlaces]', e); }
 }
 
 /* 누군가 추억 남긴 장소 로딩 — ID Set 채움 + 전체 데이터 로딩 (마커 표시용) */
@@ -3670,11 +3590,12 @@ function doLiveSearch() {
     });
   });
 
-  // 키워드 검색 (누락 보완)
+  // 키워드 검색 (누락 보완) — 카카오가 반려동물 키워드로 직접 필터한 결과이므로 신뢰도 높음
   keywords.forEach(kw => {
     kakaoPS.keywordSearch(kw, (data, status) => {
       if (status === kakao.maps.services.Status.OK && data?.length) {
-        allResults = allResults.concat(data);
+        // 키워드 검색 결과임을 표시 → autoAddLivePlace에서 place-api 이중 검증 생략
+        allResults = allResults.concat(data.map(d => ({ ...d, _fromPetKeyword: true })));
       }
       if (--pending === 0) onAllDone();
     }, locOpts);
@@ -3724,11 +3645,11 @@ async function renderLiveResults(rawData) {
                  !_excludedKakaoIds.has(String(d.id))) // 블랙리스트 제외
     .map((d, i) => ({ ...d, _idx: i }));
 
-  // 즉시 목록·지도 표시 (처리 전 미리보기) — kakaoId로 마커 추적
+  // 즉시 목록·지도 표시 (처리 전 미리보기) — 하늘색 작은 원으로 수집 중 표시
   liveData.forEach(d => {
     const lat = parseFloat(d.y), lng = parseFloat(d.x);
-    const dotHtml = `<div style="width:14px;height:14px;border-radius:50%;background:#7BC74D;border:2px solid white;box-shadow:0 1px 6px rgba(0,0,0,.3);cursor:pointer"></div>`;
-    const icon = L.divIcon({ html: dotHtml, className:'', iconSize:[14,14], iconAnchor:[7,7] });
+    const dotHtml = `<div style="width:12px;height:12px;border-radius:50%;background:#87CEEB;border:2px solid white;box-shadow:0 1px 6px rgba(0,0,0,.3);cursor:pointer"></div>`;
+    const icon = L.divIcon({ html: dotHtml, className:'', iconSize:[12,12], iconAnchor:[6,6] });
     const m = L.marker([lat, lng], { icon }).addTo(map).on('click', () => showLivePopup(d, false));
     if (d.id) liveMarkers[d.id] = m;
   });
@@ -3818,23 +3739,31 @@ async function autoAddLivePlace(dOverride) {
     // 중복 방지: places 배열에 이미 있으면 스킵 (liveData 정리는 finally에서 항상 실행)
     if (places.some(p => p && (p.kakaoId === d.id || p.name === d.place_name))) return false;
 
-    // 1) place-api로 반려동물 신호 확인 — 미확인 시 등록하지 않음
+    // 1) place-api로 반려동물 신호 확인
     let petDetails = { large: null, small: null, indoor: null, outdoor: null };
     let petStatus = 'confirmed';
-    let petFound = false;
 
-    const result = await fetchKakaoPagePetSignal(d.place_url, d.id)
-      .catch(() => ({ found: false, error: true }));
+    // ── 사전 통과 조건 (place-api 호출 생략) ──────────────────────────────
+    // A) 반려동물 키워드 검색 결과: 카카오가 이미 "애견동반" 등으로 필터 → 신뢰
+    // B) 카테고리명이 명확히 반려동물 전문 업종 (애견카페, 펫카페 등)
+    const catNameLower = (d.category_name || '').toLowerCase();
+    const isPetCategory = IMP_CONFIRMED_CATS.some(c => catNameLower.includes(c.toLowerCase()));
+    const skipSignalCheck = d._fromPetKeyword === true || isPetCategory;
 
-    if (result?.found) {
-      petFound = true;
-      if (result.petDetails) petDetails = result.petDetails;
-      if (result.recentReview)       petStatus = 'verified';
-      else if (result.strong === true) petStatus = 'confirmed';
-      else                             petStatus = 'confirmed'; // weak signal도 confirmed 유지
-    } else {
-      // place-api에서 반려동물 신호 없음 → 등록 안 함, liveData에서만 제거
-      return false;
+    if (!skipSignalCheck) {
+      const result = await fetchKakaoPagePetSignal(d.place_url, d.id)
+        .catch(() => ({ found: false, error: true }));
+
+      if (result?.found) {
+        if (result.petDetails) petDetails = result.petDetails;
+        if (result.recentReview) petStatus = 'verified';
+      } else if (result?.error) {
+        // 프록시 네트워크 오류 → 불확실하므로 등록하지 않고 건너뜀 (하늘색 마커 유지)
+        return false;
+      } else {
+        // place-api 명확한 거부 (found: false, error 아님) → 반려동물 비적합 → 제외
+        return false;
+      }
     }
 
     // 2) 카테고리·지역 매핑
@@ -4434,7 +4363,7 @@ function cardHtml(p) {
       </div>
       <button class="like-btn${isLiked?' liked':''}" data-id="${p.id}"
               onclick="event.stopPropagation();toggleLikedPlace(${p.id})"
-              title="${isLiked?'좋아요 취소':'좋아요'}">${isLiked?'♥':'♡'}</button>
+              title="${isLiked?'관심 장소 취소':'관심 장소 추가'}">${isLiked?'♥':'♡'}</button>
     </div>
     <div class="pc-tags">
       ${p.large === true ? '<span class="tag t-green">🐕 대형견 OK</span>' : p.large === false ? '<span class="tag t-gray">소형견만</span>' : '<span class="tag t-gray">🐕 견종 미확인</span>'}
@@ -4506,7 +4435,12 @@ function openPlace(p) {
     <div class="d-header">
       <div class="d-icon" style="${p.isClosed ? 'filter:grayscale(1);opacity:.6' : ''}">${p.emoji}</div>
       <div style="flex:1;min-width:0">
-        <div class="d-name" style="${p.isClosed ? 'color:#999;text-decoration:line-through' : ''}">${p.name}${p.isClosed ? ' <span style="font-size:11px;font-weight:700;color:#999;background:#F0F0F0;padding:2px 6px;border-radius:6px;text-decoration:none;display:inline-block">폐업</span>' : ''}</div>
+        <div style="display:flex;align-items:flex-start;gap:6px">
+          <div class="d-name" style="flex:1;min-width:0;${p.isClosed ? 'color:#999;text-decoration:line-through' : ''}">${p.name}${p.isClosed ? ' <span style="font-size:11px;font-weight:700;color:#999;background:#F0F0F0;padding:2px 6px;border-radius:6px;text-decoration:none;display:inline-block">폐업</span>' : ''}</div>
+          <button class="like-btn${userLikedPlaceIds.has(p.id)?' liked':''}" data-id="${p.id}"
+                  onclick="toggleLikedPlace(${p.id})" title="${userLikedPlaceIds.has(p.id)?'관심 장소 취소':'관심 장소 추가'}"
+                  style="font-size:22px;margin-top:1px;flex-shrink:0">${userLikedPlaceIds.has(p.id)?'♥':'♡'}</button>
+        </div>
         <div class="d-sub">${areaBadge(p.area)}&nbsp;${p.cat}${p.entryFee?'&nbsp;<span class="ab ab-fee">💰 입장료</span>':''}</div>
         <div class="d-sub" style="margin-top:3px">📍 ${p.addr}</div>
         ${p.phone ? `<div class="d-sub">📞 <a href="tel:${p.phone}" style="color:inherit">${p.phone}</a></div>` : ''}
@@ -4547,10 +4481,6 @@ function openPlace(p) {
       </button>
       <button class="btn-act btn-secondary" onclick="copyShareLink(${p.id})">
         <i class="fa fa-share-nodes"></i> 공유
-      </button>
-      <button class="btn-act like-btn${userLikedPlaceIds.has(p.id)?' liked':''}" data-id="${p.id}"
-              onclick="toggleLikedPlace(${p.id})" title="${userLikedPlaceIds.has(p.id)?'좋아요 취소':'좋아요'}">
-        ${userLikedPlaceIds.has(p.id)?'♥':'♡'} 좋아요
       </button>
     </div>
     <div class="drawer-mem-section" id="drawer-mem-section">
