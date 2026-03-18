@@ -2532,6 +2532,11 @@ async function loadViewportPlaces() {
       snap.docs.forEach(doc => {
         const p = { ...doc.data(), firestoreId: doc.id };
         if (p.active === false) return;                                   // 비활성 제외
+        // auto_pipeline_cat 미확인 장소는 메모리에 올리지 않음 — 마커·메모리 낭비 방지
+        if (p.source === 'auto_pipeline_cat') {
+          const st = p.petStatus;
+          if (st !== 'confirmed' && st !== 'verified') return;
+        }
         if (p.lng == null || p.lng < tile.lo || p.lng >= tile.lo + VP_TILE_DEG) return; // lng 필터
         if (existingIds.has(doc.id)) return;                              // 중복 제외
         places.push(p);
@@ -3287,9 +3292,11 @@ function filterPlaces() {
   const filtered = getFiltered();
   renderList(filtered);
   if (clusterGroup) {
+    // O(n) Set 기반 — 기존 filtered.find() O(n²) 대비 수십배 빠름
+    const filteredSet = new Set(filtered.map(f => f.id));
     places.forEach(p => {
       const m = markers[p.id]; if (!m) return;
-      const show = !!filtered.find(f => f.id === p.id);
+      const show = filteredSet.has(p.id);
       const inCluster = clusterGroup.hasLayer(m.marker);
       if (show && !inCluster) clusterGroup.addLayer(m.marker);
       if (!show && inCluster) clusterGroup.removeLayer(m.marker);
