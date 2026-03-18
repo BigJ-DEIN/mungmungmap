@@ -1862,15 +1862,19 @@ async function doAuth() {
       }
       const dogProfile = dogName ? { name: dogName, age: dogAge || '', breed: dogBreed, photoURL: dogPhotoURL || '' } : null;
       if (dogProfile) currentDog = dogProfile;
-      // Save to Firestore — 사진 업로드 실패 여부와 무관하게 항상 저장
-      await db.collection('users').doc(credential.user.uid).set({
-        email, displayName: name,
-        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-        lastLoginAt: firebase.firestore.FieldValue.serverTimestamp(),
-        loginCount: 1,
-        isAdmin: isAdmin(email),
-        ...(dogProfile ? { dog: dogProfile } : {})
-      });
+      // Save to Firestore — 실패해도 앱 진입은 허용 (ensureUserDocument가 복구)
+      try {
+        await db.collection('users').doc(credential.user.uid).set({
+          email, displayName: name,
+          createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+          lastLoginAt: firebase.firestore.FieldValue.serverTimestamp(),
+          loginCount: 1,
+          isAdmin: isAdmin(email),
+          ...(dogProfile ? { dog: dogProfile } : {})
+        });
+      } catch(fsErr) {
+        console.warn('[doAuth] Firestore 회원 문서 생성 실패 (앱은 계속 진행):', fsErr.message);
+      }
     } else {
       credential = await auth.signInWithEmailAndPassword(email, pw);
       // Update last login — 문서가 없으면 (회원가입 도중 오류로 누락) 전체 필드로 새로 생성
@@ -2055,6 +2059,8 @@ async function saveProfileChanges() {
   if (!currentUser || !db) return;
   const btn = document.getElementById('btn-profile-save');
   if (btn) { btn.disabled = true; btn.textContent = '저장 중...'; }
+  // 문서가 없는 경우(가입 시 Firestore 오류) 먼저 기본 문서 보장
+  await ensureUserDocument(currentUser).catch(() => {});
   try {
     const newName  = (document.getElementById('profile-display-name')?.value || '').trim();
     const dogName  = (document.getElementById('profile-dog-name')?.value || '').trim();
@@ -2069,13 +2075,16 @@ async function saveProfileChanges() {
       if (initial) initial.textContent = newName.charAt(0).toUpperCase();
     }
 
+    // set({merge:true}) 사용 — 문서가 없어도 생성, 있으면 덮어쓰지 않고 필드만 갱신
     const updateData = {};
     if (newName)  updateData.displayName = newName;
-    if (dogName)  updateData['dog.name']  = dogName;
-    if (dogBreed) updateData['dog.breed'] = dogBreed;
-    if (dogAge !== null && !isNaN(dogAge)) updateData['dog.age'] = dogAge;
+    const dogData = {};
+    if (dogName)  dogData.name  = dogName;
+    if (dogBreed) dogData.breed = dogBreed;
+    if (dogAge !== null && !isNaN(dogAge)) dogData.age = dogAge;
+    if (Object.keys(dogData).length > 0) updateData.dog = { ...(currentDog || {}), ...dogData };
     if (Object.keys(updateData).length > 0) {
-      await db.collection('users').doc(currentUser.uid).update(updateData);
+      await db.collection('users').doc(currentUser.uid).set(updateData, { merge: true });
     }
 
     if (!currentDog) currentDog = {};
@@ -5398,16 +5407,19 @@ async function renderAdminUsers() {
         <button onclick="renderAdminUsers()" style="font-size:12px;padding:5px 12px;border:1px solid #E2E8F0;border-radius:8px;background:#F8FAFF;color:#1E3A8A;cursor:pointer;font-family:inherit">🔄 새로고침</button>
       </div>
       <table class="admin-table">
-        <thead><tr><th>이메일</th><th>이름</th><th>가입일</th><th>최근 로그인</th><th>구분</th></tr></thead>
+        <thead><tr><th>이메일</th><th>이름</th><th>강아지 이름</th><th>견종</th><th>나이</th><th>가입일</th><th>최근 로그인</th><th>구분</th></tr></thead>
         <tbody>
           ${users.length ? users.map(u=>`
             <tr>
               <td>${u.email}</td>
               <td>${u.displayName||'-'}</td>
+              <td>${u.dog?.name||'-'}</td>
+              <td>${u.dog?.breed||'-'}</td>
+              <td>${u.dog?.age!=null&&u.dog?.age!==''?u.dog.age:'-'}</td>
               <td>${fmtDate(u.createdAt)}</td>
               <td>${fmtDate(u.lastLoginAt)}</td>
               <td>${isAdmin(u.email)?'<span class="admin-badge badge-admin">운영자</span>':'<span class="admin-badge" style="background:#F3F4F6;color:#6B7280">일반</span>'}</td>
-            </tr>`).join('') : '<tr><td colspan="5" style="text-align:center;color:#9CA3AF;padding:20px">등록된 회원이 없어요</td></tr>'}
+            </tr>`).join('') : '<tr><td colspan="8" style="text-align:center;color:#9CA3AF;padding:20px">등록된 회원이 없어요</td></tr>'}
         </tbody>
       </table>
     </div>`;
