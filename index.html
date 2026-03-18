@@ -5620,6 +5620,8 @@ const _proxyQueue = {
 /* CORS 프록시를 통해 카카오맵 페이지 HTML 가져오기 */
 async function fetchKakaoPagePetSignal(url, kakaoId) {
   const PROXIES = [
+    u => `https://corsproxy.io/?url=${encodeURIComponent(u)}`,
+    u => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
     u => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`,
     u => `https://thingproxy.freeboard.io/fetch/${encodeURIComponent(u)}`
   ];
@@ -5738,9 +5740,11 @@ async function fetchKakaoCategorySignal(placeName, lat, lng) {
 /* ── 채널 3: 네이버 블로그 검색 (CORS 프록시 경유) ── */
 async function fetchNaverBlogSignal(placeName) {
   const PROXIES = [
+    u => `https://corsproxy.io/?url=${encodeURIComponent(u)}`,
+    u => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
     u => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`,
     u => `https://thingproxy.freeboard.io/fetch/${encodeURIComponent(u)}`
-  ]; // allorigins.win 제거 (상시 429)
+  ];
   // 6개월 이내 최신 블로그 글 검색
   const query = encodeURIComponent(`${placeName} 반려견`);
   const url = `https://search.naver.com/search.naver?where=blog&query=${query}&sort=1&nso=so%3Add%2Cp%3A6m`;
