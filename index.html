@@ -5139,6 +5139,9 @@ async function renderAdminReports() {
   const pending  = rows.filter(r => r.status === 'pending');
   const resolved = rows.filter(r => r.status !== 'pending');
 
+  // 이미 places에 추가된 reportId 목록
+  const addedReportIds = new Set(places.filter(p => p?.reportId).map(p => p.reportId));
+
   document.getElementById('admin-content').innerHTML = `
     <div class="admin-section">
       <h3>📝 처리 대기 제보 (${pending.length}건)</h3>
@@ -5148,13 +5151,18 @@ async function renderAdminReports() {
     <div class="admin-section">
       <h3>처리 완료 제보 (${resolved.length}건)</h3>
       <table class="admin-table">
-        <thead><tr><th>장소명</th><th>제보자</th><th>상태</th><th>시간</th></tr></thead>
+        <thead><tr><th>장소명</th><th>제보자</th><th>상태</th><th>지도 반영</th><th>시간</th></tr></thead>
         <tbody>
           ${resolved.map(r=>`
             <tr>
               <td style="font-weight:700">${r.placeName}${r.kakaoPlaceUrl?` <a href="${r.kakaoPlaceUrl}" target="_blank" style="font-size:10px;color:#1976D2">🗺️</a>`:''}</td>
               <td style="font-size:12px">${r.userEmail}</td>
               <td><span class="admin-badge ${r.status==='approved'?'badge-approved':'badge-rejected'}">${r.status==='approved'?'승인':'반려'}</span></td>
+              <td style="font-size:11px">${r.status==='approved'
+                ? (addedReportIds.has(r.id)
+                    ? '<span style="color:#4CAF50">✅ 추가됨</span>'
+                    : `<button class="btn-sm btn-approve" style="font-size:11px;padding:3px 8px" onclick="reapplyReport('${r.id}')">지도에 추가</button>`)
+                : '-'}</td>
               <td style="font-size:11px;color:#9CA3AF">${fmtTime(r.timestamp)}</td>
             </tr>`).join('')}
         </tbody>
@@ -5162,9 +5170,68 @@ async function renderAdminReports() {
     </div>` : ''}`;
 }
 
+// 이미 승인된 제보를 places에 재추가 (기존에 누락된 경우)
+async function reapplyReport(reportId) {
+  await updateReport(reportId, 'approved');
+}
+
 async function updateReport(id, status) {
+  if (status === 'approved') {
+    // 제보 데이터 읽어서 places에 실제 장소 추가
+    const snap = await db.collection('reports').doc(id).get();
+    const r = snap.data();
+
+    // 이미 places에 추가된 경우 중복 방지
+    const alreadyAdded = places.some(p => p?.reportId === id);
+
+    if (r && r.placeName && !alreadyAdded) {
+      const cat   = impMapCat(r.kakaoCategory || '');
+      const area  = impGuessArea(r.placeAddr || '', r.placeAddr || '');
+      const nextId = Math.max(...places.filter(p => p && typeof p.id === 'number').map(p => p.id), 10000) + 1;
+
+      const newPlace = {
+        id:         nextId,
+        name:       r.placeName,
+        addr:       r.placeAddr || '',
+        phone:      r.placePhone || '',
+        kakaoUrl:   r.kakaoPlaceUrl || '',
+        kakaoId:    r.kakaoPlaceId || '',
+        kakaoCategory: r.kakaoCategory || '',
+        lat:        r.lat || null,
+        lng:        r.lng || null,
+        cat:        cat,
+        emoji:      impCatEmoji(cat),
+        area:       area,
+        province:   '',
+        petStatus:  'confirmed',   // 관리자가 직접 승인 = confirmed
+        large:      r.condLarge  ?? null,  // true=대형견OK, false=소형견만, null=미확인
+        small:      null,                   // small은 별도 수집 단계에서 채워짐
+        indoor:     r.condIndoor ?? null,   // true=실내가능, false=테라스만, null=미확인
+        outdoor:    r.condIndoor === false ? true : (r.condIndoor === null ? null : false),
+        cage:       r.condCage   ?? null,
+        entryFee:   r.condFee    ?? null,
+        stroller:   null,
+        note:       r.placeNote || '',
+        hours:      [{ d: '영업시간', t: '카카오맵 확인' }],
+        active:     true,
+        source:     'user_report',
+        reportId:   id,
+        addedAt:    new Date().toISOString(),
+      };
+
+      const ref = db.collection('places').doc();
+      newPlace.firestoreId = ref.id;
+      await ref.set(newPlace);
+
+      // 로컬 places 배열에도 추가해서 즉시 지도에 반영
+      places.push(newPlace);
+      filterPlaces();
+      if (typeof addMarker === 'function') addMarker(newPlace);
+    }
+  }
+
   await db.collection('reports').doc(id).update({ status });
-  showToast(status === 'approved' ? '✅ 제보 승인 완료!' : '❌ 제보 반려 완료!');
+  showToast(status === 'approved' ? '✅ 승인 완료! 지도에 추가됐어요 🐾' : '❌ 제보 반려 완료!');
   renderAdminReports();
 }
 
