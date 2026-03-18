@@ -4864,6 +4864,11 @@ const IMP_KWS = [
 
 // ── 전국 시/군/구 지역 데이터 (자동 파이프라인용) ──────────────────────
 const NATIONWIDE_REGIONS = [
+  // ★ 최우선: 분당 / 용인 ★
+  {province:"경기",name:"성남분당구",y:37.3845,x:127.1233},{province:"경기",name:"성남수정구",y:37.4449,x:127.1378},
+  {province:"경기",name:"성남중원구",y:37.4250,x:127.1370},
+  {province:"경기",name:"용인처인구",y:37.2410,x:127.1775},{province:"경기",name:"용인기흥구",y:37.2750,x:127.1150},
+  {province:"경기",name:"용인수지구",y:37.3220,x:127.0465},
   // 서울
   {province:"서울",name:"강남구",y:37.5172,x:127.0473},{province:"서울",name:"강동구",y:37.5301,x:127.1238},
   {province:"서울",name:"강북구",y:37.6396,x:127.0257},{province:"서울",name:"강서구",y:37.5509,x:126.8495},
@@ -4878,14 +4883,12 @@ const NATIONWIDE_REGIONS = [
   {province:"서울",name:"용산구",y:37.5384,x:126.9654},{province:"서울",name:"은평구",y:37.6027,x:126.9291},
   {province:"서울",name:"종로구",y:37.5729,x:126.9794},{province:"서울",name:"중구",y:37.5640,x:126.9975},
   {province:"서울",name:"중랑구",y:37.6063,x:127.0927},
-  // 경기 (기존 + 추가)
+  // 경기 나머지
   {province:"경기",name:"수원장안구",y:37.3043,x:127.0020},{province:"경기",name:"수원권선구",y:37.2580,x:126.9919},
   {province:"경기",name:"수원팔달구",y:37.2784,x:127.0137},{province:"경기",name:"수원영통구",y:37.2490,x:127.0565},
-  {province:"경기",name:"성남분당구",y:37.3845,x:127.1233},{province:"경기",name:"성남수정구",y:37.4449,x:127.1378},
-  {province:"경기",name:"성남중원구",y:37.4250,x:127.1370},{province:"경기",name:"고양덕양구",y:37.6320,x:126.8320},
+  {province:"경기",name:"고양덕양구",y:37.6320,x:126.8320},
   {province:"경기",name:"고양일산동구",y:37.6760,x:126.7770},{province:"경기",name:"고양일산서구",y:37.6580,x:126.7240},
-  {province:"경기",name:"용인처인구",y:37.2410,x:127.1775},{province:"경기",name:"용인기흥구",y:37.2750,x:127.1150},
-  {province:"경기",name:"용인수지구",y:37.3220,x:127.0465},{province:"경기",name:"부천원미구",y:37.5035,x:126.7660},
+  {province:"경기",name:"부천원미구",y:37.5035,x:126.7660},
   {province:"경기",name:"안산단원구",y:37.3219,x:126.8309},{province:"경기",name:"안산상록구",y:37.3000,x:126.8200},
   {province:"경기",name:"안양만안구",y:37.3943,x:126.9568},{province:"경기",name:"안양동안구",y:37.3910,x:126.9490},
   {province:"경기",name:"남양주",y:37.6360,x:127.2165},{province:"경기",name:"화성",y:37.2110,x:127.0820},
@@ -5708,28 +5711,60 @@ async function fetchKakaoPagePetSignal(url, kakaoId) {
       if (autoV.running) autoV.proxyOk = (autoV.proxyOk||0)+1;
 
       const addInfo = data?.place_add_info;
-
-      // ── 1) 시설 아이콘 텍스트 확인 (ai_mate.store_facility_icons[].text) ──
-      // 예: "반려동물 동반 가능", "소형견 동반 가능" 등 카카오 공식 시설 태그
-      const iconTexts = (addInfo?.ai_mate?.store_facility_icons || [])
-        .map(i => i?.text || '').join(' ');
-      if (PET_FACILITY_KW.some(kw => iconTexts.includes(kw))) {
-        return { found: true, strong: true }; // 카카오 공식 시설 태그 → verified
-      }
-
-      // ── 2) 태그 배열 확인 (place_add_info.tags[]) ──
-      const tagText = (addInfo?.tags || []).join(' ');
-      if (PET_FACILITY_KW.some(kw => tagText.includes(kw))) {
-        return { found: true, strong: true };
-      }
-
-      // ── 3) 전체 JSON에서 펫 리뷰 키워드 검색 (리뷰/설명 등) ──
       const fullStr = JSON.stringify(data);
-      if (PET_REVIEW_KW.some(kw => fullStr.includes(kw))) {
-        return { found: true, strong: false }; // 키워드 발견 → confirmed
+
+      // ── 반려동물 상세 정보 파싱 (시설 아이콘 + 태그) ──────────────────
+      const iconTexts = (addInfo?.ai_mate?.store_facility_icons || [])
+        .map(i => (i?.text || '').toLowerCase()).join(' ');
+      const tagText   = (addInfo?.tags || []).map(t => (t||'').toLowerCase()).join(' ');
+      const signalStr = iconTexts + ' ' + tagText;
+
+      const petDetails = { large: null, small: null, indoor: null, outdoor: null };
+      // 대형견
+      if (signalStr.includes('대형견')) petDetails.large = true;
+      // 소형견 (명시적 소형견 태그 or 일반 반려동물 가능 → 소형견 최소 허용으로 간주)
+      if (signalStr.includes('소형견')) petDetails.small = true;
+      if (petDetails.small === null &&
+          (signalStr.includes('반려동물 동반') || signalStr.includes('반려견 동반') ||
+           signalStr.includes('반려동물 가능') || signalStr.includes('반려견 가능') ||
+           signalStr.includes('반려동물동반') || signalStr.includes('반려견동반'))) {
+        petDetails.small = true; // 일반 반려동물 가능 태그 → 소형견은 OK로 처리
+      }
+      // 실내
+      if (signalStr.includes('실내')) petDetails.indoor = true;
+      // 야외/테라스
+      if (signalStr.includes('야외') || signalStr.includes('테라스')) petDetails.outdoor = true;
+
+      // ── 카카오 최근 3개월 리뷰에서 반려견 키워드 체크 (→ verified 신호) ──
+      // JSON 전체에서 날짜(yyyy-mm-dd 계열) + 반려견 키워드가 근접하면 recentReview=true
+      const cutoff3mo = Date.now() - 90 * 24 * 60 * 60 * 1000;
+      const dateRe2 = /(\d{4})[.\-\/](\d{1,2})[.\-\/](\d{1,2})/g;
+      let dm2, hasRecentPetReview = false;
+      while ((dm2 = dateRe2.exec(fullStr)) !== null) {
+        const d = new Date(`${dm2[1]}-${dm2[2].padStart(2,'0')}-${dm2[3].padStart(2,'0')}`).getTime();
+        if (!isNaN(d) && d > cutoff3mo) {
+          const snip = fullStr.slice(Math.max(0, dm2.index - 250), dm2.index + 250).toLowerCase();
+          if (PET_REVIEW_KW.some(kw => snip.includes(kw))) { hasRecentPetReview = true; break; }
+        }
       }
 
-      return { found: false };
+      // ── 1) 시설 아이콘 텍스트 확인 (공식 태그 있음 → strong) ──
+      if (PET_FACILITY_KW.some(kw => iconTexts.includes(kw))) {
+        return { found: true, strong: true, recentReview: hasRecentPetReview, petDetails };
+      }
+
+      // ── 2) 태그 배열 확인 ──
+      if (PET_FACILITY_KW.some(kw => tagText.includes(kw))) {
+        return { found: true, strong: true, recentReview: hasRecentPetReview, petDetails };
+      }
+
+      // ── 3) 전체 JSON에서 펫 리뷰 키워드 검색 ──
+      const fullStrLower = fullStr.toLowerCase();
+      if (PET_REVIEW_KW.some(kw => fullStrLower.includes(kw))) {
+        return { found: true, strong: false, recentReview: hasRecentPetReview, petDetails };
+      }
+
+      return { found: false, recentReview: false, petDetails };
     } catch (e) {
       if (autoV.running) autoV.proxyFail = (autoV.proxyFail||0)+1;
     }
@@ -6213,24 +6248,41 @@ async function nwVerifyStage2Region(regionName) {
     let memRes = false, sdkRes = null, naverRes = null, kakaoPageRes = null;
     if (newStatus !== 'verified') {
       if (p.source === 'auto_pipeline_cat') {
-        // 카테고리 수집 장소: Kakao JSON API 단일 채널 (kakaoId 우선)
+        // 카테고리 수집 장소: Kakao JSON API 단일 채널
         kakaoPageRes = (p.kakaoUrl || p.kakaoId)
           ? await fetchKakaoPagePetSignal(p.kakaoUrl, p.kakaoId)
           : { found: false };
-        if (kakaoPageRes?.found) newStatus = pickBetter(newStatus, kakaoPageRes.strong ? 'verified' : 'confirmed');
+        // verified: 카카오 최근 3개월 리뷰에 반려견 키워드 있을 때만
+        if (kakaoPageRes?.recentReview)   newStatus = pickBetter(newStatus, 'verified');
+        else if (kakaoPageRes?.found)     newStatus = pickBetter(newStatus, 'confirmed');
       } else {
-        // 키워드 수집 장소: 기존 4채널 병렬
+        // 키워드 수집 장소: 4채널 병렬
         [memRes, sdkRes, naverRes, kakaoPageRes] = await Promise.all([
           checkRecentMemoryForPlace(p.id),
           fetchKakaoCategorySignal(p.name, p.lat, p.lng),
           fetchNaverBlogSignal(p.name),
           (p.kakaoUrl || p.kakaoId) ? fetchKakaoPagePetSignal(p.kakaoUrl, p.kakaoId) : Promise.resolve({ found: false })
         ]);
-        if (memRes)              newStatus = pickBetter(newStatus, 'verified');
-        if (sdkRes?.found)       newStatus = pickBetter(newStatus, 'confirmed');
-        if (naverRes?.found)     newStatus = pickBetter(newStatus, naverRes.strong ? 'verified' : 'confirmed');
-        if (kakaoPageRes?.found) newStatus = pickBetter(newStatus, kakaoPageRes.strong ? 'verified' : 'confirmed');
+        // verified: 앱 추억 OR 카카오 최근 3개월 리뷰만
+        if (memRes)                       newStatus = pickBetter(newStatus, 'verified');
+        if (kakaoPageRes?.recentReview)   newStatus = pickBetter(newStatus, 'verified');
+        // confirmed: SDK/네이버/카카오 시설 태그 (최대 confirmed)
+        if (sdkRes?.found)                newStatus = pickBetter(newStatus, 'confirmed');
+        if (naverRes?.found)              newStatus = pickBetter(newStatus, 'confirmed');
+        if (kakaoPageRes?.found)          newStatus = pickBetter(newStatus, 'confirmed');
       }
+    }
+
+    // ── petDetails 자동 저장 (null 필드만 덮어씀, 관리자 수동 입력 보존) ──
+    const pd = kakaoPageRes?.petDetails;
+    if (pd && p.firestoreId && firebaseReady && db) {
+      const detailUpdate = {};
+      if (pd.large   !== null && p.large   === null) { p.large   = pd.large;   detailUpdate.large   = pd.large; }
+      if (pd.small   !== null && p.small   === null) { p.small   = pd.small;   detailUpdate.small   = pd.small; }
+      if (pd.indoor  !== null && p.indoor  === null) { p.indoor  = pd.indoor;  detailUpdate.indoor  = pd.indoor; }
+      if (pd.outdoor !== null && p.outdoor === null) { p.outdoor = pd.outdoor; detailUpdate.outdoor = pd.outdoor; }
+      if (Object.keys(detailUpdate).length > 0)
+        db.collection('places').doc(p.firestoreId).update(detailUpdate).catch(()=>{});
     }
 
     const nowStr = new Date().toISOString();
@@ -6687,6 +6739,7 @@ async function runAutoStage2Verify() {
     }
 
     // ── 채널 2·3·4: 네트워크 체크 병렬 실행 ──────────────────────
+    let _kakaoPageRes = null;
     if (newStatus !== 'verified') {
       const [memRes, sdkRes, naverRes, kakaoPageRes] = await Promise.all([
         checkRecentMemoryForPlace(p.id),
@@ -6694,17 +6747,30 @@ async function runAutoStage2Verify() {
         fetchNaverBlogSignal(p.name),
         (p.kakaoUrl || p.kakaoId) ? fetchKakaoPagePetSignal(p.kakaoUrl, p.kakaoId) : Promise.resolve({ found: false })
       ]);
+      _kakaoPageRes = kakaoPageRes;
 
-      if (memRes)           { newStatus = pickBetter(newStatus, 'verified');  autoV.ch_memory++; }
-      if (sdkRes.found)     { newStatus = pickBetter(newStatus, 'confirmed'); autoV.ch_kakaoSdk++; }
-      if (naverRes.found)   {
-        newStatus = pickBetter(newStatus, naverRes.strong ? 'verified' : 'confirmed');
-        autoV.ch_naver++;
+      // verified: 앱 추억 OR 카카오 최근 3개월 리뷰만
+      if (memRes)                     { newStatus = pickBetter(newStatus, 'verified');  autoV.ch_memory++; }
+      if (kakaoPageRes?.recentReview) { newStatus = pickBetter(newStatus, 'verified');  autoV.ch_kakaoPage++; }
+      // confirmed: SDK/네이버/카카오 시설 태그 (최대 confirmed)
+      if (sdkRes?.found)              { newStatus = pickBetter(newStatus, 'confirmed'); autoV.ch_kakaoSdk++; }
+      if (naverRes?.found)            { newStatus = pickBetter(newStatus, 'confirmed'); autoV.ch_naver++; }
+      if (kakaoPageRes?.found && !kakaoPageRes?.recentReview) {
+        newStatus = pickBetter(newStatus, 'confirmed'); // recentReview 아닐 때만 (중복 방지)
+        if (!kakaoPageRes?.recentReview) autoV.ch_kakaoPage++;
       }
-      if (kakaoPageRes.found) {
-        newStatus = pickBetter(newStatus, kakaoPageRes.strong ? 'verified' : 'confirmed');
-        autoV.ch_kakaoPage++;
-      }
+    }
+
+    // ── petDetails 자동 저장 (null 필드만 덮어씀, 관리자 수동 입력 보존) ──
+    const pd2 = _kakaoPageRes?.petDetails;
+    if (pd2 && p.firestoreId && firebaseReady && db) {
+      const detailUpdate = {};
+      if (pd2.large   !== null && p.large   === null) { p.large   = pd2.large;   detailUpdate.large   = pd2.large; }
+      if (pd2.small   !== null && p.small   === null) { p.small   = pd2.small;   detailUpdate.small   = pd2.small; }
+      if (pd2.indoor  !== null && p.indoor  === null) { p.indoor  = pd2.indoor;  detailUpdate.indoor  = pd2.indoor; }
+      if (pd2.outdoor !== null && p.outdoor === null) { p.outdoor = pd2.outdoor; detailUpdate.outdoor = pd2.outdoor; }
+      if (Object.keys(detailUpdate).length > 0)
+        db.collection('places').doc(p.firestoreId).update(detailUpdate).catch(()=>{});
     }
 
     // ── 최종: 현재보다 높은 등급일 때만 적용 ────────────────────
