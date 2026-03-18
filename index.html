@@ -3661,11 +3661,14 @@ function doLiveSearch() {
   const kwPages  = [1, 2, 3];
 
   let allResults = [];
-  let pending = gridPoints.length * (catCodes.length * pages.length + keywords.length * kwPages.length);
+  let sdkDone = false, restDone = false;
 
-  function onAllDone() {
-    renderLiveResults(allResults);
+  function checkAllDone() {
+    if (sdkDone && restDone) renderLiveResults(allResults);
   }
+
+  // ── ① SDK 카테고리 + 키워드 검색 ──────────────────────────────────────────
+  let pending = gridPoints.length * (catCodes.length * pages.length + keywords.length * kwPages.length);
 
   gridPoints.forEach(pt => {
     const locOpts = { x: pt.lng, y: pt.lat, radius: Math.round(cellRadiusM), size: 15 };
@@ -3677,7 +3680,7 @@ function doLiveSearch() {
           if (status === kakao.maps.services.Status.OK && data?.length) {
             allResults = allResults.concat(data);
           }
-          if (--pending === 0) onAllDone();
+          if (--pending === 0) { sdkDone = true; checkAllDone(); }
         }, { ...locOpts, page });
       });
     });
@@ -3689,11 +3692,49 @@ function doLiveSearch() {
           if (status === kakao.maps.services.Status.OK && data?.length) {
             allResults = allResults.concat(data.map(d => ({ ...d, _fromPetKeyword: true })));
           }
-          if (--pending === 0) onAllDone();
+          if (--pending === 0) { sdkDone = true; checkAllDone(); }
         }, { ...locOpts, page });
       });
     });
   });
+
+  // ── ② REST API 키워드 검색 (전체 페이지 병렬 수집) ───────────────────────
+  // SDK keywordSearch 가 시설 태그 기반 장소를 반환하지 않는 경우를 보완
+  // dapi.kakao.com 은 브라우저에서 직접 CORS 접근 가능, is_end 로 완전 수집 보장
+  const restKeywords = ['반려견동반', '애견동반', '반려동물동반', '반려견', '반려동물', '애견카페', '펫카페', '강아지카페'];
+  ;(async () => {
+    try {
+      const tasks = [];
+      for (const pt of gridPoints) {
+        for (const kw of restKeywords) {
+          tasks.push((async () => {
+            for (let page = 1; page <= 5; page++) {
+              try {
+                const resp = await fetch(
+                  `https://dapi.kakao.com/v2/local/search/keyword.json` +
+                  `?query=${encodeURIComponent(kw)}&x=${pt.lng}&y=${pt.lat}` +
+                  `&radius=${Math.round(cellRadiusM)}&size=15&page=${page}`,
+                  { headers: { 'Authorization': `KakaoAK ${KAKAO_REST_KEY}` },
+                    signal: AbortSignal.timeout(6000) }
+                );
+                if (!resp.ok) break;
+                const json = await resp.json();
+                if (json.documents?.length) {
+                  allResults = allResults.concat(
+                    json.documents.map(d => ({ ...d, _fromPetKeyword: true }))
+                  );
+                }
+                if (json.meta?.is_end !== false) break; // 더 이상 결과 없으면 종료
+              } catch(e) { break; }
+            }
+          })());
+        }
+      }
+      await Promise.allSettled(tasks);
+    } catch(e) {}
+    restDone = true;
+    checkAllDone();
+  })();
 }
 
 async function renderLiveResults(rawData) {
@@ -4123,9 +4164,15 @@ function toggleFilterPanel() {
 function updateFilterBadge() {
   const badge = document.getElementById('filter-active-count');
   if (!badge) return;
-  const count = activeFilters.conditions.length +
-    (activeFilters.cat && activeFilters.cat !== 'all' ? 1 : 0) +
-    (activeFilters.area && activeFilters.area !== 'all' ? 1 : 0);
+  const count =
+    (activeFilters.largeDog ? 1 : 0) +
+    (activeFilters.indoor   ? 1 : 0) +
+    (activeFilters.outdoor  ? 1 : 0) +
+    (activeFilters.noCage   ? 1 : 0) +
+    (activeFilters.hasFee   ? 1 : 0) +
+    (activeFilters.noFee    ? 1 : 0) +
+    (activeFilters.catType && activeFilters.catType !== 'all' ? 1 : 0) +
+    (activeFilters.area    && activeFilters.area    !== 'all' ? 1 : 0);
   if (count > 0) {
     badge.textContent = count + '개 적용';
     badge.style.display = 'inline-block';
@@ -4151,6 +4198,7 @@ function toggleFilter(btn, type) {
   if (type==='입장료있음')  { activeFilters.hasFee = on; if (on) { activeFilters.noFee=false; document.querySelector('[data-cond="입장료없음"]')?.classList.remove('active'); } }
   if (type==='입장료없음')  { activeFilters.noFee  = on; if (on) { activeFilters.hasFee=false; document.querySelector('[data-cond="입장료있음"]')?.classList.remove('active'); } }
   filterPlaces();
+  updateFilterBadge();
   if (isMobile()) setMobileTab('list');
 }
 
@@ -4159,6 +4207,7 @@ function setCatFilter(btn, catKey) {
   btn.classList.add('active');
   activeFilters.catType = catKey;
   filterPlaces();
+  updateFilterBadge();
   if (isMobile()) setMobileTab('list');
 }
 
@@ -7294,30 +7343,32 @@ function _isQuotaExceeded() {
  * place-api 프록시가 카카오 서버에 의해 차단될 때의 fallback
  */
 async function verifySdkPetKeyword(d) {
-  const PET_KWS = ['반려견동반', '애견동반', '반려동물동반'];
-  const RADIUS  = 500; // 50m → 500m: 카카오 SDK 최소 유효 반경 이상으로 확대
+  // 시설 태그 기반 키워드 + 일반 반려동물 키워드 모두 포함
+  const PET_KWS = ['반려견동반', '애견동반', '반려동물동반', '반려견', '반려동물'];
+  const RADIUS  = 1000; // 500m → 1000m: 더 넓은 범위에서 해당 장소 확인
 
   function matchesPlace(r) {
-    return r.id === d.id ||
+    // ID 비교는 String()으로 형변환 (SDK/REST 혼용 시 타입 불일치 방지)
+    return String(r.id) === String(d.id) ||
       (r.place_name === d.place_name &&
        Math.abs(parseFloat(r.y) - parseFloat(d.y)) < 0.005 &&
        Math.abs(parseFloat(r.x) - parseFloat(d.x)) < 0.005);
   }
 
-  // ── ① SDK keywordSearch (3키워드 × 3페이지 병렬) ──────────────────────
+  // ── ① SDK keywordSearch (5키워드 × 5페이지 병렬) ──────────────────────
   const sdkFound = await new Promise(resolve => {
     try {
       if (!window.kakao?.maps?.services?.Places) { resolve(false); return; }
-      const ps   = new kakao.maps.services.Places();
-      const pages = [1, 2, 3];
+      const ps    = new kakao.maps.services.Places();
+      const pages = [1, 2, 3, 4, 5];
       let found     = false;
       let remaining = PET_KWS.length * pages.length;
-      const timer   = setTimeout(() => resolve(false), 8000);
+      const timer   = setTimeout(() => { resolve(found); }, 12000);
       PET_KWS.forEach(kw => {
         pages.forEach(page => {
           ps.keywordSearch(kw, (data, status) => {
             if (!found && status === kakao.maps.services.Status.OK && data?.length) {
-              if (data.some(matchesPlace)) found = true;
+              if (data.some(matchesPlace)) { found = true; clearTimeout(timer); resolve(true); }
             }
             if (--remaining === 0) { clearTimeout(timer); resolve(found); }
           }, { x: d.x, y: d.y, radius: RADIUS, size: 15, page });
@@ -7327,10 +7378,10 @@ async function verifySdkPetKeyword(d) {
   });
   if (sdkFound) return true;
 
-  // ── ② REST API fallback (SDK 실패 시) ───────────────────────────────────
+  // ── ② REST API fallback — 전체 페이지 수집, is_end 기반 중단 ────────────
   try {
     for (const kw of PET_KWS) {
-      for (let page = 1; page <= 3; page++) {
+      for (let page = 1; page <= 5; page++) {
         const resp = await fetch(
           `https://dapi.kakao.com/v2/local/search/keyword.json` +
           `?query=${encodeURIComponent(kw)}&x=${d.x}&y=${d.y}&radius=${RADIUS}&size=15&page=${page}`,
@@ -7340,7 +7391,7 @@ async function verifySdkPetKeyword(d) {
         if (!resp.ok) break;
         const json = await resp.json();
         if ((json.documents || []).some(matchesPlace)) return true;
-        if (json.meta?.is_end) break;
+        if (json.meta?.is_end !== false) break; // is_end 이면 더 없음
       }
     }
   } catch(e) { /* REST API 실패 → false 반환 */ }
