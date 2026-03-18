@@ -1121,7 +1121,7 @@
         <div class="dog-fields-col">
           <div class="form-group" style="margin-bottom:0">
             <label>강아지 이름</label>
-            <input type="text" id="dog-name" placeholder="홍시" autocomplete="off"/>
+            <input type="text" id="dog-name" placeholder="예) 메리, 나무, 앙꼬, 베일리..." autocomplete="off"/>
           </div>
           <div class="form-group" style="margin-bottom:0">
             <label>나이</label>
@@ -1415,7 +1415,7 @@
         <input type="file" id="mem-photo-input" accept="image/*" style="display:none" onchange="onMemPhotoSelected(event)">
       </div>
       <div class="modal-field">
-        <textarea id="mem-text" placeholder="그날의 기억, 홍시 반응, 느낀 점..." rows="3" maxlength="280" style="height:80px"></textarea>
+        <textarea id="mem-text" placeholder="그날의 기억, 강아지 반응, 느낀 점..." rows="3" maxlength="280" style="height:80px"></textarea>
       </div>
       <!-- 공개/비공개 토글 -->
       <div class="mem-privacy-row">
@@ -1468,7 +1468,7 @@
           </div>
         </div>
         <div class="rep-search-box">
-          <input id="rep-search-input" placeholder="예) 카페 홍시, 강아지 카페 분당" onkeydown="if(event.key==='Enter')repSearch()" />
+          <input id="rep-search-input" placeholder="예) 반려견 카페 성수, 강아지 카페 분당" onkeydown="if(event.key==='Enter')repSearch()" />
           <button class="rep-search-btn" onclick="repSearch()">검색</button>
         </div>
         <div id="rep-result-list" class="rep-result-list">
@@ -4804,7 +4804,7 @@ async function loadMemoriesFeed() {
 
   if (!mems.length) {
     const emptyMsg = isMine
-      ? `<div class="mem-empty">아직 기록이 없어요 🐾<br>홍시와 다녀온 곳의 기억을 남겨봐요!</div>`
+      ? `<div class="mem-empty">아직 기록이 없어요 🐾<br>강아지와 다녀온 곳의 기억을 남겨봐요!</div>`
       : `<div class="mem-empty">아직 아무도 기록을 남기지 않았어요 🐾</div>`;
     feed.innerHTML = emptyMsg;
     return;
