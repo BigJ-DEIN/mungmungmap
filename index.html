@@ -3327,81 +3327,82 @@ async function autoAddLivePlace(dOverride) {
   const d = dOverride || _livePopupPlace;
   if (!d) return;
 
-  // 중복 방지: places 배열에 이미 있으면 스킵
-  if (places.some(p => p && (p.kakaoId === d.id || p.name === d.place_name))) return;
-
-  // 1) place-api로 반려동물 상세 정보 수집 (파이프라인 동일 채널)
-  let petDetails = { large: null, small: null, indoor: null, outdoor: null };
-  let petStatus = 'confirmed'; // 애견동반 키워드 검색 결과 = 최소 confirmed
   try {
-    const result = await fetchKakaoPagePetSignal(d.place_url, d.id);
-    if (result?.petDetails) petDetails = result.petDetails;
-    // 공식 시설 태그(strong) 확인 → confirmed / 최근 반려견 리뷰 → verified
-    if (result?.recentReview)      petStatus = 'verified';
-    else if (result?.strong === true) petStatus = 'confirmed';
-    // strong:false (키워드만) — 검색 자체가 애견동반 쿼리이므로 confirmed 유지
-  } catch(e) { /* place-api 실패 → petStatus=confirmed, petDetails 전부 null */ }
+    // 중복 방지: places 배열에 이미 있으면 스킵 (liveData 정리는 finally에서 항상 실행)
+    if (places.some(p => p && (p.kakaoId === d.id || p.name === d.place_name))) return;
 
-  // 2) 카테고리·지역 매핑
-  const cat  = impMapCat(d.category_name || '');
-  const area = impGuessArea(d.road_address_name || '', d.address_name || '');
-  const nextId = Math.max(...places.filter(p => p && typeof p.id === 'number').map(p => p.id), 10000) + 1;
+    // 1) place-api로 반려동물 상세 정보 수집 (파이프라인 동일 채널)
+    let petDetails = { large: null, small: null, indoor: null, outdoor: null };
+    let petStatus = 'confirmed'; // 애견동반 키워드 검색 결과 = 최소 confirmed
+    try {
+      const result = await fetchKakaoPagePetSignal(d.place_url, d.id);
+      if (result?.petDetails) petDetails = result.petDetails;
+      if (result?.recentReview)      petStatus = 'verified';
+      else if (result?.strong === true) petStatus = 'confirmed';
+    } catch(e) { /* place-api 실패 → petStatus=confirmed, petDetails 전부 null */ }
 
-  // 3) large/indoor/outdoor 필드 결정
-  const largeFinal   = petDetails.large !== null ? petDetails.large
-                     : (petDetails.small === true ? false : null); // 소형견 태그만 → large:false
-  const indoorFinal  = petDetails.indoor !== null ? petDetails.indoor
-                     : (petDetails.outdoor === true ? false : null); // 야외만 → indoor:false
-  const outdoorFinal = petDetails.outdoor !== null ? petDetails.outdoor
-                     : (petDetails.indoor === false ? true : null);
+    // 2) 카테고리·지역 매핑
+    const cat  = impMapCat(d.category_name || '');
+    const area = impGuessArea(d.road_address_name || '', d.address_name || '');
+    const nextId = Math.max(...places.filter(p => p && typeof p.id === 'number').map(p => p.id), 10000) + 1;
 
-  const newPlace = {
-    id:        nextId,
-    name:      d.place_name,
-    addr:      d.road_address_name || d.address_name || '',
-    phone:     d.phone || '',
-    kakaoUrl:  d.place_url || '',
-    kakaoId:   d.id || '',
-    cat:       cat,
-    emoji:     impCatEmoji(cat),
-    area:      area,
-    province:  '',
-    petStatus: petStatus,
-    large:     largeFinal,
-    small:     null,
-    indoor:    indoorFinal,
-    outdoor:   outdoorFinal,
-    cage:      null,
-    entryFee:  null,
-    stroller:  null,
-    note:      '',
-    hours:     [{ d: '영업시간', t: '카카오맵 확인' }],
-    active:    true,
-    source:    'live_search',
-    addedAt:   new Date().toISOString(),
-  };
+    // 3) large/indoor/outdoor 필드 결정
+    const largeFinal   = petDetails.large !== null ? petDetails.large
+                       : (petDetails.small === true ? false : null);
+    const indoorFinal  = petDetails.indoor !== null ? petDetails.indoor
+                       : (petDetails.outdoor === true ? false : null);
+    const outdoorFinal = petDetails.outdoor !== null ? petDetails.outdoor
+                       : (petDetails.indoor === false ? true : null);
 
-  // 4) Firestore 저장
-  if (firebaseReady && db) {
-    const ref = db.collection('places').doc();
-    newPlace.firestoreId = ref.id;
-    await ref.set(newPlace);
+    const newPlace = {
+      id:        nextId,
+      name:      d.place_name,
+      addr:      d.road_address_name || d.address_name || '',
+      phone:     d.phone || '',
+      kakaoUrl:  d.place_url || '',
+      kakaoId:   d.id || '',
+      cat:       cat,
+      emoji:     impCatEmoji(cat),
+      area:      area,
+      province:  '',
+      petStatus: petStatus,
+      large:     largeFinal,
+      small:     null,
+      indoor:    indoorFinal,
+      outdoor:   outdoorFinal,
+      cage:      null,
+      entryFee:  null,
+      stroller:  null,
+      note:      '',
+      hours:     [{ d: '영업시간', t: '카카오맵 확인' }],
+      active:    true,
+      source:    'live_search',
+      addedAt:   new Date().toISOString(),
+    };
+
+    // 4) 로컬 배열 먼저 반영 (UI 즉시 업데이트 + Firestore 실패해도 세션 내 유지)
+    places.push(newPlace);
+    if (_allKakaoIds && d.id) _allKakaoIds.add(d.id);
+
+    // 5) Firestore 저장 (실패해도 로컬엔 이미 추가됨)
+    if (firebaseReady && db) {
+      const ref = db.collection('places').doc();
+      newPlace.firestoreId = ref.id;
+      await ref.set(newPlace).catch(e => console.warn('Firestore 저장 실패:', d.place_name, e));
+    }
+
+    // 6) 하늘색 임시 마커 제거 → 정식 컬러 마커로 교체
+    if (d.id && liveMarkers[d.id]) {
+      map.removeLayer(liveMarkers[d.id]);
+      delete liveMarkers[d.id];
+    }
+    if (typeof addMarker === 'function') addMarker(newPlace);
+
+  } finally {
+    // 성공·실패·중복 모든 경우에 liveData에서 제거 후 UI 갱신
+    liveData = liveData.filter(x => x.id !== d.id && x.place_name !== d.place_name);
+    filterPlaces();
   }
-
-  // 5) 로컬 배열 + 지도 마커 즉시 반영
-  places.push(newPlace);
-  if (_allKakaoIds && d.id) _allKakaoIds.add(d.id); // 파이프라인 중복 방지 캐시 갱신
-
-  // 하늘색 임시 마커 제거 → 정식 컬러 마커로 교체
-  if (d.id && liveMarkers[d.id]) {
-    map.removeLayer(liveMarkers[d.id]);
-    delete liveMarkers[d.id];
-  }
-  if (typeof addMarker === 'function') addMarker(newPlace);
-
-  // 6) liveData에서 제거 → filterPlaces()가 정식 섹션에서 렌더링
-  liveData = liveData.filter(x => x.id !== d.id && x.place_name !== d.place_name);
-  filterPlaces();
 }
 
 function clearLiveSearch() {
