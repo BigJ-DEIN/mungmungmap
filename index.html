@@ -735,6 +735,7 @@
 
       /* ── 지도 줌 +/- 버튼 모바일 숨김 ── */
       .leaflet-control-zoom { display:none !important; }
+      .leaflet-control-attribution { display:none !important; }
 
       /* ── 드로어 헤더 (목록 제목 + 닫기 X) ── */
       #drawer-header {
@@ -773,11 +774,11 @@
       #filter-panel-body {
         max-height:0; overflow:hidden;
         transition:max-height .3s ease;
-        padding:0 10px;
+        padding:0;
       }
       #filter-panel-body.expanded {
-        max-height:400px; overflow-y:auto;
-        padding:0 10px 6px;
+        max-height:700px; overflow-y:auto;
+        padding:0;
       }
       /* 데스크탑: 필터 토글 버튼 숨김, 패널 항상 표시 */
 
@@ -832,20 +833,32 @@
     }
 
     /* ── QUICK FILTERS (목록 상단 고정 필터) ── */
-    #quick-filters { padding:8px 10px 0; border-bottom:1px solid #F5F5F5; flex-shrink:0; }
-    .qf-row { display:flex; gap:5px; flex-wrap:wrap; margin-bottom:7px; align-items:center; }
-    .area-toggle-btn {
-      display:flex; align-items:center; gap:4px; padding:4px 11px;
-      border:1.5px solid #E8E8E8; border-radius:18px; background:white;
-      font-size:12px; font-weight:600; color:#777; cursor:pointer; font-family:inherit;
-      transition:all .15s;
+    #quick-filters { padding:4px 0 0; border-bottom:1px solid #F5F5F5; flex-shrink:0; }
+    /* ── 3-row collapsible filter ── */
+    .frow { border-bottom:1px solid #F2F2F2; }
+    .frow:last-child { border-bottom:none; margin-bottom:4px; }
+    .frow-hdr {
+      display:flex; align-items:center; gap:6px;
+      padding:9px 10px 9px 10px; cursor:pointer;
+      user-select:none; -webkit-user-select:none;
     }
-    .area-toggle-btn.active { border-color:#E04E14; color:#E04E14; }
-    .area-toggle-btn .arrow { font-size:9px; transition:transform .25s; }
-    .area-toggle-btn.open .arrow { transform:rotate(180deg); }
-    .area-chips-wrap { overflow:hidden; max-height:0; transition:max-height .3s ease; }
-    .area-chips-wrap.open { max-height:120px; }
-    .area-chips-inner { padding:4px 0 8px; display:flex; flex-wrap:wrap; gap:4px; }
+    .frow-lbl {
+      font-size:11px; font-weight:700; color:#AAA;
+      min-width:28px; flex-shrink:0;
+    }
+    .frow-sum {
+      font-size:12px; font-weight:600; color:#E04E14;
+      flex:1; overflow:hidden; white-space:nowrap; text-overflow:ellipsis;
+    }
+    .frow-arr { font-size:9px; color:#BBB; transition:transform .2s; flex-shrink:0; }
+    .frow.open .frow-arr { transform:rotate(180deg); }
+    .frow-body {
+      display:flex; flex-wrap:wrap; gap:5px;
+      padding:0 10px 10px;
+      max-height:38px; overflow:hidden;
+      transition:max-height .35s ease;
+    }
+    .frow.open .frow-body { max-height:400px; overflow-y:auto; }
 
     /* ── MEMORIES PANEL ── */
     #memories-panel {
@@ -1059,6 +1072,8 @@
       #filter-toggle-btn { display:none; }
       #drawer-header { display:none; }
       #filter-panel-body { max-height:none !important; overflow:visible !important; padding:0 !important; }
+      .frow-body { max-height:none !important; overflow:visible !important; }
+      .frow-hdr { cursor:default; }
     }
 
     /* ── 내 위치 파란 점 (Google Maps 스타일) ── */
@@ -1364,59 +1379,74 @@
 
       <!-- 필터 내용 (모바일: 기본 접힘 / 데스크탑: 항상 표시) -->
       <div id="filter-panel-body">
-      <!-- 조건 필터 -->
-      <div class="qf-row">
-        <button class="filter-chip" data-cond="대형견"       onclick="toggleFilter(this,'대형견')">대형견 OK</button>
-        <button class="filter-chip" data-cond="실내"         onclick="toggleFilter(this,'실내')">실내 가능</button>
-        <button class="filter-chip" data-cond="테라스"       onclick="toggleFilter(this,'테라스')">🌿 테라스</button>
-        <button class="filter-chip" data-cond="케이지불필요"  onclick="toggleFilter(this,'케이지불필요')">케이지 불필요</button>
-        <button class="filter-chip fee-chip" data-cond="입장료있음" onclick="toggleFilter(this,'입장료있음')">입장료</button>
-      </div>
-      <!-- 장소 종류 필터 -->
-      <div class="qf-row" style="margin-bottom:2px">
-        <span style="font-size:10px;font-weight:700;color:#BBB;white-space:nowrap;margin-right:2px">장소</span>
-        <button class="filter-chip active" data-cat="all"        onclick="setCatFilter(this,'all')">전체</button>
-        <button class="filter-chip" data-cat="cafe"              onclick="setCatFilter(this,'cafe')">☕ 카페</button>
-        <button class="filter-chip" data-cat="petcafe"           onclick="setCatFilter(this,'petcafe')">🐾 애견카페</button>
-        <button class="filter-chip" data-cat="restaurant"        onclick="setCatFilter(this,'restaurant')">🍽 식당</button>
-        <button class="filter-chip" data-cat="bakery"            onclick="setCatFilter(this,'bakery')">🥐 베이커리</button>
-        <button class="filter-chip" data-cat="park"              onclick="setCatFilter(this,'park')">🏃 운동장</button>
-        <button class="filter-chip" data-cat="hotel"             onclick="setCatFilter(this,'hotel')">🏨 숙소</button>
-        <button class="filter-chip" data-cat="hospital"          onclick="setCatFilter(this,'hospital')">🏥 동물병원</button>
-        <button class="filter-chip" data-cat="grooming"          onclick="setCatFilter(this,'grooming')">✂️ 미용</button>
-        <button class="filter-chip" data-cat="other"             onclick="setCatFilter(this,'other')">📍 기타</button>
-      </div>
-      <!-- 지역 필터 토글 + 지도 범위 연동 버튼 -->
-      <div class="qf-row" style="gap:6px">
-        <button class="area-toggle-btn" id="area-toggle-btn" onclick="toggleAreaFilter()">
-          <span id="area-toggle-label">지역 전체</span>
-          <span class="arrow">▼</span>
-        </button>
-        <button class="filter-chip active" id="viewport-sync-btn" onclick="toggleViewportSync()" title="끄면 전체 장소 표시" style="white-space:nowrap;font-size:11px">🗺 지도 범위</button>
-      </div>
-      <!-- 접을 수 있는 지역 칩 -->
-      <div class="area-chips-wrap" id="area-chips-wrap">
-        <div class="area-chips-inner" id="area-chips">
-          <button class="filter-chip active" data-area="all"  onclick="setAreaFilter(this,'all')">전체</button>
-          <button class="filter-chip" data-area="서울"  onclick="setAreaFilter(this,'서울')">서울</button>
-          <button class="filter-chip" data-area="경기"  onclick="setAreaFilter(this,'경기')">경기</button>
-          <button class="filter-chip" data-area="인천"  onclick="setAreaFilter(this,'인천')">인천</button>
-          <button class="filter-chip" data-area="강원"  onclick="setAreaFilter(this,'강원')">강원</button>
-          <button class="filter-chip" data-area="충북"  onclick="setAreaFilter(this,'충북')">충북</button>
-          <button class="filter-chip" data-area="충남"  onclick="setAreaFilter(this,'충남')">충남</button>
-          <button class="filter-chip" data-area="세종"  onclick="setAreaFilter(this,'세종')">세종</button>
-          <button class="filter-chip" data-area="대전"  onclick="setAreaFilter(this,'대전')">대전</button>
-          <button class="filter-chip" data-area="전북"  onclick="setAreaFilter(this,'전북')">전북</button>
-          <button class="filter-chip" data-area="전남"  onclick="setAreaFilter(this,'전남')">전남</button>
-          <button class="filter-chip" data-area="광주"  onclick="setAreaFilter(this,'광주')">광주</button>
-          <button class="filter-chip" data-area="경북"  onclick="setAreaFilter(this,'경북')">경북</button>
-          <button class="filter-chip" data-area="경남"  onclick="setAreaFilter(this,'경남')">경남</button>
-          <button class="filter-chip" data-area="대구"  onclick="setAreaFilter(this,'대구')">대구</button>
-          <button class="filter-chip" data-area="울산"  onclick="setAreaFilter(this,'울산')">울산</button>
-          <button class="filter-chip" data-area="부산"  onclick="setAreaFilter(this,'부산')">부산</button>
-          <button class="filter-chip" data-area="제주"  onclick="setAreaFilter(this,'제주')">제주</button>
+
+        <!-- ── 조건 row ── -->
+        <div class="frow" id="frow-cond">
+          <div class="frow-hdr" onclick="toggleFrow('cond')">
+            <span class="frow-lbl">조건</span>
+            <span class="frow-sum" id="frow-cond-sum"></span>
+            <span class="frow-arr">▼</span>
+          </div>
+          <div class="frow-body" id="frow-cond-body">
+            <button class="filter-chip" data-cond="대형견"       onclick="toggleFilter(this,'대형견')">🐕 대형견 OK</button>
+            <button class="filter-chip" data-cond="실내"         onclick="toggleFilter(this,'실내')">🏠 실내 가능</button>
+            <button class="filter-chip" data-cond="테라스"       onclick="toggleFilter(this,'테라스')">🌿 테라스</button>
+            <button class="filter-chip" data-cond="케이지불필요"  onclick="toggleFilter(this,'케이지불필요')">케이지 불필요</button>
+            <button class="filter-chip fee-chip" data-cond="입장료있음" onclick="toggleFilter(this,'입장료있음')">💰 입장료</button>
+          </div>
         </div>
-      </div>
+
+        <!-- ── 종류 row ── -->
+        <div class="frow" id="frow-cat">
+          <div class="frow-hdr" onclick="toggleFrow('cat')">
+            <span class="frow-lbl">종류</span>
+            <span class="frow-sum" id="frow-cat-sum">전체</span>
+            <span class="frow-arr">▼</span>
+          </div>
+          <div class="frow-body" id="frow-cat-body">
+            <button class="filter-chip active" data-cat="all"       onclick="setCatFilter(this,'all')">전체</button>
+            <button class="filter-chip" data-cat="cafe"             onclick="setCatFilter(this,'cafe')">☕ 카페</button>
+            <button class="filter-chip" data-cat="petcafe"          onclick="setCatFilter(this,'petcafe')">🐾 애견카페</button>
+            <button class="filter-chip" data-cat="restaurant"       onclick="setCatFilter(this,'restaurant')">🍽 식당</button>
+            <button class="filter-chip" data-cat="bakery"           onclick="setCatFilter(this,'bakery')">🥐 베이커리</button>
+            <button class="filter-chip" data-cat="park"             onclick="setCatFilter(this,'park')">🏃 운동장</button>
+            <button class="filter-chip" data-cat="hotel"            onclick="setCatFilter(this,'hotel')">🏨 숙소</button>
+            <button class="filter-chip" data-cat="hospital"         onclick="setCatFilter(this,'hospital')">🏥 동물병원</button>
+            <button class="filter-chip" data-cat="grooming"         onclick="setCatFilter(this,'grooming')">✂️ 미용</button>
+            <button class="filter-chip" data-cat="other"            onclick="setCatFilter(this,'other')">📍 기타</button>
+          </div>
+        </div>
+
+        <!-- ── 지역 row ── -->
+        <div class="frow" id="frow-area">
+          <div class="frow-hdr" onclick="toggleFrow('area')">
+            <span class="frow-lbl">지역</span>
+            <span class="frow-sum" id="frow-area-sum">전체</span>
+            <span class="frow-arr">▼</span>
+          </div>
+          <div class="frow-body" id="frow-area-body">
+            <button class="filter-chip active" id="viewport-sync-btn" onclick="toggleViewportSync()" title="끄면 전체 장소 표시" style="white-space:nowrap">🗺 지도 범위</button>
+            <button class="filter-chip active" data-area="all"  onclick="setAreaFilter(this,'all')">전체</button>
+            <button class="filter-chip" data-area="서울"  onclick="setAreaFilter(this,'서울')">서울</button>
+            <button class="filter-chip" data-area="경기"  onclick="setAreaFilter(this,'경기')">경기</button>
+            <button class="filter-chip" data-area="인천"  onclick="setAreaFilter(this,'인천')">인천</button>
+            <button class="filter-chip" data-area="강원"  onclick="setAreaFilter(this,'강원')">강원</button>
+            <button class="filter-chip" data-area="충북"  onclick="setAreaFilter(this,'충북')">충북</button>
+            <button class="filter-chip" data-area="충남"  onclick="setAreaFilter(this,'충남')">충남</button>
+            <button class="filter-chip" data-area="세종"  onclick="setAreaFilter(this,'세종')">세종</button>
+            <button class="filter-chip" data-area="대전"  onclick="setAreaFilter(this,'대전')">대전</button>
+            <button class="filter-chip" data-area="전북"  onclick="setAreaFilter(this,'전북')">전북</button>
+            <button class="filter-chip" data-area="전남"  onclick="setAreaFilter(this,'전남')">전남</button>
+            <button class="filter-chip" data-area="광주"  onclick="setAreaFilter(this,'광주')">광주</button>
+            <button class="filter-chip" data-area="경북"  onclick="setAreaFilter(this,'경북')">경북</button>
+            <button class="filter-chip" data-area="경남"  onclick="setAreaFilter(this,'경남')">경남</button>
+            <button class="filter-chip" data-area="대구"  onclick="setAreaFilter(this,'대구')">대구</button>
+            <button class="filter-chip" data-area="울산"  onclick="setAreaFilter(this,'울산')">울산</button>
+            <button class="filter-chip" data-area="부산"  onclick="setAreaFilter(this,'부산')">부산</button>
+            <button class="filter-chip" data-area="제주"  onclick="setAreaFilter(this,'제주')">제주</button>
+          </div>
+        </div>
+
       </div><!-- /filter-panel-body -->
     </div>
     <div id="place-list"></div>
@@ -3349,11 +3379,11 @@ function initMap() {
     console.error('[initMap] Leaflet 초기화 실패:', e.message);
     return;
   }
-  L.control.zoom({ position:'bottomright' }).addTo(map);
   L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-    attribution:'© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors © <a href="https://carto.com/attributions">CARTO</a>',
+    attribution:'',
     subdomains:'abcd', maxZoom:19
   }).addTo(map);
+  map.attributionControl.setPrefix('');
   setTimeout(() => map.invalidateSize(), 300);
 
   // 마커 클러스터 그룹
@@ -4333,11 +4363,19 @@ async function autoAddLivePlace(dOverride) {
     const area = impGuessArea(d.road_address_name || '', d.address_name || '');
     const nextId = Math.max(...places.filter(p => p && typeof p.id === 'number').map(p => p.id), 10000) + 1;
 
-    // 3) large/indoor/outdoor 필드 결정
+    // 3) large/indoor/outdoor/cage/entryFee 필드 결정
     // 명시적 태그가 있을 때만 값을 설정 — 근거 없는 추론은 null(미확인)로 유지
-    const largeFinal   = petDetails.large  !== null ? petDetails.large  : null;
-    const indoorFinal  = petDetails.indoor !== null ? petDetails.indoor : null;
-    const outdoorFinal = petDetails.outdoor !== null ? petDetails.outdoor : null;
+    const largeFinal    = petDetails.large    !== null ? petDetails.large    : null;
+    const indoorFinal   = petDetails.indoor   !== null ? petDetails.indoor   : null;
+    const outdoorFinal  = petDetails.outdoor  !== null ? petDetails.outdoor  : null;
+    const cageFinal     = petDetails.cage     !== null ? petDetails.cage     : null;
+    const entryFeeFinal = petDetails.entryFee !== null ? petDetails.entryFee : null;
+
+    // 3-b) 블로그 점수 조회 (panel3 캐시 재활용 — 별도 API 호출 없음)
+    let blogRating = null;
+    if (d.id) {
+      blogRating = await fetchKakaoRating(d.id).catch(() => null);
+    }
 
     // 좌표 파싱 (d.y = lat, d.x = lng — Kakao API 규격)
     const placeLat = parseFloat(d.y);
@@ -4365,19 +4403,22 @@ async function autoAddLivePlace(dOverride) {
       emoji:     impCatEmoji(cat),
       area:      area,
       province:  province,
-      petStatus: petStatus,
-      large:     largeFinal,
-      small:     null,
-      indoor:    indoorFinal,
-      outdoor:   outdoorFinal,
-      cage:      null,
-      entryFee:  null,
-      stroller:  null,
-      note:      '',
-      hours:     [{ d: '영업시간', t: '카카오맵 확인' }],
-      active:    true,
-      source:    'live_search',
-      addedAt:   new Date().toISOString(),
+      petStatus:  petStatus,
+      large:      largeFinal,
+      small:      null,
+      indoor:     indoorFinal,
+      outdoor:    outdoorFinal,
+      cage:       cageFinal,
+      entryFee:   entryFeeFinal,
+      stroller:   null,
+      note:       '',
+      hours:      [{ d: '영업시간', t: '카카오맵 확인' }],
+      active:     true,
+      source:     'live_search',
+      addedAt:    new Date().toISOString(),
+      // 블로그 기반 인기 점수
+      blogCount:  blogRating?.blog  ?? null,
+      blogScore:  blogRating?.score ?? null,
     };
 
     // 4) 로컬 배열 먼저 반영 (UI 즉시 업데이트 + Firestore 실패해도 세션 내 유지)
@@ -4529,19 +4570,11 @@ function setAreaFilter(btn, area) {
   document.querySelectorAll('[data-area]').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   activeFilters.area = area;
-  // 지역 토글 버튼 레이블 업데이트
-  const label = document.getElementById('area-toggle-label');
-  if (label) label.textContent = area === 'all' ? '지역 전체' : area;
-  const toggleBtn = document.getElementById('area-toggle-btn');
-  if (toggleBtn) toggleBtn.classList.toggle('active', area !== 'all');
-  // 지역 선택 후 패널 닫기 (모바일 UX)
-  if (isMobile()) {
-    const wrap = document.getElementById('area-chips-wrap');
-    const tb = document.getElementById('area-toggle-btn');
-    if (wrap && area !== 'all') {
-      wrap.classList.remove('open');
-      if (tb) tb.classList.remove('open');
-    }
+  updateFrowSummaries();
+  // 지역 선택 후 행 접기 (모바일 UX)
+  if (isMobile() && area !== 'all') {
+    const frow = document.getElementById('frow-area');
+    if (frow) frow.classList.remove('open');
   }
   filterPlaces();
 }
@@ -4580,11 +4613,39 @@ function updateFilterBadge() {
 }
 
 function toggleAreaFilter() {
-  const wrap = document.getElementById('area-chips-wrap');
-  const btn  = document.getElementById('area-toggle-btn');
-  if (!wrap || !btn) return;
-  wrap.classList.toggle('open');
-  btn.classList.toggle('open');
+  toggleFrow('area'); // legacy alias
+}
+
+/* ── 행 접기/펼치기 ── */
+function toggleFrow(id) {
+  const el = document.getElementById('frow-' + id);
+  if (el) el.classList.toggle('open');
+}
+
+/* ── 각 행의 요약 레이블 업데이트 ── */
+function updateFrowSummaries() {
+  // 조건 요약
+  const condLabels = [];
+  if (activeFilters.largeDog) condLabels.push('대형견 OK');
+  if (activeFilters.indoor)   condLabels.push('실내 가능');
+  if (activeFilters.outdoor)  condLabels.push('테라스');
+  if (activeFilters.noCage)   condLabels.push('케이지 불필요');
+  if (activeFilters.hasFee)   condLabels.push('입장료');
+  if (activeFilters.noFee)    condLabels.push('입장료 없음');
+  const condSum = document.getElementById('frow-cond-sum');
+  if (condSum) condSum.textContent = condLabels.join(' · ');
+
+  // 종류 요약
+  const catMap = { all:'전체', cafe:'카페', petcafe:'애견카페', restaurant:'식당',
+    bakery:'베이커리', park:'운동장', hotel:'숙소', hospital:'동물병원', grooming:'미용', other:'기타' };
+  const catSum = document.getElementById('frow-cat-sum');
+  if (catSum) catSum.textContent = catMap[activeFilters.catType] || '전체';
+
+  // 지역 요약
+  const areaSum = document.getElementById('frow-area-sum');
+  if (areaSum) areaSum.textContent = (activeFilters.area === 'all' || !activeFilters.area) ? '전체' : activeFilters.area;
+
+  updateFilterBadge();
 }
 function toggleFilter(btn, type) {
   btn.classList.toggle('active');
@@ -4596,7 +4657,7 @@ function toggleFilter(btn, type) {
   if (type==='입장료있음')  { activeFilters.hasFee = on; if (on) { activeFilters.noFee=false; document.querySelector('[data-cond="입장료없음"]')?.classList.remove('active'); } }
   if (type==='입장료없음')  { activeFilters.noFee  = on; if (on) { activeFilters.hasFee=false; document.querySelector('[data-cond="입장료있음"]')?.classList.remove('active'); } }
   filterPlaces();
-  updateFilterBadge();
+  updateFrowSummaries();
   if (isMobile()) setMobileTab('list');
 }
 
@@ -4605,7 +4666,7 @@ function setCatFilter(btn, catKey) {
   btn.classList.add('active');
   activeFilters.catType = catKey;
   filterPlaces();
-  updateFilterBadge();
+  updateFrowSummaries();
   if (isMobile()) setMobileTab('list');
 }
 
