@@ -4500,11 +4500,14 @@ async function doLiveSearch() {
   let allResults = [];
   let sdkDone = false, restDone = false;
 
-  // ── 그리드 캐시 히트: 기존 DB 장소를 allResults에 사전 투입 ─────────────
-  // A/B를 스킵하더라도 라이브 패널에 저장된 장소가 모두 표시되도록 보완
+  // ── 그리드 캐시 히트: Firestore에서 뷰포트 장소 로드 후 allResults에 사전 투입 ──
+  // places[]는 앱 첫 로드 시 비어있으므로 loadViewportPlaces()로 먼저 채워야 함
   if (_skipAB) {
     showToast('✅ 저장된 장소 표시 중 · 새 장소도 확인 중...');
-    // 현재 뷰포트 안의 places[] 항목을 Kakao API 포맷으로 변환해 allResults에 추가
+    // Firestore에서 현재 뷰포트 장소를 places[]에 로드 (비어있을 경우 대비)
+    await loadViewportPlaces();
+    filterPlaces();
+    // 로드된 places[]를 Kakao API 포맷으로 변환해 allResults에 추가
     // autoAddLivePlace에서 kakaoId로 기존 Firestore 문서를 찾아 재사용함
     places.filter(p =>
       p && p.lat != null && p.lng != null &&
@@ -4523,7 +4526,6 @@ async function doLiveSearch() {
       });
     });
     sdkDone = true; // SDK 스킵
-    filterPlaces();
   } else {
     showToast(`🔍 ${gridN}×${gridN} 구역으로 나눠 검색 중...`);
   }
@@ -4638,9 +4640,9 @@ async function doLiveSearch() {
           const rgJson = await rgResp.json();
           const reg    = rgJson.documents?.[0];
           const dong   = (reg?.region_3depth_name || '').replace(/\d+가$/, ''); // "성수동1가" → "성수동"
-          const gu     = reg?.region_2depth_name || '';
-          // 동(洞) + 구(區) 두 레벨 모두 검색 — 구 레벨은 더 넓은 범위 커버
-          const searchAreas = [...new Set([dong, gu].filter(Boolean))];
+          // 동(洞) 단위만 검색 — 구(區) 레벨 검색 시 radius 없으면 구 전체(성동구 등)가
+          // 검색 범위가 돼서 뷰포트 훨씬 바깥 장소까지 등록되는 문제 발생
+          const searchAreas = dong ? [dong] : [];
           // radius 없이 지역명 포함 쿼리로 검색 — radius 추가 시 Kakao가 거리순 정렬로
           // 바뀌어 콩카세같이 태그없는 인기장소가 페이지 밖으로 밀림. 쿼리에 지역명이
           // 이미 있으므로 radius 없어도 해당 지역 결과가 상위에 나옴.
