@@ -1946,6 +1946,7 @@
     <button class="atab" data-tab="feedback"  onclick="switchAdminTab(this,'feedback')">🐛 피드백</button>
     <button class="atab" data-tab="corrections" onclick="switchAdminTab(this,'corrections')">🔧 수정 요청</button>
     <button class="atab" data-tab="batchfill"   onclick="switchAdminTab(this,'batchfill')">🐾 정보 채우기</button>
+    <button class="atab" data-tab="dedup"       onclick="switchAdminTab(this,'dedup')">🔗 중복 정리</button>
   </div>
   <div id="admin-content">
     <div class="empty-state"><div class="es-icon">⏳</div><p>데이터 로딩 중...</p></div>
@@ -3828,14 +3829,36 @@ async function loadAllMemoryPlaceIds() {
                 _stub: true, _recovered: 'kakao'
               };
               if (!places.find(x => x.id == pid)) {
-                places.push(stub);
-                if (clusterGroup) { try { addMarker(stub); } catch(e) {} }
-                console.log('[loadAllMemoryPlaceIds] 카카오 API로 좌표 복구:', md.placeName, stub.lat, stub.lng);
-                // 복구된 장소를 Firestore에도 저장 (다른 사용자 세션에서도 사용 가능하도록)
-                if (firebaseReady && db) {
-                  const ref = db.collection('places').doc();
-                  stub.firestoreId = ref.id;
-                  ref.set(stub).catch(e => console.warn('[loadAllMemoryPlaceIds] Firestore 저장 실패:', e));
+                // ★ Firestore에 같은 이름+지역 문서가 이미 있으면 stub 신규 저장 금지
+                let skipFsSave = false;
+                if (firebaseReady && db && md.placeName) {
+                  try {
+                    const nameSnap2 = await db.collection('places')
+                      .where('name', '==', md.placeName).limit(5).get();
+                    if (!nameSnap2.empty) {
+                      // 기존 문서 중 지역이 일치하는 것 우선
+                      const matchDoc2 = nameSnap2.docs.find(d => {
+                        const a = d.data().area || '';
+                        return !md.placeArea || a.includes(md.placeArea) || md.placeArea.includes(a);
+                      }) || nameSnap2.docs[0];
+                      const existP = { ...matchDoc2.data(), id: pid, firestoreId: matchDoc2.id };
+                      places.push(existP);
+                      if (clusterGroup) { try { addMarker(existP); } catch(e) {} }
+                      skipFsSave = true;
+                      console.log('[loadAllMemoryPlaceIds] ②-c 중복 방지 — 기존 문서 재사용:', md.placeName);
+                    }
+                  } catch(e2) { /* 조회 실패 시 기존 흐름 유지 */ }
+                }
+                if (!skipFsSave) {
+                  places.push(stub);
+                  if (clusterGroup) { try { addMarker(stub); } catch(e) {} }
+                  console.log('[loadAllMemoryPlaceIds] 카카오 API로 좌표 복구:', md.placeName, stub.lat, stub.lng);
+                  // 복구된 장소를 Firestore에도 저장 (다른 사용자 세션에서도 사용 가능하도록)
+                  if (firebaseReady && db) {
+                    const ref = db.collection('places').doc();
+                    stub.firestoreId = ref.id;
+                    ref.set(stub).catch(e => console.warn('[loadAllMemoryPlaceIds] Firestore 저장 실패:', e));
+                  }
                 }
               }
             }
@@ -4584,8 +4607,30 @@ async function autoAddLivePlace(dOverride) {
   if (!d) return false;
 
   try {
-    // 중복 방지: places 배열에 이미 있으면 스킵 (liveData 정리는 finally에서 항상 실행)
+    // 중복 방지 ①: places 배열에 이미 있으면 스킵 (liveData 정리는 finally에서 항상 실행)
     if (places.some(p => p && (p.kakaoId === d.id || p.name === d.place_name))) return false;
+
+    // 중복 방지 ②: Firestore kakaoId 확인 — 세션 간 중복 생성 방지 (핵심 수정)
+    if (firebaseReady && db && d.id) {
+      // _allKakaoIds 캐시가 있으면 빠르게 확인, 없으면 직접 쿼리
+      const inCache = _allKakaoIds ? _allKakaoIds.has(d.id) : false;
+      if (inCache || !_allKakaoIds) {
+        try {
+          const dupSnap = await db.collection('places').where('kakaoId', '==', d.id).limit(1).get();
+          if (!dupSnap.empty) {
+            // 기존 문서 재사용 — places에 없으면 추가
+            const existingP = { ...dupSnap.docs[0].data(), firestoreId: dupSnap.docs[0].id };
+            if (!places.find(x => x.id == existingP.id)) {
+              places.push(existingP);
+              if (clusterGroup) { try { addMarker(existingP); } catch(e) {} }
+            }
+            if (_allKakaoIds) _allKakaoIds.add(d.id);
+            console.log('[autoAddLivePlace] 기존 문서 재사용:', existingP.name, '→ id:', existingP.id);
+            return false; // 중복 생성 방지
+          }
+        } catch(dupErr) { console.warn('[autoAddLivePlace] 중복 확인 실패:', dupErr); }
+      }
+    }
 
     // 1) place-api로 반려동물 신호 확인
     let petDetails = { large: null, small: null, indoor: null, outdoor: null };
@@ -7230,6 +7275,7 @@ async function loadAdminTab(tab) {
   if (tab === 'memories')  { await renderAdminMemories(); return; }
   if (tab === 'verify')    { renderVerifyTab(); return; }
   if (tab === 'batchfill') { renderAdminBatchFill(); return; }
+  if (tab === 'dedup')     { renderAdminDedup(); return; }
 
   if (!firebaseReady || !db) {
     content.innerHTML = `<div class="empty-state"><div class="es-icon">⚠️</div><p>Firebase가 연결되지 않았어요.<br>설정 후 사용할 수 있어요.</p></div>`;
@@ -7250,6 +7296,7 @@ async function loadAdminTab(tab) {
     else if (tab === 'feedback') await renderAdminFeedback();
     else if (tab === 'corrections') await renderAdminCorrections();
     else if (tab === 'batchfill') renderAdminBatchFill();
+    else if (tab === 'dedup')     renderAdminDedup();
   } catch(e) {
     content.innerHTML = `<div class="empty-state"><div class="es-icon">❌</div><p>오류가 발생했어요.<br>${e.message}</p></div>`;
   }
@@ -8938,6 +8985,207 @@ async function fetchKakaoPagePetSignal(url, kakaoId) {
     }
   }
   return { found: false, error: true };
+}
+
+// ══════════════════════════════════════════════════════
+//  ADMIN: 중복 장소 정리 (Deduplication)
+// ══════════════════════════════════════════════════════
+
+function renderAdminDedup() {
+  const content = document.getElementById('admin-content');
+  content.innerHTML = `
+    <div style="padding:4px 0 16px">
+      <div style="font-size:14px;color:#555;margin-bottom:16px;line-height:1.6">
+        같은 <b>kakaoId</b> 또는 같은 <b>이름+지역</b>으로 중복 저장된 장소를 찾아 하나로 통합합니다.<br>
+        통합 시: 가장 많은 정보가 있는 문서를 대표로 유지하고, 나머지 문서는 삭제됩니다.<br>
+        해당 장소를 참조하는 <b>추억 기록의 placeId도 자동 수정</b>됩니다.
+      </div>
+      <button id="dedup-scan-btn" onclick="runDedupScan()"
+        style="padding:10px 24px;background:#7C3AED;color:white;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit">
+        🔍 중복 장소 스캔
+      </button>
+    </div>
+    <div id="dedup-log" style="font-size:12px;color:#888;font-family:monospace;white-space:pre-wrap;margin-top:8px"></div>
+    <div id="dedup-results"></div>`;
+}
+
+let _dedupGroups = []; // [{ keepDoc, deleteDocs, mergedData }]
+
+async function runDedupScan() {
+  const btn = document.getElementById('dedup-scan-btn');
+  const logEl = document.getElementById('dedup-log');
+  const resEl = document.getElementById('dedup-results');
+  if (!firebaseReady || !db) { showToast('Firebase 연결 필요'); return; }
+  btn.disabled = true; btn.textContent = '스캔 중...';
+  logEl.textContent = '';
+  resEl.innerHTML = '';
+  _dedupGroups = [];
+
+  function log(msg) { logEl.textContent += msg + '\n'; }
+
+  try {
+    log('Firestore places 전체 로딩 중...');
+    const snap = await db.collection('places').get();
+    const docs = snap.docs.map(d => ({ fsId: d.id, ...d.data() }));
+    log(`총 ${docs.length}개 장소 문서 로드됨`);
+
+    // ── 그룹화: kakaoId 우선, 없으면 name+area ──
+    const groups = new Map(); // key → [docs]
+    docs.forEach(d => {
+      const key = d.kakaoId ? `kakao:${d.kakaoId}` : `name:${d.name||''}|${d.area||''}`;
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(d);
+    });
+
+    const dupGroups = [...groups.values()].filter(g => g.length > 1);
+    log(`중복 그룹 ${dupGroups.length}개 발견`);
+
+    if (!dupGroups.length) {
+      resEl.innerHTML = `<div style="text-align:center;padding:32px;color:#10B981;font-size:14px;font-weight:700">✅ 중복 없음! 데이터가 깨끗합니다.</div>`;
+      btn.disabled = false; btn.textContent = '🔍 중복 장소 스캔';
+      return;
+    }
+
+    // ── 각 그룹에서 대표 문서 선정 + merge 데이터 계산 ──
+    _dedupGroups = dupGroups.map(group => {
+      // 대표 선정 기준: manuallyEdited 우선 → non-null 필드 수 → 낮은 id 순
+      const score = d => {
+        let s = 0;
+        if (d.manuallyEdited) s += 1000;
+        ['large','small','indoor','outdoor','cage','entryFee','stroller','note','hours','phone','addr'].forEach(f => {
+          if (d[f] != null && d[f] !== '' && d[f] !== 'undefined') s++;
+        });
+        if (d.petStatus === 'verified')   s += 20;
+        if (d.petStatus === 'confirmed')  s += 10;
+        // ID가 낮을수록 먼저 생성된 것 → 동점이면 낮은 ID 우선
+        s -= (typeof d.id === 'number' ? d.id : 99999) * 0.0001;
+        return s;
+      };
+      const sorted = [...group].sort((a, b) => score(b) - score(a));
+      const keepDoc = sorted[0];
+      const deleteDocs = sorted.slice(1);
+
+      // merge: null 필드를 다른 문서에서 채움
+      const MERGE_FIELDS = ['large','small','indoor','outdoor','cage','entryFee','stroller',
+                            'note','hours','phone','addr','kakaoId','kakaoUrl','blogCount','blogScore'];
+      const mergedData = { ...keepDoc };
+      MERGE_FIELDS.forEach(f => {
+        if (mergedData[f] == null || mergedData[f] === '') {
+          for (const d of deleteDocs) {
+            if (d[f] != null && d[f] !== '') { mergedData[f] = d[f]; break; }
+          }
+        }
+      });
+      return { keepDoc, deleteDocs, mergedData, allIds: group.map(d => d.id) };
+    });
+
+    // ── UI 렌더링 ──
+    resEl.innerHTML = `
+      <div style="margin:12px 0;display:flex;gap:10px;align-items:center">
+        <span style="font-size:14px;font-weight:700;color:#C62828">⚠️ ${_dedupGroups.length}개 중복 그룹 발견</span>
+        <button onclick="runDedupAll()"
+          style="padding:8px 20px;background:#C62828;color:white;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">
+          🗑 전체 일괄 통합
+        </button>
+      </div>
+      <div id="dedup-group-list">
+        ${_dedupGroups.map((g, i) => `
+          <div id="dedup-g-${i}" style="background:white;border:1.5px solid #FFCDD2;border-radius:10px;padding:12px;margin-bottom:10px">
+            <div style="font-size:13px;font-weight:700;margin-bottom:6px">
+              ${g.keepDoc.name || '이름없음'} <span style="color:#888;font-weight:400;font-size:11px">${g.keepDoc.area||''}</span>
+              <span style="background:#FFF0F0;color:#C62828;font-size:10px;font-weight:700;padding:2px 7px;border-radius:5px;margin-left:8px">${g.allIds.length}개 중복</span>
+            </div>
+            <div style="font-size:11px;color:#555;margin-bottom:8px">
+              유지: <b style="color:#10B981">id:${g.keepDoc.id}</b> (firestoreId: ${g.keepDoc.fsId?.slice(0,8)}...)
+              &nbsp;|&nbsp; 삭제: ${g.deleteDocs.map(d=>`<span style="color:#C62828">id:${d.id}</span>`).join(', ')}
+            </div>
+            <button onclick="runDedupOne(${i})"
+              style="padding:6px 16px;background:#7C3AED;color:white;border:none;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">
+              이 그룹 통합
+            </button>
+          </div>`).join('')}
+      </div>`;
+
+    btn.disabled = false; btn.textContent = '🔍 다시 스캔';
+  } catch(e) {
+    log('오류: ' + e.message);
+    btn.disabled = false; btn.textContent = '🔍 중복 장소 스캔';
+  }
+}
+
+async function runDedupOne(groupIdx) {
+  const g = _dedupGroups[groupIdx];
+  if (!g) return;
+  const logEl = document.getElementById('dedup-log');
+  function log(msg) { if(logEl) logEl.textContent += msg + '\n'; }
+
+  try {
+    const batch = db.batch();
+
+    // 1) 대표 문서 merge 데이터로 업데이트
+    const keepRef = db.collection('places').doc(g.keepDoc.fsId);
+    const updateFields = {};
+    const MERGE_FIELDS = ['large','small','indoor','outdoor','cage','entryFee','stroller',
+                          'note','hours','phone','addr','kakaoId','kakaoUrl','blogCount','blogScore'];
+    MERGE_FIELDS.forEach(f => {
+      if (g.mergedData[f] != null && g.mergedData[f] !== '') updateFields[f] = g.mergedData[f];
+    });
+    if (Object.keys(updateFields).length) batch.update(keepRef, updateFields);
+
+    // 2) 중복 문서 삭제
+    g.deleteDocs.forEach(d => batch.delete(db.collection('places').doc(d.fsId)));
+
+    await batch.commit();
+    log(`✅ [${g.keepDoc.name}] 통합 완료 — 대표 id:${g.keepDoc.id}, 삭제 id: ${g.deleteDocs.map(d=>d.id).join(', ')}`);
+
+    // 3) memories placeId 수정 — 삭제 문서들의 id → 대표 id로 일괄 교체
+    const deleteIds = g.deleteDocs.map(d => Number(d.id)).filter(x => !isNaN(x));
+    if (deleteIds.length) {
+      for (const oldId of deleteIds) {
+        const memSnap = await db.collection('memories').where('placeId', '==', oldId).get();
+        if (!memSnap.empty) {
+          const memBatch = db.batch();
+          memSnap.docs.forEach(doc => memBatch.update(doc.ref, { placeId: Number(g.keepDoc.id) }));
+          await memBatch.commit();
+          log(`  📝 추억 ${memSnap.size}건 placeId ${oldId} → ${g.keepDoc.id} 수정`);
+        }
+        // in-memory 정리
+        const oldMarker = markers[oldId];
+        if (oldMarker) {
+          if (clusterGroup) clusterGroup.removeLayer(oldMarker.marker);
+          delete markers[oldId];
+        }
+        allMemoryPlaceIds.delete(oldId);
+        const idx = places.findIndex(p => p.id == oldId);
+        if (idx !== -1) places.splice(idx, 1);
+      }
+    }
+
+    // 4) in-memory places 업데이트
+    const keepInMem = places.find(p => p.id == g.keepDoc.id);
+    if (keepInMem) Object.assign(keepInMem, updateFields);
+
+    // 5) UI에서 해당 그룹 완료 표시
+    const groupEl = document.getElementById(`dedup-g-${groupIdx}`);
+    if (groupEl) groupEl.style.cssText = 'background:#F0FFF4;border-color:#A7F3D0;border-radius:10px;padding:12px;margin-bottom:10px;opacity:0.6';
+
+    _dedupGroups[groupIdx] = null; // 처리 완료 표시
+    showToast(`✅ "${g.keepDoc.name}" 통합 완료`);
+    invalidatePlacesCache();
+  } catch(e) {
+    log('❌ 통합 실패: ' + e.message);
+    showToast('통합 실패: ' + e.message);
+  }
+}
+
+async function runDedupAll() {
+  if (!confirm(`발견된 ${_dedupGroups.filter(Boolean).length}개 중복 그룹을 모두 통합할까요?\n이 작업은 되돌릴 수 없어요.`)) return;
+  const groups = _dedupGroups.map((g, i) => ({ g, i })).filter(x => x.g);
+  for (const { i } of groups) {
+    await runDedupOne(i);
+    await new Promise(r => setTimeout(r, 200)); // Firestore 부하 분산
+  }
+  showToast(`✅ 전체 통합 완료`);
 }
 
 /* ══ 배치: 기존 장소의 pet 필터 정보(large/indoor/outdoor/cage/entryFee) 자동 채우기 ══ */
