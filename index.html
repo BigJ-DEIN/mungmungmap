@@ -3189,6 +3189,22 @@ function dismissHongsiBubble() {
   localStorage.setItem('hongsi_bubble_seen', '1');
 }
 
+/* 쿼터 초과 시 홍시 말풍선으로 안내 */
+let _quotaBubbleTimer = null;
+function showQuotaBubble() {
+  const el = document.getElementById('hongsi-bubble');
+  if (!el) return;
+  clearTimeout(_bubbleTimer);
+  clearTimeout(_quotaBubbleTimer);
+  el.textContent = '자는 중... 밤 12시 이후에 다시 놀아요.';
+  el.classList.add('visible');
+  _quotaBubbleTimer = setTimeout(() => {
+    el.classList.remove('visible');
+    // 텍스트 원복 (다음 방문자 말풍선 위해)
+    el.textContent = '어디 갈꺼야? 내가 찾아줄게♥';
+  }, 7000);
+}
+
 function updateUserBadge() {
   const initialEl = document.getElementById('user-initial');
   const imgEl     = document.getElementById('user-badge-img');
@@ -4651,6 +4667,8 @@ async function doLiveSearch() {
 
 async function renderLiveResults(rawData) {
   _setLiveFabState(false);
+  // 쿼터 초과 시 말풍선으로 안내
+  if (_sessionQuotaHit) showQuotaBubble();
 
   // Deduplicate by place_name + address
   // Map 방식으로 중복 병합 — _fromPetKeyword:true 를 어느 쪽 결과에서든 보존
@@ -5384,7 +5402,7 @@ function onSearchKeydown(e) {
     _sgKakaoPlaces = docs;
     selectKakaoPlaceSuggestion(0);
   })
-  .catch(e => showToast(e.message === '429' ? '잠시 후 다시 검색해주세요' : '검색 중 오류가 발생했어요'));
+  .catch(e => showToast(e.message === '429' ? '자는 중... 밤 12시 이후에 다시 놀아요.' : '검색 중 오류가 발생했어요'));
 }
 
 function clearSearch() {
@@ -5525,7 +5543,7 @@ async function showSearchSuggestions(query) {
       bx.innerHTML = stripped + kakaoHtml;
       bx.classList.add('open');
     } catch(e) {
-      _sgClear(e?.is429 ? '잠시 후 다시 검색해주세요' : '결과 없음');
+      _sgClear(e?.is429 ? '자는 중... 밤 12시 이후에 다시 놀아요.' : '결과 없음');
     }
 
   }, 300);
@@ -5548,7 +5566,7 @@ async function _sgRestFallback(query, q, renderFn) {
         const stripped = bx.innerHTML.replace(/<div class="sg-empty[^>]*>[\s\S]*?<\/div>/, '');
         const hasOtherResults = stripped.includes('sg-item');
         if (!hasOtherResults) {
-          bx.innerHTML = stripped + `<div class="sg-empty">잠시 후 다시 검색해주세요</div>`;
+          bx.innerHTML = stripped + `<div class="sg-empty">자는 중... 밤 12시 이후에 다시 놀아요.</div>`;
         }
       }
       return;
@@ -6761,7 +6779,7 @@ function closeCropModal() {
 async function confirmCrop() {
   const img = document.getElementById('crop-img');
   if (!_cropNW) return;
-  const outSize = 900;
+  const outSize = 500;
   const canvas = document.createElement('canvas');
   canvas.width = outSize; canvas.height = outSize;
   const ctx = canvas.getContext('2d');
