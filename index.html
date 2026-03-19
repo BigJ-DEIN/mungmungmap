@@ -4414,7 +4414,7 @@ function doLiveSearch() {
   const _ctr = map.getCenter();
   const _cacheKey = `${Math.round(_ctr.lat*100)}_${Math.round(_ctr.lng*100)}_${map.getZoom()}`;
   const _cached = _liveCache.get(_cacheKey);
-  if (_cached && Date.now() - _cached.ts < 15 * 60 * 1000) {
+  if (_cached && Date.now() - _cached.ts < 5 * 60 * 1000) {
     showToast('📦 캐시된 결과로 표시합니다');
     renderLiveResults(_cached.data);
     return;
