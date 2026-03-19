@@ -1129,8 +1129,7 @@
       #filter-toggle-btn { display:none; }
       #drawer-header { display:none; }
       #filter-panel-body { max-height:none !important; overflow:visible !important; padding:0 !important; }
-      .frow-body { max-height:none !important; overflow:visible !important; }
-      .frow-hdr { cursor:default; }
+      /* 데스크탑: frow는 접기/펼치기 기능 동일하게 유지 (max-height 오버라이드 제거) */
     }
 
     /* ── 내 위치 파란 점 (Google Maps 스타일) ── */
@@ -4025,7 +4024,7 @@ function doLiveSearch() {
   const _ctr = map.getCenter();
   const _cacheKey = `${Math.round(_ctr.lat*100)}_${Math.round(_ctr.lng*100)}_${map.getZoom()}`;
   const _cached = _liveCache.get(_cacheKey);
-  if (_cached && Date.now() - _cached.ts < 15 * 60 * 1000) {
+  if (_cached && Date.now() - _cached.ts < 5 * 60 * 1000) {
     showToast('📦 캐시된 결과로 표시합니다');
     renderLiveResults(_cached.data);
     return;
@@ -4143,7 +4142,8 @@ function doLiveSearch() {
         }
 
         // B) REST 키워드 검색 (반려동물 시설 태그) — is_end 까지 완전 수집
-        const restKeywords = ['반려견동반', '애견동반', '반려동물동반', '반려견', '반려동물', '애견카페', '펫카페', '강아지카페'];
+        // 태그 없는 로컬 장소(콩카세 등)를 잡으려면 넓은 키워드 필요 — 좁히지 말 것
+        const restKeywords = ['반려견동반', '애견동반', '반려동물동반', '반려견 카페', '애견카페', '펫카페', '강아지카페', '도그카페', '반려견 식당', '반려동물 동반'];
         for (const kw of restKeywords) {
           tasks.push((async () => {
             for (let page = 1; page <= 3; page++) {
@@ -4181,26 +4181,26 @@ function doLiveSearch() {
         if (rgResp.ok) {
           const rgJson = await rgResp.json();
           const reg    = rgJson.documents?.[0];
-          // 동(洞) 우선, 없으면 구(區), 없으면 시(市) 사용
-          const dong   = reg?.region_3depth_name || '';
+          const dong   = (reg?.region_3depth_name || '').replace(/\d+가$/, ''); // "성수동1가" → "성수동"
           const gu     = reg?.region_2depth_name || '';
-          const areaName = dong.replace(/\d+가$/, '') || gu; // "성수동1가" → "성수동"
-          if (areaName) {
-            const areaKws = [
-              areaName + ' 반려견 카페',
-              areaName + ' 애견 카페',
-              areaName + ' 강아지 카페',
-              areaName + ' 반려동물 카페',
-              areaName + ' 펫카페',
-              areaName + ' 반려견',        // 넓은 반려동물 장소 포함
-            ];
-            for (const kw of areaKws) {
+          // 동(洞) + 구(區) 두 레벨 모두 검색 — 구 레벨은 더 넓은 범위 커버
+          const searchAreas = [...new Set([dong, gu].filter(Boolean))];
+          // 뷰포트 기준 검색 반경 — 위치 바운딩 없으면 전국 결과가 나와서 로컬 장소 누락
+          const rgRadiusM = Math.min(Math.round(Math.sqrt(
+            Math.pow(viewKmW * 1000, 2) + Math.pow(viewKmH * 1000, 2)) / 2 * 1.5), 10000);
+          const rgLocQ = `x=${ctr.lng}&y=${ctr.lat}&radius=${rgRadiusM}`;
+          // 넓은 키워드(' 반려견')가 태그 없는 로컬 인기 장소를 잡는 핵심 — 좁히지 말 것
+          const petKwSuffixes = [' 반려견 카페', ' 애견 카페', ' 강아지 카페', ' 반려동물 카페', ' 펫카페', ' 반려견', ' 강아지', ' 애견'];
+          for (const area of searchAreas) {
+            for (const suffix of petKwSuffixes) {
+              const kw = area + suffix;
               tasks.push((async () => {
                 for (let page = 1; page <= 3; page++) {
                   try {
+                    // 위치 반경 바운딩: 현재 뷰포트 중심 기준 → 지금 화면의 로컬 장소 우선
                     const resp = await fetch(
                       `https://dapi.kakao.com/v2/local/search/keyword.json` +
-                      `?query=${encodeURIComponent(kw)}&size=15&page=${page}`,
+                      `?query=${encodeURIComponent(kw)}&${rgLocQ}&size=15&page=${page}`,
                       { headers: { 'Authorization': `KakaoAK ${KAKAO_REST_KEY}` },
                         signal: AbortSignal.timeout(6000) }
                     );
@@ -4623,6 +4623,7 @@ async function cleanupInvalidLivePlaces() {
 function clearLiveSearch() {
   clearLiveMarkers();
   liveData = [];
+  _liveCache.clear(); // 검색 캐시도 초기화 → 다음 검색 시 최신 결과 수집
   filterPlaces();
   _setLiveFabState(false);
 }
@@ -4716,8 +4717,20 @@ function toggleFrow(id) {
   if (el) el.classList.toggle('open');
 }
 
+/* ── 최초 1회: 모든 필터 행을 펼친 상태로 초기화 ── */
+let _frowsInited = false;
+function _initFrowsOpen() {
+  if (_frowsInited) return;
+  _frowsInited = true;
+  ['cond','cat','area'].forEach(id => {
+    const el = document.getElementById('frow-' + id);
+    if (el) el.classList.add('open');
+  });
+}
+
 /* ── 각 행의 요약 레이블 업데이트 ── */
 function updateFrowSummaries() {
+  _initFrowsOpen();
   // 조건 요약
   const condLabels = [];
   if (activeFilters.largeDog) condLabels.push('대형견 OK');
@@ -5269,13 +5282,25 @@ function filterPlaces() {
   renderList(markerFiltered);
   if (clusterGroup) {
     const filteredSet = new Set(markerFiltered.map(f => f.id));
+    let needRerate = false;
     places.forEach(p => {
       const m = markers[p.id]; if (!m) return;
       const show = filteredSet.has(p.id);
       const inCluster = clusterGroup.hasLayer(m.marker);
-      if (show && !inCluster) clusterGroup.addLayer(m.marker);
+      if (show && !inCluster) {
+        clusterGroup.addLayer(m.marker);
+        if (m.ratingScore) needRerate = true; // 등급 재적용 필요
+      }
       if (!show && inCluster) clusterGroup.removeLayer(m.marker);
     });
+    // 뷰포트에서 벗어났다 돌아온 마커는 Leaflet이 새 DOM을 생성하므로
+    // 저장된 등급 데이터를 새 DOM에 다시 적용해야 함
+    if (needRerate) {
+      setTimeout(() => {
+        const sz = getMarkerSizeForZoom(map ? map.getZoom() : 15);
+        if (sz >= 16) Object.keys(markers).forEach(pid => _applyRatingToDot(parseInt(pid)));
+      }, 200);
+    }
   }
 }
 
@@ -5525,8 +5550,15 @@ function closeDrawer() {
 function openKakaoMap(id) { showDetailWebview(id); } // 하위 호환 alias
 
 function showDetailWebview(id) {
-  const p = places.find(x => x.id === id); if (!p) return;
-  const url = p.kakaoUrl || (p.kakaoId ? `https://place.map.kakao.com/${p.kakaoId}` : `https://map.kakao.com/?q=${encodeURIComponent(p.name)}`);
+  // id는 숫자 또는 문자열로 올 수 있으므로 == 비교 사용
+  const p = places.find(x => x.id == id);
+  const kakaoUrl = p?.kakaoUrl || (p?.kakaoId ? `https://place.map.kakao.com/${p.kakaoId}` : null);
+  if (!p) {
+    // places 배열에서 못 찾은 경우 — 카카오맵 외부 열기
+    window.open(kakaoUrl || `https://map.kakao.com/`, '_blank');
+    return;
+  }
+  const url = kakaoUrl || `https://map.kakao.com/?q=${encodeURIComponent(p.name)}`;
   const wv  = document.getElementById('kakao-webview');
   const ct  = document.getElementById('kw-content');
   if (!wv || !ct) { window.open(url, '_blank'); return; }
@@ -5570,8 +5602,9 @@ function _kwRenderBasic(p) {
     ? `<span class="kw-score">★ ${p.blogScore}등급${p.blogCount > 0 ? ` (블로그 ${p.blogCount}개)` : ''}</span>` : '';
   const chipsHtml = chips.length
     ? `<div class="kw-policy-row">${chips.map(c=>`<span class="kw-chip ${c.cls}">${c.label}</span>`).join('')}</div>` : '';
-  const addrHtml  = p.address
-    ? `<div class="kw-info-row"><span class="kw-info-icon">📍</span><span class="kw-info-text">${esc(p.address)}</span></div>` : '';
+  const addrStr   = p.addr || p.address || '';
+  const addrHtml  = addrStr
+    ? `<div class="kw-info-row"><span class="kw-info-icon">📍</span><span class="kw-info-text">${esc(addrStr)}</span></div>` : '';
   const phoneHtml = p.phone
     ? `<div class="kw-info-row"><span class="kw-info-icon">📞</span><span class="kw-info-text"><a href="tel:${esc(p.phone)}" style="color:#E04E14;text-decoration:none">${esc(p.phone)}</a></span></div>` : '';
   const hoursHtml = p.hours
