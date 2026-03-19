@@ -7154,7 +7154,8 @@ async function openEditMemory(memId) {
     const doc = await db.collection('memories').doc(memId).get();
     if (!doc.exists) { showToast('추억을 찾을 수 없어요'); return; }
     const m = { id: doc.id, ...doc.data() };
-    // 모달 열기 후 값 채우기
+    // 새 사진 선택 초기화
+    memPhotoBlob = null;
     openModal('memory-modal');
     setTimeout(() => {
       const textEl = document.getElementById('mem-text');
@@ -7167,26 +7168,55 @@ async function openEditMemory(memId) {
           if (pickerInput) { pickerInput.value = `${place.name}${place.area ? ' · '+place.area : ''}`; pickerInput.classList.add('has-val'); }
         }
       }
-      // 제출 버튼을 "수정 저장"으로 변경 및 id 태깅
+      // 기존 사진 미리보기
+      const preview = document.getElementById('mem-photo-preview');
+      const hint    = document.getElementById('mem-photo-hint');
+      const sizeEl  = document.getElementById('mem-photo-size');
+      if (m.photoURL && preview) {
+        preview.src = m.photoURL;
+        preview.style.display = 'block';
+        if (hint)   hint.textContent  = '📸 사진 변경하려면 탭';
+        if (sizeEl) sizeEl.textContent = '';
+      } else {
+        if (preview) { preview.style.display = 'none'; preview.src = ''; }
+        if (hint)   hint.textContent  = '📸 사진도 같이 남겨요 (선택)';
+        if (sizeEl) sizeEl.textContent = '';
+      }
+      document.getElementById('mem-photo-input').value = '';
+      // 제출 버튼 수정 모드
       const btn = document.getElementById('mem-submit-btn');
       if (btn) {
         btn.textContent = '수정 저장';
         btn.dataset.editId = memId;
+        btn.dataset.origPhotoURL = m.photoURL || '';
         btn.onclick = () => saveEditMemory(memId);
       }
     }, 100);
   } catch(e) { showToast('불러오기 실패: ' + e.message); }
 }
+
 async function saveEditMemory(memId) {
   const text = document.getElementById('mem-text').value.trim();
-  const btn = document.getElementById('mem-submit-btn');
+  const btn  = document.getElementById('mem-submit-btn');
+  const origPhotoURL = btn.dataset.origPhotoURL || null;
   btn.disabled = true; btn.textContent = '저장 중...';
   try {
-    await db.collection('memories').doc(memId).update({ text });
+    const updates = { text };
+    // 새 사진이 선택된 경우 업로드 후 photoURL 교체
+    if (memPhotoBlob) {
+      const newURL = await uploadMemPhoto(memPhotoBlob);
+      if (!newURL) {
+        btn.disabled = false; btn.textContent = '수정 저장';
+        showToast('⚠️ 사진 업로드 실패. 다시 시도해주세요.');
+        return;
+      }
+      updates.photoURL = newURL;
+    }
+    await db.collection('memories').doc(memId).update(updates);
+    memPhotoBlob = null;
     showToast('✅ 수정됐어요!');
     closeModal('memory-modal');
-    // 버튼 원복
-    btn.textContent = '기록하기'; delete btn.dataset.editId;
+    btn.textContent = '기록하기'; delete btn.dataset.editId; delete btn.dataset.origPhotoURL;
     btn.onclick = submitMemory;
     loadMemoriesFeed();
   } catch(e) {
