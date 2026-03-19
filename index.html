@@ -3729,8 +3729,27 @@ async function loadAllMemoryPlaceIds() {
       if (pid != null) { uniqueIds.add(Number(pid)); allMemoryPlaceIds.add(Number(pid)); }
     });
     // 아직 로딩 안 된 장소 → 전체 데이터 로딩 (마커 표시에 필요), 최대 200개 제한
-    const missingIds = [...uniqueIds].filter(id => !places.find(p => p.id === id)).slice(0, 200);
+    // ★ 느슨한 동등비교(==)로 문자열/숫자 타입 불일치 방지
+    const missingIds = [...uniqueIds].filter(id => !places.find(p => p.id == id)).slice(0, 200);
     if (missingIds.length) await batchLoadPlacesByIds(missingIds);
+    // Firestore에도 없는 장소 → 추억 데이터에서 lat/lng 스텁 생성
+    uniqueIds.forEach(pid => {
+      if (!places.find(p => p.id == pid)) {
+        const memDoc = snap.docs.find(d => Number(d.data().placeId) == pid);
+        if (memDoc) {
+          const md = memDoc.data();
+          if (md.placeLat != null && md.placeLng != null) {
+            const stub = {
+              id: pid, name: md.placeName || '알 수 없는 장소',
+              lat: md.placeLat, lng: md.placeLng, area: md.placeArea || '',
+              petStatus: 'confirmed', active: true, _stub: true
+            };
+            places.push(stub);
+            if (clusterGroup) { try { addMarker(stub); } catch(e) {} }
+          }
+        }
+      }
+    });
     // 전체 장소 로딩 완료 후 연두색 하트로 업그레이드 (race condition 방지)
     uniqueIds.forEach(pid => {
       if (!userVisitedPlaceIds.has(pid)) upgradeToGreenHeartMarker(pid);
@@ -3792,7 +3811,8 @@ function upgradeToHeartMarker(placeId) {
 /* 다른 사람 추억 장소: 기존 마커 → 연두색 하트로 교체 */
 function upgradeToGreenHeartMarker(placeId) {
   if (userVisitedPlaceIds.has(placeId)) return; // 본인 추억 우선
-  const place = places.find(p => p.id === placeId);
+  // ★ 느슨한 동등비교(==)로 문자열/숫자 id 타입 불일치 방지
+  const place = places.find(p => p.id == placeId);
   if (!place || !clusterGroup) return;
   const info = markers[placeId];
   const sz   = map ? getMarkerSizeForZoom(map.getZoom()) : 20;
@@ -5000,6 +5020,12 @@ function clearSearch() {
   if (clrBtn) clrBtn.classList.remove('visible');
   hideSearchSuggestions();
   clearTimeout(searchTimer);
+  // ★ 라이브 검색 마커·결과도 같이 제거 (검색어 지우기 = 모든 검색 흔적 삭제)
+  clearLiveMarkers();
+  liveData = [];
+  // ★ 카카오 검색 핀 마커도 제거
+  if (_searchResultMarker) { map?.removeLayer(_searchResultMarker); _searchResultMarker = null; }
+  _setLiveFabState(false);
   filterPlaces();
   inp?.focus();
 }
@@ -5350,7 +5376,12 @@ function filterPlaces() {
     const filteredSet = new Set(markerFiltered.map(f => f.id));
     let needRerate = false;
     places.forEach(p => {
-      const m = markers[p.id]; if (!m) return;
+      let m = markers[p.id];
+      // ★ 마커가 없는데 목록에 있는 장소 → 즉시 마커 생성 (목록 ≠ 마커 불일치 방지)
+      if (!m && filteredSet.has(p.id)) {
+        try { addMarker(p); m = markers[p.id]; } catch(e) {}
+      }
+      if (!m) return;
       // ★ 하트 마커 (나의 추억·친구 추억)는 뷰포트 필터 적용 안 함 — 항상 지도에 표시
       if (m.isHeart) return;
       const show = filteredSet.has(p.id);
@@ -5750,19 +5781,23 @@ async function _kwLoadPanel3(p, ct) {
 /* Firestore 장소 필드 저장 helper — document not found 시 전체 set으로 fallback */
 async function savePlaceField(p, updateObj) {
   if (!firebaseReady || !db) throw new Error('Firebase 연결 필요');
+  // Firestore는 undefined 값을 허용하지 않으므로 제거 (null은 허용)
+  const stripUndefined = obj => Object.fromEntries(
+    Object.entries(obj).filter(([, v]) => v !== undefined)
+  );
   // firestoreId 없으면 신규 문서 생성
   if (!p.firestoreId) {
     const ref = db.collection('places').doc();
     p.firestoreId = ref.id;
-    await ref.set({ ...p, ...updateObj });
+    await ref.set(stripUndefined({ ...p, ...updateObj }));
     return;
   }
   try {
     await db.collection('places').doc(p.firestoreId).update(updateObj);
   } catch(e) {
     if (e.code === 'not-found' || (e.message && e.message.includes('No document to update'))) {
-      // 문서가 없으면 전체 장소 데이터로 새로 생성
-      await db.collection('places').doc(p.firestoreId).set({ ...p, ...updateObj });
+      // 문서가 없으면 전체 장소 데이터로 새로 생성 (undefined 필드 제거)
+      await db.collection('places').doc(p.firestoreId).set(stripUndefined({ ...p, ...updateObj }));
     } else {
       throw e;
     }
@@ -6416,6 +6451,8 @@ async function submitMemory() {
     placeId,
     placeName: place ? place.name : '',
     placeArea: place ? place.area : '',
+    placeLat:  place ? (place.lat ?? null) : null,   // ★ 장소 없을 때 스텁 마커용
+    placeLng:  place ? (place.lng ?? null) : null,
     userId:       currentUser?.uid || 'anonymous',
     userName:     currentUser?.displayName || currentUser?.email?.split('@')[0] || '익명',
     userPhotoURL: currentUser?.photoURL || null,
