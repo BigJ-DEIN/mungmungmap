@@ -947,31 +947,28 @@
       border-radius:16px; font-size:12px; font-weight:700; cursor:pointer;
       font-family:inherit; flex-shrink:0;
     }
-    .mem-feed { flex:1; overflow-y:auto; padding:0; -webkit-overflow-scrolling:touch; background:#F5F5F5; }
+    .mem-feed { flex:1; overflow-y:auto; padding:12px 12px 20px; -webkit-overflow-scrolling:touch; background:#F2F2F2; display:flex; flex-direction:column; gap:14px; }
     .mem-feed::-webkit-scrollbar { width:3px; }
     .mem-feed::-webkit-scrollbar-thumb { background:#DDD; border-radius:2px; }
-    /* Instagram-style feed card */
+    /* ── Instagram-style card ── */
     .mem-card {
-      background:white; margin-bottom:8px; border-bottom:1px solid #EFEFEF;
+      background:white;
+      border-radius:16px;
+      overflow:hidden;
+      box-shadow:0 1px 4px rgba(0,0,0,.07), 0 0 0 1px rgba(0,0,0,.04);
     }
     /* Card header: place name + region + menu */
     .mem-card-header {
-      display:flex; align-items:center; padding:10px 14px 8px;
+      display:flex; align-items:center; padding:12px 14px 0;
       gap:8px;
     }
-    .mem-card-place {
-      flex:1; min-width:0;
-    }
+    .mem-card-place { flex:1; min-width:0; }
     .mem-card-place-name {
       font-size:13px; font-weight:800; color:#1A1A1A;
       white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
     }
-    .mem-card-place-area {
-      font-size:11px; color:#999; margin-top:1px;
-    }
-    .mem-card-menu {
-      display:flex; gap:6px; flex-shrink:0;
-    }
+    .mem-card-place-area { font-size:11px; color:#999; margin-top:1px; }
+    .mem-card-menu { display:flex; gap:6px; flex-shrink:0; }
     .mem-card-menu-btn {
       background:none; border:none; cursor:pointer; font-size:12px; color:#999;
       padding:3px 7px; border-radius:8px; font-family:inherit; font-weight:600;
@@ -980,40 +977,40 @@
     .mem-card-menu-btn:hover { background:#F5F5F5; color:#555; }
     .mem-card-menu-btn.del { color:#E04E14; }
     .mem-card-menu-btn.del:hover { background:#FFF0EC; }
-    /* Full-width photo */
-    .mem-card-img { width:100%; max-height:300px; object-fit:cover; display:block; }
-    /* User + dog row */
+    /* User + dog row (above image, Instagram style) */
     .mem-card-user-row {
-      display:flex; align-items:center; padding:10px 14px 4px; gap:9px;
+      display:flex; align-items:center; padding:10px 14px 8px; gap:9px;
     }
     .mem-card-avatar {
-      width:30px; height:30px; border-radius:50%; object-fit:cover;
+      width:34px; height:34px; border-radius:50%; object-fit:cover;
       background:#EEE; flex-shrink:0;
+      border:2px solid #F0EBE8;
     }
     .mem-card-avatar-placeholder {
-      width:30px; height:30px; border-radius:50%; background:#F0E8E4;
+      width:34px; height:34px; border-radius:50%; background:#F0E8E4;
       display:flex; align-items:center; justify-content:center;
-      font-size:15px; flex-shrink:0;
+      font-size:16px; flex-shrink:0;
+      border:2px solid #F0EBE8;
     }
     .mem-card-user-info { flex:1; min-width:0; }
-    .mem-card-username { font-size:12px; font-weight:700; color:#2D2D2D; }
-    .mem-card-time { font-size:10px; color:#BBBBBB; margin-top:1px; }
+    .mem-card-username { font-size:13px; font-weight:700; color:#1A1A1A; }
+    .mem-card-time { font-size:11px; color:#BBBBBB; margin-top:1px; }
     .mem-card-dog-badge {
       display:flex; align-items:center; gap:5px; flex-shrink:0;
-      background:#FFF4EF; border-radius:20px; padding:3px 9px 3px 5px;
+      background:#FFF4EF; border-radius:20px; padding:4px 10px 4px 6px;
     }
-    .mem-card-dog-avatar {
-      width:20px; height:20px; border-radius:50%; object-fit:cover;
-    }
+    .mem-card-dog-avatar { width:22px; height:22px; border-radius:50%; object-fit:cover; }
     .mem-card-dog-name { font-size:11px; font-weight:700; color:#E04E14; }
+    /* Full-width photo — square-ish crop */
+    .mem-card-img {
+      width:100%; aspect-ratio:4/3; object-fit:cover; display:block;
+    }
     /* Body */
-    .mem-card-body { padding:4px 14px 12px; }
-    .mem-text { font-size:13px; color:#2D2D2D; line-height:1.65; }
-    .mem-private-label { font-size:10px; color:#AAA; margin-top:5px; }
-    /* Legacy — kept for drawer cards */
+    .mem-card-body { padding:10px 14px 14px; }
+    .mem-text { font-size:14px; color:#1A1A1A; line-height:1.65; }
+    .mem-private-label { font-size:11px; color:#CCC; margin-top:6px; display:flex; align-items:center; gap:3px; }
     .mem-place-tag {
-      display:inline-block; font-size:11px; font-weight:700; color:#E04E14;
-      margin-bottom:5px;
+      display:inline-block; font-size:11px; font-weight:700; color:#E04E14; margin-bottom:5px;
     }
     .mem-meta { font-size:11px; color:#C0C0C0; margin-top:7px; display:flex; gap:8px; }
     .mem-empty { text-align:center; padding:48px 20px; color:#CCC; font-size:13px; line-height:1.7; }
@@ -1093,18 +1090,22 @@
 
     /* Drawer memories section */
     .drawer-mem-section { margin-top:4px; }
-    .drawer-mem-feed { display:flex; flex-direction:column; gap:0; margin-top:8px;
-      background:#F7F7F7; border-radius:14px; overflow:hidden; }
-    /* drawer 안 mem-card 오버라이드 — 둥근 배경 없이 리스트처럼 */
-    .drawer-mem-feed .mem-card {
-      margin-bottom:0; border-bottom:1px solid #EFEFEF; border-radius:0;
-      background:white;
+    /* 드로어 추억 피드 — 인스타그램 카드 스타일 */
+    .drawer-mem-feed {
+      display:flex; flex-direction:column; gap:12px;
+      margin-top:10px; padding-bottom:8px; background:transparent;
     }
-    .drawer-mem-feed .mem-card:last-child { border-bottom:none; }
-    .drawer-mem-feed .mem-card-img { max-height:180px; }
-    .drawer-mem-feed .mem-card-header { padding:8px 12px 6px; }
-    .drawer-mem-feed .mem-card-user-row { padding:8px 12px 3px; }
-    .drawer-mem-feed .mem-card-body { padding:3px 12px 10px; }
+    /* drawer 안 mem-card — 인스타그램 카드 스타일 유지, 이미지 높이만 제한 */
+    .drawer-mem-feed .mem-card {
+      border-radius:14px;
+      box-shadow:0 1px 6px rgba(0,0,0,.08), 0 0 0 1px rgba(0,0,0,.05);
+    }
+    .drawer-mem-feed .mem-card-img {
+      aspect-ratio:4/3; max-height:220px; object-fit:cover;
+    }
+    .drawer-mem-feed .mem-card-header { padding:10px 12px 0; }
+    .drawer-mem-feed .mem-card-user-row { padding:8px 12px 6px; }
+    .drawer-mem-feed .mem-card-body { padding:6px 12px 12px; }
     /* legacy — 하위호환 */
     .drawer-mem-card {
       background:#FAFAFA; border-radius:12px; overflow:hidden; border:1.5px solid #F0F0F0;
@@ -5714,7 +5715,7 @@ function openPlace(p) {
       </div>
     </div>` : '';
 
-  currentDrawerMemTab = 'mine';
+  currentDrawerMemTab = 'all';
   document.getElementById('drawer-content').innerHTML = `
     <div class="d-header">
       <div class="d-icon" style="${p.isClosed ? 'filter:grayscale(1);opacity:.6' : ''}">${p.emoji}</div>
@@ -5765,8 +5766,8 @@ function openPlace(p) {
       <div class="divider"></div>
       <div class="drawer-mem-header">
         <div class="drawer-mem-tabs">
-          <button class="drawer-mem-tab active" id="drawer-tab-mine" onclick="switchDrawerMemTab('mine')">나의 추억</button>
-          <button class="drawer-mem-tab" id="drawer-tab-all" onclick="switchDrawerMemTab('all')">모두의 추억</button>
+          <button class="drawer-mem-tab active" id="drawer-tab-all" onclick="switchDrawerMemTab('all')">모두의 추억</button>
+          <button class="drawer-mem-tab" id="drawer-tab-mine" onclick="switchDrawerMemTab('mine')">나의 추억</button>
         </div>
         <button class="btn-mem-write-small" onclick="openWriteMemory(${p.id})">✏️ 추억 남기기</button>
       </div>
@@ -5791,7 +5792,7 @@ function openPlace(p) {
 
 let _drawerOpenAt = 0;
 let _drawerExpanded = false;
-let currentDrawerMemTab = 'mine'; // 기본: 나의 추억
+let currentDrawerMemTab = 'all'; // 기본: 모두의 추억
 
 function switchDrawerMemTab(tab) {
   currentDrawerMemTab = tab;
@@ -6799,26 +6800,9 @@ function timeAgo(ts) {
 /* 추억 피드 렌더링 — Instagram 스타일 */
 function renderMemoryCard(m, showPlace = true) {
   const isMyMem = m.userId && currentUser?.uid && m.userId === currentUser.uid;
+  const safePlace = (m.placeName||'').replace(/'/g,"\\'");
 
-  // ── 헤더: 장소명 + 지역 + 수정/삭제 버튼 (내 글만) ──
-  const headerHtml = showPlace ? `
-    <div class="mem-card-header">
-      <div class="mem-card-place">
-        ${m.placeName ? `<div class="mem-card-place-name">📍 ${m.placeName}</div>` : ''}
-        ${m.placeArea ? `<div class="mem-card-place-area">${m.placeArea}</div>` : ''}
-      </div>
-      ${isMyMem ? `<div class="mem-card-menu">
-        <button class="mem-card-menu-btn" onclick="openEditMemory('${m.id}')">수정</button>
-        <button class="mem-card-menu-btn del" onclick="confirmDeleteMemory('${m.id}','${(m.placeName||'').replace(/'/g,"\\'")}')">삭제</button>
-      </div>` : ''}
-    </div>` : '';
-
-  // ── 전체 사진 ──
-  const imgHtml = m.photoURL
-    ? `<img class="mem-card-img" src="${m.photoURL}" loading="lazy" alt="">`
-    : '';
-
-  // ── 유저 행: 아바타 + 이름 + 시간 + 강아지 배지 ──
+  // ── 유저 행: 아바타 + 이름 + 시간 (이미지 위에 표시 — 인스타그램과 동일) ──
   const avatarHtml = m.userPhotoURL
     ? `<img class="mem-card-avatar" src="${m.userPhotoURL}" alt="">`
     : `<div class="mem-card-avatar-placeholder">🐾</div>`;
@@ -6827,9 +6811,16 @@ function renderMemoryCard(m, showPlace = true) {
   if (m.dogName) {
     const dogAv = m.dogPhotoURL
       ? `<img class="mem-card-dog-avatar" src="${m.dogPhotoURL}" alt="">`
-      : `<span style="font-size:14px">🐶</span>`;
+      : `<span style="font-size:13px">🐶</span>`;
     dogBadgeHtml = `<div class="mem-card-dog-badge">${dogAv}<span class="mem-card-dog-name">${m.dogName}${m.dogAge ? ' · '+m.dogAge : ''}</span></div>`;
   }
+
+  // 수정/삭제 메뉴 (내 글만)
+  const menuHtml = isMyMem ? `
+    <div class="mem-card-menu">
+      <button class="mem-card-menu-btn" onclick="openEditMemory('${m.id}')">수정</button>
+      <button class="mem-card-menu-btn del" onclick="confirmDeleteMemory('${m.id}','${safePlace}')">삭제</button>
+    </div>` : '';
 
   const userRowHtml = `
     <div class="mem-card-user-row">
@@ -6839,25 +6830,33 @@ function renderMemoryCard(m, showPlace = true) {
         <div class="mem-card-time">${timeAgo(m.createdAt)}</div>
       </div>
       ${dogBadgeHtml}
+      ${menuHtml}
     </div>`;
 
+  // ── 장소 태그 (추억 탭에서만 표시) ──
+  const placeTagHtml = showPlace && m.placeName ? `
+    <div style="padding:0 14px 0; margin-top:-2px">
+      <span style="font-size:12px;font-weight:700;color:#E04E14">📍 ${m.placeName}</span>
+      ${m.placeArea ? `<span style="font-size:11px;color:#BBBBBB;margin-left:4px">${m.placeArea}</span>` : ''}
+    </div>` : '';
+
+  // ── 사진 (전체 너비) ──
+  const imgHtml = m.photoURL
+    ? `<img class="mem-card-img" src="${m.photoURL}" loading="lazy" alt="">`
+    : '';
+
   // ── 본문 ──
-  const privNote = (m.isPublic === false && isMyMem) ? `<div class="mem-private-label">🔒 나만 보기</div>` : '';
+  const privNote = (m.isPublic === false && isMyMem)
+    ? `<span class="mem-private-label">🔒 나만 보기</span>` : '';
   const bodyHtml = (m.text || privNote) ? `
     <div class="mem-card-body">
-      ${m.text ? `<div class="mem-text">${m.text.replace(/\n/g,'<br>')}</div>` : ''}
+      ${m.text ? `<p class="mem-text">${m.text.replace(/\n/g,'<br>')}</p>` : ''}
       ${privNote}
     </div>` : '';
 
-  // ── 내 글이지만 showPlace=false (drawer)이면 메뉴 버튼 포함 ──
-  const drawerMenu = !showPlace && isMyMem ? `
-    <div style="display:flex;gap:6px;padding:0 14px 10px">
-      <button class="mem-card-menu-btn" onclick="openEditMemory('${m.id}')">수정</button>
-      <button class="mem-card-menu-btn del" onclick="confirmDeleteMemory('${m.id}','${(m.placeName||'').replace(/'/g,"\\'")}')">삭제</button>
-    </div>` : '';
-
+  // 인스타그램 레이아웃: 유저행 → 장소태그 → 이미지 → 본문
   return `<div class="mem-card" data-mem-id="${m.id}">
-    ${headerHtml}${imgHtml}${userRowHtml}${bodyHtml}${drawerMenu}
+    ${userRowHtml}${placeTagHtml}${imgHtml}${bodyHtml}
   </div>`;
 }
 
