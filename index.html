@@ -3198,7 +3198,20 @@ async function loadViewportPlaces() {
         }
         // 경도 클라이언트 필터
         if (p.lng == null || p.lng < lngMin || p.lng > lngMax) return;
-        if (existingIds.has(p.id)) return;
+        if (existingIds.has(p.id)) {
+          // ★ Fix D: 이미 로드된 장소라도 Firestore에 manuallyEdited 필드가 있으면 필드 병합
+          // 이를 통해 반려견 정책 수동 편집이 세션 간에 유지됨
+          if (p.manuallyEdited === true) {
+            const existing = places.find(x => x.id == p.id);
+            if (existing && !existing.manuallyEdited) {
+              const POLICY_FIELDS = ['large','small','indoor','outdoor','cage','entryFee','stroller','note','hours'];
+              POLICY_FIELDS.forEach(f => { if (p[f] !== undefined) existing[f] = p[f]; });
+              existing.manuallyEdited = true;
+              existing.firestoreId = p.firestoreId; // 최신 firestoreId로 갱신
+            }
+          }
+          return;
+        }
         existingIds.add(p.id);
         places.push(p);
         newBatch.push(p);
@@ -5377,6 +5390,22 @@ async function addKakaoSearchPlaceToFavorite() {
   // 이미 DB에 있으면 liked 토글만
   let place = places.find(p => p.kakaoId === d.id || p.name === d.place_name);
 
+  if (!place && firebaseReady && db && d.id) {
+    // ★ Fix C: Firestore에서 kakaoId로 기존 문서 확인 (세션 간 중복 방지 — 반려견 정책 유지)
+    try {
+      const kakaoSnap = await db.collection('places').where('kakaoId', '==', d.id).limit(1).get();
+      if (!kakaoSnap.empty) {
+        const existingDoc = kakaoSnap.docs[0];
+        place = { ...existingDoc.data(), firestoreId: existingDoc.id };
+        if (!places.find(x => x.id == place.id)) {
+          places.push(place);
+          if (clusterGroup) { try { addMarker(place); } catch(e) {} }
+        }
+        console.log('[addKakaoSearchPlaceToFavorite] Firestore 기존 문서 재사용:', place.name, '→ id:', place.id);
+      }
+    } catch(fsErr) { console.warn('[addKakaoSearchPlaceToFavorite] Firestore 중복 확인 실패:', fsErr); }
+  }
+
   if (!place) {
     showToast('📍 장소 등록 중...');
     // autoAddLivePlace 와 동일한 저장 로직 (pet 검증 생략 — 사용자가 직접 선택)
@@ -5637,7 +5666,7 @@ function openPlace(p) {
       </div>
     </div>` : '';
 
-  currentDrawerMemTab = 'all';
+  currentDrawerMemTab = 'mine';
   document.getElementById('drawer-content').innerHTML = `
     <div class="d-header">
       <div class="d-icon" style="${p.isClosed ? 'filter:grayscale(1);opacity:.6' : ''}">${p.emoji}</div>
@@ -5675,11 +5704,6 @@ function openPlace(p) {
     <div class="hours-grid editable" onclick="onFieldClick(${p.id},'hours')" title="${currentUser?.isAdmin?'클릭해서 수정':'탭해서 수정 요청'}">
       ${hoursHtml}
     </div>
-    <div class="divider"></div>
-    <div class="sec-label">상세 정보</div>
-    <div class="notes-box editable" onclick="onFieldClick(${p.id},'note')" title="${currentUser?.isAdmin?'클릭해서 수정':'탭해서 수정 요청'}">
-      ${p.note || ''}
-    </div>
     <div class="warn-note">⚠️ 방문 전 전화로 최신 정보 확인을 권장합니다</div>
     <div class="action-row">
       <button class="btn-act btn-primary" onclick="openKakaoMap(${p.id})">
@@ -5693,10 +5717,10 @@ function openPlace(p) {
       <div class="divider"></div>
       <div class="drawer-mem-header">
         <div class="drawer-mem-tabs">
-          <button class="drawer-mem-tab active" id="drawer-tab-all" onclick="switchDrawerMemTab('all')">모두의 추억</button>
-          <button class="drawer-mem-tab" id="drawer-tab-mine" onclick="switchDrawerMemTab('mine')">나의 추억</button>
+          <button class="drawer-mem-tab active" id="drawer-tab-mine" onclick="switchDrawerMemTab('mine')">나의 추억</button>
+          <button class="drawer-mem-tab" id="drawer-tab-all" onclick="switchDrawerMemTab('all')">모두의 추억</button>
         </div>
-        <button class="btn-mem-write-small" onclick="openWriteMemory(${p.id})">✏️ 남기기</button>
+        <button class="btn-mem-write-small" onclick="openWriteMemory(${p.id})">✏️ 추억 남기기</button>
       </div>
       <div class="drawer-mem-feed" id="drawer-mem-list">
         <div style="font-size:13px;color:#DDD;text-align:center;padding:12px 0">기억 꺼내는 중...</div>
@@ -5719,12 +5743,12 @@ function openPlace(p) {
 
 let _drawerOpenAt = 0;
 let _drawerExpanded = false;
-let currentDrawerMemTab = 'all';
+let currentDrawerMemTab = 'mine'; // 기본: 나의 추억
 
 function switchDrawerMemTab(tab) {
   currentDrawerMemTab = tab;
-  document.getElementById('drawer-tab-all')?.classList.toggle('active', tab === 'all');
   document.getElementById('drawer-tab-mine')?.classList.toggle('active', tab === 'mine');
+  document.getElementById('drawer-tab-all')?.classList.toggle('active', tab === 'all');
   if (activePlace) refreshDrawerMemories(activePlace.id);
 }
 
@@ -6507,7 +6531,10 @@ function onMemPrivacyChange() {
     : '🔒 비공개 — 나만 볼 수 있어요';
 }
 
+let _pendingMemoryPlaceId = null; // ★ Fix A: 재발 방지 — 모달 열 때의 장소 ID 보관
+
 function openWriteMemory(placeId) {
+  _pendingMemoryPlaceId = (placeId != null) ? Number(placeId) : null;
   memPhotoBlob = null;
   const preview = document.getElementById('mem-photo-preview');
   if (preview) { preview.style.display = 'none'; preview.src = ''; }
@@ -6546,6 +6573,16 @@ async function submitMemory() {
   const text    = document.getElementById('mem-text').value.trim();
   if (!placeId) { showToast('어디 다녀왔는지 골라줘요 🐾'); return; }
   if (!text && !memPhotoBlob) { showToast('사진이나 한 마디라도 남겨봐요'); return; }
+
+  // ★ Fix A: 드로어에서 열린 장소와 다른 장소가 선택됐을 때 재확인
+  if (_pendingMemoryPlaceId != null && placeId !== _pendingMemoryPlaceId) {
+    const selectedPlace = places.find(p => p.id === placeId);
+    const pendingPlace  = places.find(p => p.id === _pendingMemoryPlaceId);
+    const pendingName   = pendingPlace  ? pendingPlace.name  : `ID ${_pendingMemoryPlaceId}`;
+    const selectedName  = selectedPlace ? selectedPlace.name : `ID ${placeId}`;
+    const ok = confirm(`⚠️ 장소가 변경됐어요!\n\n원래 장소: ${pendingName}\n선택된 장소: ${selectedName}\n\n"${selectedName}"에 추억을 저장할까요?`);
+    if (!ok) return;
+  }
 
   const btn = document.getElementById('mem-submit-btn');
   btn.disabled = true; btn.textContent = '저장 중...';
@@ -6814,11 +6851,15 @@ async function loadMemoriesFeed() {
 /* 특정 가게 추억 로드 (detail drawer) */
 async function loadPlaceMemories(placeId) {
   let mems = [];
+  // ★ placeId 정규화: submitMemory는 parseInt()로 저장 → 항상 Number로 쿼리
+  //   Firestore에서 온 p.id가 String일 경우 where('placeId','==', "10001")는 Number와 불일치
+  const numId = Number(placeId);
+  const queryId = !isNaN(numId) ? numId : placeId;
   if (firebaseReady && db) {
     try {
       // placeId 단독 쿼리 → composite index 불필요, 클라이언트 정렬
       const snap = await db.collection('memories')
-        .where('placeId','==', placeId).limit(50).get();
+        .where('placeId','==', queryId).limit(50).get();
       mems = snap.docs.map(d => ({ id: d.id, ...d.data() }))
         .sort((a, b) => {
           const ta = a.createdAt?.toMillis?.() ?? (a.createdAt?.seconds ?? 0) * 1000;
@@ -6828,7 +6869,7 @@ async function loadPlaceMemories(placeId) {
     } catch(e) { console.warn('place memories error:', e); }
   }
   const local = JSON.parse(localStorage.getItem('mem_local') || '[]');
-  const localFiltered = local.filter(m => m.placeId === placeId);
+  const localFiltered = local.filter(m => Number(m.placeId) === queryId || m.placeId == placeId);
   let all = [...localFiltered, ...mems];
   // 비공개 글은 본인만 볼 수 있음, 숨김 처리된 글은 관리자 외 모두 제외
   const myUid = currentUser?.uid;
@@ -6854,7 +6895,7 @@ async function refreshDrawerMemories(placeId) {
   }
   if (!mems.length) {
     const msg = currentDrawerMemTab === 'mine'
-      ? (currentUser ? '아직 내 기록이 없어요. ✏️ 남기기로 첫 추억을 남겨봐요 🐾' : '로그인 후 나의 추억을 남겨봐요 🐾')
+      ? (currentUser ? '아직 내 기록이 없어요. ✏️ 추억 남기기로 첫 기록을 남겨봐요 🐾' : '로그인 후 나의 추억을 남겨봐요 🐾')
       : '아직 기록이 없어요. 첫 번째로 남겨봐요 🐾';
     inner.innerHTML = `<div style="font-size:13px;color:#CCC;text-align:center;padding:16px 0">${msg}</div>`;
     return;
@@ -7648,9 +7689,13 @@ function _renderAdminMemUI() {
         ${m.placeName ? `<div style="padding:2px 12px 6px;font-size:12px;font-weight:700;color:#E04E14">📍 ${(m.placeName||'').replace(/</g,'&lt;')}${m.placeArea?` · ${m.placeArea}`:''}</div>` : ''}
         ${imgHtml}
         ${textHtml}
+        <div style="font-size:10px;color:#AAA;padding:0 12px 4px">placeId: ${m.placeId ?? '없음'}</div>
         <div style="display:flex;gap:8px;padding:8px 12px 10px;border-top:1px solid #F5F5F5">
           <button onclick="adminHideMemory('${safeId}',${!isHidden})" style="flex:1;padding:7px;border-radius:9px;border:1.5px solid ${isHidden?'#43A047':'#E04E14'};background:${isHidden?'#E8F5E9':'#FFF3EE'};color:${isHidden?'#2E7D32':'#E04E14'};font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">
             ${isHidden ? '👁 공개 복구' : '🚫 숨김 처리'}
+          </button>
+          <button onclick="adminRelocateMemory('${safeId}')" style="flex:1;padding:7px;border-radius:9px;border:1.5px solid #7C3AED;background:#F5F3FF;color:#7C3AED;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">
+            📍 장소 수정
           </button>
           <button onclick="adminDeleteMemory('${safeId}','${safeName}')" style="flex:1;padding:7px;border-radius:9px;border:1.5px solid #FFCDD2;background:#FFF5F5;color:#C62828;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">
             🗑 삭제
@@ -7700,6 +7745,85 @@ async function adminDeleteMemory(memId, placeName) {
     _renderAdminMemUI();
     showToast('🗑️ 추억이 삭제됐어요');
   } catch(e) { showToast('삭제 실패: ' + e.message); }
+}
+
+// ★ Fix B: 관리자 — 추억의 장소(placeId) 재지정
+let _adminRelocateMemId = null;
+async function adminRelocateMemory(memId) {
+  _adminRelocateMemId = memId;
+  const m = _adminMemList.find(x => x.id === memId);
+  if (!m) return;
+  // 모달이 없으면 생성
+  let modal = document.getElementById('admin-relocate-modal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'admin-relocate-modal';
+    modal.style.cssText = 'display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;display:flex;align-items:center;justify-content:center';
+    modal.innerHTML = `
+      <div style="background:white;border-radius:16px;padding:20px;width:calc(100% - 40px);max-width:360px;box-shadow:0 8px 32px rgba(0,0,0,.2)">
+        <div style="font-size:16px;font-weight:700;margin-bottom:4px">📍 장소 재지정</div>
+        <div id="arloc-cur" style="font-size:12px;color:#AAA;margin-bottom:12px"></div>
+        <input id="arloc-input" placeholder="장소명 검색 (예: 스테이어도러블)" autocomplete="off"
+          style="width:100%;box-sizing:border-box;padding:10px 12px;border:1.5px solid #DDD;border-radius:10px;font-size:14px;font-family:inherit;outline:none;margin-bottom:6px"
+          oninput="adminRelocateSearch(this.value)">
+        <div id="arloc-results" style="max-height:220px;overflow-y:auto;border:1px solid #EEE;border-radius:10px;display:none"></div>
+        <button onclick="document.getElementById('admin-relocate-modal').style.display='none'" style="margin-top:12px;width:100%;padding:10px;border-radius:10px;border:1.5px solid #DDD;background:white;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit">취소</button>
+      </div>`;
+    document.body.appendChild(modal);
+  }
+  document.getElementById('arloc-cur').textContent = `현재: "${m.placeName || '?'}" (placeId: ${m.placeId ?? '없음'})`;
+  document.getElementById('arloc-input').value = '';
+  document.getElementById('arloc-results').style.display = 'none';
+  modal.style.display = 'flex';
+  setTimeout(() => document.getElementById('arloc-input')?.focus(), 80);
+}
+
+function adminRelocateSearch(q) {
+  const dropdown = document.getElementById('arloc-results');
+  if (!q.trim()) { dropdown.style.display = 'none'; return; }
+  const kw = q.trim().toLowerCase();
+  const matches = places
+    .filter(p => p && p.id != null && p.name && (p.name.toLowerCase().includes(kw) || (p.area||'').toLowerCase().includes(kw)))
+    .sort((a, b) => a.name.localeCompare(b.name, 'ko'))
+    .slice(0, 20);
+  if (!matches.length) {
+    dropdown.innerHTML = `<div style="padding:10px 12px;font-size:13px;color:#AAA">검색 결과 없음</div>`;
+  } else {
+    dropdown.innerHTML = matches.map(p =>
+      `<div onclick="adminRelocateConfirm(${p.id},'${(p.name||'').replace(/'/g,"\\'")}','${(p.area||'').replace(/'/g,"\\'")}')"
+        style="padding:9px 12px;border-bottom:1px solid #F5F5F5;cursor:pointer;font-size:13px">
+        <span style="font-weight:600">${p.name.replace(/</g,'&lt;')}</span>
+        ${p.area ? `<span style="color:#AAA;margin-left:6px;font-size:11px">${p.area}</span>` : ''}
+        <span style="float:right;font-size:10px;color:#CCC">id:${p.id}</span>
+      </div>`
+    ).join('');
+  }
+  dropdown.style.display = 'block';
+}
+
+async function adminRelocateConfirm(newPlaceId, placeName, placeArea) {
+  const memId = _adminRelocateMemId;
+  if (!memId || !newPlaceId) return;
+  const m = _adminMemList.find(x => x.id === memId);
+  const oldName = m ? (m.placeName || '?') : '?';
+  if (!confirm(`"${oldName}" → "${placeName}"(${placeArea})\n\n장소를 변경할까요?`)) return;
+  const p = places.find(x => x.id == newPlaceId);
+  const updateData = {
+    placeId:   newPlaceId,
+    placeName: placeName,
+    placeArea: placeArea,
+    ...(p ? { placeLat: p.lat ?? null, placeLng: p.lng ?? null } : {})
+  };
+  try {
+    await db.collection('memories').doc(memId).update(updateData);
+    if (m) { m.placeId = newPlaceId; m.placeName = placeName; m.placeArea = placeArea; }
+    document.getElementById('admin-relocate-modal').style.display = 'none';
+    _renderAdminMemUI();
+    showToast(`✅ 장소를 "${placeName}"으로 수정했어요`);
+    // 캐시 무효화 — 다음 viewport 로딩 시 하트 마커 재조정
+    allMemoryPlaceIds.add(Number(newPlaceId));
+    invalidatePlacesCache();
+  } catch(e) { showToast('❌ 수정 실패: ' + e.message); }
 }
 
 // ══════════════════════════════════════════════════════
