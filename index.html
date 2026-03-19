@@ -3103,6 +3103,7 @@ function startApp(user) {
   loadUserDogProfile(user.uid).catch(() => {});
   // load visited places → heart markers + 영구 표시 장소 로딩 (non-blocking, runs after map init)
   setTimeout(() => {
+    initGlobalMaxId().catch(() => {}); // ★ Fix H: Firestore 최대 ID 조회 → 중복 ID 방지
     loadUserVisitedPlaces(user.uid).catch(() => {});
     loadPersistentPlaces(user.uid).catch(() => {});
   }, 1000);
@@ -3216,6 +3217,7 @@ async function loadViewportPlaces() {
         existingIds.add(p.id);
         places.push(p);
         newBatch.push(p);
+        if (typeof p.id === 'number') updateGlobalMaxId(p.id); // ★ Fix H
       } catch(docErr) { console.warn('[loadViewportPlaces] doc 오류:', docErr); }
     });
 
@@ -3747,6 +3749,7 @@ async function batchLoadPlacesByIds(ids) {
         const p = { ...doc.data(), firestoreId: doc.id };
         if (!places.find(x => x.id == p.id)) {   // == 느슨한 비교 — String/Number 타입 불일치 방지
           places.push(p);
+          if (typeof p.id === 'number') updateGlobalMaxId(p.id); // ★ Fix H
           if (clusterGroup) { try { addMarker(p); } catch(e) {} }
         }
       });
@@ -4683,7 +4686,7 @@ async function autoAddLivePlace(dOverride) {
     // 2) 카테고리·지역 매핑
     const cat  = impMapCat(d.category_name || '');
     const area = impGuessArea(d.road_address_name || '', d.address_name || '');
-    const nextId = Math.max(...places.filter(p => p && typeof p.id === 'number').map(p => p.id), 10000) + 1;
+    const nextId = getNextPlaceId(); // ★ Fix H: 전역 최대 ID 기반 — 세션 간 중복 방지
 
     // 3) large/indoor/outdoor/cage/entryFee 필드 결정
     // 명시적 태그가 있을 때만 값을 설정 — 근거 없는 추론은 null(미확인)로 유지
@@ -5456,7 +5459,7 @@ async function addKakaoSearchPlaceToFavorite() {
     // autoAddLivePlace 와 동일한 저장 로직 (pet 검증 생략 — 사용자가 직접 선택)
     const cat  = impMapCat(d.category_name || '');
     const area = impGuessArea(d.road_address_name || '', d.address_name || '');
-    const nextId = Math.max(...places.filter(p => p && typeof p.id === 'number').map(p => p.id), 10000) + 1;
+    const nextId = getNextPlaceId(); // ★ Fix H: 전역 최대 ID 기반 — 세션 간 중복 방지
     const addrStr = d.road_address_name || d.address_name || '';
     const provinceMap = [
       ['서울','서울'],['경기','경기'],['인천','인천'],['강원','강원'],
@@ -6578,6 +6581,34 @@ function onMemPrivacyChange() {
 
 let _pendingMemoryPlaceId = null; // ★ Fix A: 재발 방지 — 모달 열 때의 장소 ID 보관
 
+// ★ Fix H: 전역 최대 ID 관리 — 세션 간 ID 중복 방지
+let _globalMaxId = 10000;
+
+function getNextPlaceId() {
+  // 인메모리 최대값과 전역 최대값 중 큰 것 + 1
+  const memMax = places.filter(p => p && typeof p.id === 'number').reduce((m, p) => Math.max(m, p.id), 10000);
+  const next = Math.max(memMax, _globalMaxId) + 1;
+  _globalMaxId = next; // 예약한 값을 바로 반영해 동시 할당 방지
+  return next;
+}
+
+function updateGlobalMaxId(id) {
+  const n = typeof id === 'number' ? id : Number(id);
+  if (!isNaN(n) && n > _globalMaxId) _globalMaxId = n;
+}
+
+async function initGlobalMaxId() {
+  if (!firebaseReady || !db) return;
+  try {
+    const snap = await db.collection('places').orderBy('id', 'desc').limit(1).get();
+    if (!snap.empty) {
+      const maxId = snap.docs[0].data().id;
+      if (typeof maxId === 'number' && maxId > _globalMaxId) _globalMaxId = maxId;
+    }
+    console.log('[initGlobalMaxId] _globalMaxId 초기화 완료:', _globalMaxId);
+  } catch(e) { console.warn('[initGlobalMaxId]', e); }
+}
+
 function openWriteMemory(placeId) {
   _pendingMemoryPlaceId = (placeId != null) ? Number(placeId) : null;
   memPhotoBlob = null;
@@ -7554,7 +7585,7 @@ async function updateReport(id, status) {
     if (r && r.placeName && !alreadyAdded) {
       const cat   = impMapCat(r.kakaoCategory || '');
       const area  = impGuessArea(r.placeAddr || '', r.placeAddr || '');
-      const nextId = Math.max(...places.filter(p => p && typeof p.id === 'number').map(p => p.id), 10000) + 1;
+      const nextId = getNextPlaceId(); // ★ Fix H: 전역 최대 ID 기반 — 세션 간 중복 방지
 
       const newPlace = {
         id:         nextId,
@@ -7877,7 +7908,10 @@ async function _doAdminRelocateSearch(q) {
       const p = { ...doc.data(), firestoreId: doc.id };
       if (!p.id || !p.name) return;
       // in-memory에 없으면 추가
-      if (!places.find(x => x.id == p.id)) places.push(p);
+      if (!places.find(x => x.id == p.id)) {
+        places.push(p);
+        if (typeof p.id === 'number') updateGlobalMaxId(p.id); // ★ Fix H
+      }
       if (!memMatches.find(x => x.id == p.id)) fsMatches.push(p);
     });
     const combined = [...memMatches, ...fsMatches]
@@ -9611,8 +9645,8 @@ async function nwCollectRegion(region) {
 /* 수집된 장소를 Firestore에 저장 */
 async function nwSavePlacesToFirestore(newPlaces) {
   if (!firebaseReady || !db || !newPlaces.length) return 0;
-  // numeric id: 기존 최대값 + 1 부터 순번 부여
-  let nextId = Math.max(...places.filter(p => p && typeof p.id === 'number').map(p => p.id), 10000) + 1;
+  // numeric id: 전역 최대값 기반 순번 부여 (★ Fix H: 세션 간 중복 방지)
+  let nextId = getNextPlaceId(); // _globalMaxId가 첫 번째 ID로 예약됨
   const CHUNK = 400;
   let count = 0;
   for (let i = 0; i < newPlaces.length; i += CHUNK) {
@@ -9630,6 +9664,8 @@ async function nwSavePlacesToFirestore(newPlaces) {
     }
     try { await batch.commit(); } catch(e) { console.warn('nwSave batch err', e); }
   }
+  // 루프에서 할당한 마지막 ID를 _globalMaxId에 반영
+  updateGlobalMaxId(nextId - 1);
   return count;
 }
 
