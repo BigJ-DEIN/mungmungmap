@@ -4371,8 +4371,6 @@ function initKakaoSearch() {
 }
 
 let _liveSearchRunning = false;
-let _sessionQuotaHit = false; // REST 429 감지 시 true → 캐시 저장 금지
-let _liveAllEnded    = true;  // 모든 REST 호출이 is_end:true로 끝나야 true
 
 function _setLiveFabState(loading) {
   const label = document.getElementById('feedback-fab-label');
@@ -4408,42 +4406,11 @@ function toggleLiveSearch() {
 // 뷰포트 기반 결과 캐시 (15분 TTL) — 동일 위치 재검색 시 keyword.json 호출 절약
 const _liveCache = new Map();
 
-// ── Firestore 그리드 완료 캐시 (30일 TTL) ─────────────────────────────────
-// A/B 섹션이 is_end:true로 완전 탐색된 그리드 → 30일간 A/B 재검색 생략
-// C 섹션(역지오코딩)은 캐시 여부와 무관하게 항상 실행
-async function _checkGridCache(cacheKey) {
-  if (!firebaseReady || !db) return null;
-  try {
-    const doc = await db.collection('liveSearchCache').doc(cacheKey).get();
-    if (!doc.exists) return null;
-    const d = doc.data();
-    if (!d || !d.completedAt) return null;
-    const age = Date.now() - d.completedAt.toMillis();
-    if (age > 30 * 24 * 60 * 60 * 1000) return null; // 30일 만료
-    return d;
-  } catch(e) { return null; }
-}
 
-async function _writeGridCache(cacheKey, resultCount) {
-  if (!firebaseReady || !db) return;
-  if (_sessionQuotaHit) return;  // 429 발생 시 저장 금지 (불완전 결과 방지)
-  if (!_liveAllEnded)  return;  // is_end:false 페이지 있으면 저장 금지
-  try {
-    await db.collection('liveSearchCache').doc(cacheKey).set({
-      completedAt: firebase.firestore.FieldValue.serverTimestamp(),
-      resultCount,
-      zoom: map.getZoom(),
-    });
-    console.log('[gridCache] 저장:', cacheKey, 'results:', resultCount);
-  } catch(e) { console.warn('[_writeGridCache]', e); }
-}
-
-async function doLiveSearch() {
+function doLiveSearch() {
   _setLiveFabState(true);
-  _sessionQuotaHit = false; // 새 검색마다 초기화
-  _liveAllEnded    = true;  // 낙관적 초기화 → REST 루프에서 반증 시 false
 
-  // ── 캐시 확인: 동일 뷰포트 5분 내 재검색이면 API 호출 없이 바로 표시 ──────
+  // ── 캐시 확인: 동일 뷰포트 15분 내 재검색이면 API 호출 없이 바로 표시 ──────
   const _ctr = map.getCenter();
   const _cacheKey = `${Math.round(_ctr.lat*100)}_${Math.round(_ctr.lng*100)}_${map.getZoom()}`;
   const _cached = _liveCache.get(_cacheKey);
@@ -4451,16 +4418,6 @@ async function doLiveSearch() {
     showToast('📦 캐시된 결과로 표시합니다');
     renderLiveResults(_cached.data);
     return;
-  }
-
-  // ── Firestore 그리드 완료 캐시 확인 (30일 TTL) ────────────────────────────
-  // 캐시 히트 시: A/B(대량 API) 스킵 + DB 장소 즉시 표시 + C(역지오코딩)는 계속 실행
-  // — C섹션이 콩카세같은 미태그 장소를 잡는 유일한 경로이므로 캐시와 무관하게 실행
-  const _gridCached = await _checkGridCache(_cacheKey);
-  const _skipAB = !!_gridCached;
-  if (_gridCached) {
-    showToast('✅ 저장된 장소 표시 중 · 새 장소도 확인 중...');
-    filterPlaces(); // 기존 DB 장소를 지도·목록에 즉시 표시
   }
 
   const bounds = map.getBounds();
@@ -4514,36 +4471,29 @@ async function doLiveSearch() {
   function checkAllDone() {
     if (sdkDone && restDone) {
       _liveCache.set(_cacheKey, { data: allResults, ts: Date.now() });
-      // 캐시 히트(_skipAB)면 Firestore 재기록 금지 — 30일 TTL 유지, resultCount 오염 방지
-      if (!_skipAB) _writeGridCache(_cacheKey, allResults.length);
       renderLiveResults(allResults);
     }
   }
 
   // ── ① SDK 카테고리 검색 (키워드 SDK는 항상 ERROR → REST로 대체) ──────────
-  // 캐시 히트(_skipAB)면 SDK 전체 스킵 → sdkDone 즉시 true
-  if (_skipAB) {
-    sdkDone = true;
-  } else {
-    let pending = gridPoints.length * catCodes.length * pages.length;
+  let pending = gridPoints.length * catCodes.length * pages.length;
 
-    gridPoints.forEach(pt => {
-      const locOpts = { x: pt.lng, y: pt.lat, radius: Math.round(cellRadiusM), size: 15 };
+  gridPoints.forEach(pt => {
+    const locOpts = { x: pt.lng, y: pt.lat, radius: Math.round(cellRadiusM), size: 15 };
 
-      // 카테고리 검색
-      catCodes.forEach(code => {
-        pages.forEach(page => {
-          kakaoPS.categorySearch(code, (data, status) => {
-            if (status === kakao.maps.services.Status.OK && data?.length) {
-              allResults = allResults.concat(data);
-            }
-            if (--pending === 0) { sdkDone = true; checkAllDone(); }
-          }, { ...locOpts, page });
-        });
+    // 카테고리 검색
+    catCodes.forEach(code => {
+      pages.forEach(page => {
+        kakaoPS.categorySearch(code, (data, status) => {
+          if (status === kakao.maps.services.Status.OK && data?.length) {
+            allResults = allResults.concat(data);
+          }
+          if (--pending === 0) { sdkDone = true; checkAllDone(); }
+        }, { ...locOpts, page });
       });
-
     });
-  }
+
+  });
 
   // ── ② REST API 검색 (병렬) ────────────────────────────────────────────────
   // A) 카테고리 검색: SDK는 45개(3p×15)로 끊기므로 REST로 is_end까지 전부 수집
@@ -4553,62 +4503,60 @@ async function doLiveSearch() {
     try {
       const tasks = [];
 
-      // 캐시 히트(_skipAB)면 A/B 전체 스킵 → C(역지오코딩)만 실행
-      if (!_skipAB) {
-        for (const pt of gridPoints) {
-          const locQ = `x=${pt.lng}&y=${pt.lat}&radius=${Math.round(cellRadiusM)}&size=15`;
+      for (const pt of gridPoints) {
+        const locQ = `x=${pt.lng}&y=${pt.lat}&radius=${Math.round(cellRadiusM)}&size=15`;
 
-          // A) REST 카테고리 검색 (CE7·FD6·AT4·AD5) — is_end 까지 완전 수집
-          for (const code of catCodes) {
-            tasks.push((async () => {
-              for (let page = 1; page <= 45; page++) {
-                try {
-                  const resp = await fetch(
-                    `https://dapi.kakao.com/v2/local/search/category.json` +
-                    `?category_group_code=${code}&${locQ}&page=${page}`,
-                    { headers: { 'Authorization': `KakaoAK ${KAKAO_REST_KEY}` },
-                      signal: AbortSignal.timeout(6000) }
-                  );
-                  if (resp.status === 429) { _sessionQuotaHit = true; break; }
-                  if (!resp.ok) break;
-                  const json = await resp.json();
-                  if (json.documents?.length) {
-                    allResults = allResults.concat(json.documents);
-                  }
-                  if (json.meta?.is_end !== false) break;
-                  if (page === 45) _liveAllEnded = false; // 45p에서도 is_end:false → 미완료
-                } catch(e) { break; }
-              }
-            })());
-          }
-
-          // B) REST 키워드 검색 (반려동물 시설 태그)
-          const restKeywords = ['반려견동반', '애견동반', '반려동물동반', '반려견 카페', '애견카페', '펫카페', '강아지카페', '도그카페', '반려견 식당', '반려동물 동반'];
-          for (const kw of restKeywords) {
-            tasks.push((async () => {
-              for (let page = 1; page <= 3; page++) {
-                try {
-                  const resp = await fetch(
-                    `https://dapi.kakao.com/v2/local/search/keyword.json` +
-                    `?query=${encodeURIComponent(kw)}&${locQ}&page=${page}`,
-                    { headers: { 'Authorization': `KakaoAK ${KAKAO_REST_KEY}` },
-                      signal: AbortSignal.timeout(6000) }
-                  );
-                  if (resp.status === 429) { _sessionQuotaHit = true; break; }
-                  if (!resp.ok) break;
-                  const json = await resp.json();
-                  if (json.documents?.length) {
-                    allResults = allResults.concat(
-                      json.documents.map(d => ({ ...d, _fromPetKeyword: true }))
-                    );
-                  }
-                  if (json.meta?.is_end !== false) break;
-                } catch(e) { break; }
-              }
-            })());
-          }
+        // A) REST 카테고리 검색 (CE7·FD6·AT4·AD5) — is_end 까지 완전 수집
+        // page 최대 45 = Kakao API 허용 최대치 / 성수동같은 고밀도 지역 누락 방지
+        // is_end:true 감지 시 자동 조기 종료 → 실제 요청 수는 밀도에 비례
+        for (const code of catCodes) {
+          tasks.push((async () => {
+            for (let page = 1; page <= 45; page++) {
+              try {
+                const resp = await fetch(
+                  `https://dapi.kakao.com/v2/local/search/category.json` +
+                  `?category_group_code=${code}&${locQ}&page=${page}`,
+                  { headers: { 'Authorization': `KakaoAK ${KAKAO_REST_KEY}` },
+                    signal: AbortSignal.timeout(6000) }
+                );
+                if (!resp.ok) break;
+                const json = await resp.json();
+                if (json.documents?.length) {
+                  // 카테고리 검색 결과 → _fromPetKeyword 없음 (반려동물 확인 필요)
+                  allResults = allResults.concat(json.documents);
+                }
+                if (json.meta?.is_end !== false) break; // is_end:true → 완전 수집
+              } catch(e) { break; }
+            }
+          })());
         }
-      } // end if (!_skipAB)
+
+        // B) REST 키워드 검색 (반려동물 시설 태그) — is_end 까지 완전 수집
+        // 태그 없는 로컬 장소(콩카세 등)를 잡으려면 넓은 키워드 필요 — 좁히지 말 것
+        const restKeywords = ['반려견동반', '애견동반', '반려동물동반', '반려견 카페', '애견카페', '펫카페', '강아지카페', '도그카페', '반려견 식당', '반려동물 동반'];
+        for (const kw of restKeywords) {
+          tasks.push((async () => {
+            for (let page = 1; page <= 3; page++) {
+              try {
+                const resp = await fetch(
+                  `https://dapi.kakao.com/v2/local/search/keyword.json` +
+                  `?query=${encodeURIComponent(kw)}&${locQ}&page=${page}`,
+                  { headers: { 'Authorization': `KakaoAK ${KAKAO_REST_KEY}` },
+                    signal: AbortSignal.timeout(6000) }
+                );
+                if (!resp.ok) break;
+                const json = await resp.json();
+                if (json.documents?.length) {
+                  allResults = allResults.concat(
+                    json.documents.map(d => ({ ...d, _fromPetKeyword: true }))
+                  );
+                }
+                if (json.meta?.is_end !== false) break;
+              } catch(e) { break; }
+            }
+          })());
+        }
+      }
 
       // ── C) 역지오코딩 → 동네명 기반 반려동물 카페 검색 ────────────────────
       // 카카오 카테고리 태그가 없어도 사용자 검색 패턴으로 연관된 장소 발굴
@@ -4696,24 +4644,6 @@ async function renderLiveResults(rawData) {
     return;
   }
 
-
-  // ── 뷰포트 영역 필터 (8% 버퍼) ─────────────────────────────────────────────
-  // 카카오 원형 반경 검색이 뷰포트 바깥 장소도 포함하므로 클라이언트에서 필터
-  {
-    const vpB   = map.getBounds();
-    const latPd = (vpB.getNorth() - vpB.getSouth()) * 0.08;
-    const lngPd = (vpB.getEast()  - vpB.getWest())  * 0.08;
-    const ext   = L.latLngBounds(
-      [vpB.getSouth() - latPd, vpB.getWest()  - lngPd],
-      [vpB.getNorth() + latPd, vpB.getEast()  + lngPd]
-    );
-    const before = data.length;
-    const vpFiltered = data.filter(d => ext.contains([parseFloat(d.y), parseFloat(d.x)]));
-    const removed = before - vpFiltered.length;
-    if (removed > 0) console.log(`[viewportFilter] 뷰포트 바깥 ${removed}개 제거`);
-    data.length = 0;
-    vpFiltered.forEach(d => data.push(d));
-  }
 
   // Check which are already in our DB (kakaoId 우선, 이름+좌표 폴백)
   const dbKakaoIds = new Set(places.filter(p=>p&&p.kakaoId).map(p=>p.kakaoId));
