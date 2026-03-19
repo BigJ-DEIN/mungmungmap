@@ -993,92 +993,90 @@
     .mem-feed { flex:1; overflow-y:auto; padding:12px 12px 20px; -webkit-overflow-scrolling:touch; background:#F2F2F2; display:flex; flex-direction:column; gap:14px; }
     .mem-feed::-webkit-scrollbar { width:3px; }
     .mem-feed::-webkit-scrollbar-thumb { background:#DDD; border-radius:2px; }
-    /* ── Instagram-style card ── */
+    /* ── Memory card ── */
     .mem-card {
-      background:white;
-      border-radius:16px;
-      overflow:hidden;
+      background:white; border-radius:16px; overflow:hidden;
       box-shadow:0 1px 4px rgba(0,0,0,.07), 0 0 0 1px rgba(0,0,0,.04);
     }
-    /* Card header: place name + region + menu */
-    .mem-card-header {
-      display:flex; align-items:center; padding:12px 14px 0;
-      gap:8px;
+    /* ── 정보 행: 강아지(좌) + 장소(우) + 메뉴 ── */
+    .mem-card-info-row {
+      display:flex; align-items:center; gap:8px; padding:12px 12px 0;
     }
-    .mem-card-place { flex:1; min-width:0; }
-    .mem-card-place-name {
-      font-size:13px; font-weight:800; color:#1A1A1A;
+    /* 강아지 섹션 */
+    .mem-card-dog-sec {
+      display:flex; align-items:center; gap:7px; flex-shrink:0;
+    }
+    .mc-dog-photo {
+      width:34px; height:34px; border-radius:50%; object-fit:cover;
+      flex-shrink:0; border:2px solid #F5C4A8;
+    }
+    .mc-dog-icon { font-size:24px; flex-shrink:0; line-height:1; }
+    .mc-dog-name { font-size:14px; font-weight:800; color:#1A1A1A; }
+    .mc-dog-age  { font-size:12px; color:#BBBBBB; margin-left:2px; }
+    /* 장소 섹션 */
+    .mem-card-place-sec {
+      flex:1; min-width:0; text-align:right;
+    }
+    .mc-place-name {
+      font-size:12px; font-weight:700; color:#E04E14;
       white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
     }
-    .mem-card-place-area { font-size:11px; color:#999; margin-top:1px; }
-    .mem-card-menu { display:flex; gap:6px; flex-shrink:0; }
+    .mc-place-area { font-size:11px; color:#BBBBBB; margin-top:1px; }
+    /* 메뉴 버튼 */
+    .mem-card-menu { display:flex; gap:4px; flex-shrink:0; }
     .mem-card-menu-btn {
-      background:none; border:none; cursor:pointer; font-size:12px; color:#999;
-      padding:3px 7px; border-radius:8px; font-family:inherit; font-weight:600;
+      background:none; border:none; cursor:pointer; font-size:11px; color:#BBBBBB;
+      padding:3px 6px; border-radius:7px; font-family:inherit; font-weight:600;
       transition:background .15s;
     }
     .mem-card-menu-btn:hover { background:#F5F5F5; color:#555; }
     .mem-card-menu-btn.del { color:#E04E14; }
     .mem-card-menu-btn.del:hover { background:#FFF0EC; }
-    /* ── 유저 행 ── */
-    .mem-card-user-row {
-      display:flex; align-items:center; padding:12px 14px 8px; gap:10px;
+    /* 날짜 */
+    .mem-card-date {
+      padding:3px 13px 9px; font-size:11px; color:#CCCCCC; text-align:right;
     }
-    .mem-card-avatar {
-      width:36px; height:36px; border-radius:50%; object-fit:cover;
-      background:#EEE; flex-shrink:0; border:2px solid #F0EBE8;
-    }
-    .mem-card-avatar-placeholder {
-      width:36px; height:36px; border-radius:50%; background:#F0E8E4;
-      display:flex; align-items:center; justify-content:center;
-      font-size:17px; flex-shrink:0; border:2px solid #F0EBE8;
-    }
-    .mem-card-user-info { flex:1; min-width:0; }
-    .mem-card-username { font-size:13px; font-weight:700; color:#1A1A1A; }
-    .mem-card-time { font-size:11px; color:#BBBBBB; margin-top:1px; }
-
-    /* ── 장소 행 ── */
-    .mem-card-place-row {
-      display:flex; align-items:center; gap:5px;
-      padding:0 14px 8px; flex-wrap:wrap;
-    }
-    .mem-card-place-row .place-pin { font-size:13px; }
-    .mem-card-place-row .place-name {
-      font-size:13px; font-weight:700; color:#E04E14;
-      white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:180px;
-    }
-    .mem-card-place-row .place-area {
-      font-size:11px; color:#BBBBBB; flex-shrink:0;
-    }
-
-    /* ── 강아지 행 (독립 섹션 — 인스타그램 위치 태그 스타일) ── */
-    .mem-card-dog-row {
-      display:flex; align-items:center; gap:8px;
-      padding:6px 14px 10px;
-      background:#FFF8F5; border-top:1px solid #F5EEE9;
-    }
-    .mem-card-dog-photo {
-      width:30px; height:30px; border-radius:50%; object-fit:cover;
-      flex-shrink:0; border:2px solid #F5C4A8;
-    }
-    .mem-card-dog-icon { font-size:20px; flex-shrink:0; line-height:1; }
-    .mem-card-dog-info { display:flex; flex-direction:column; gap:1px; }
-    .mem-card-dog-name-text { font-size:13px; font-weight:700; color:#C0440A; }
-    .mem-card-dog-age-text  { font-size:11px; color:#BBBBBB; }
-
-    /* ── 사진 (전체 너비) ── */
+    /* ── 사진 (정사각형 1:1) ── */
     .mem-card-img {
-      width:100%; aspect-ratio:4/3; object-fit:cover; display:block;
+      width:100%; aspect-ratio:1/1; object-fit:cover; display:block;
     }
     /* ── 본문 ── */
     .mem-card-body { padding:10px 14px 14px; }
     .mem-text { font-size:14px; color:#1A1A1A; line-height:1.65; }
     .mem-private-label { font-size:11px; color:#CCC; margin-top:6px; display:flex; align-items:center; gap:3px; }
-    /* legacy place tag (unused but keep for compat) */
     .mem-place-tag { display:inline-block; font-size:11px; font-weight:700; color:#E04E14; margin-bottom:5px; }
     .mem-meta { font-size:11px; color:#C0C0C0; margin-top:7px; display:flex; gap:8px; }
     .mem-empty { text-align:center; padding:48px 20px; color:#CCC; font-size:13px; line-height:1.7; }
     .mem-loading { text-align:center; padding:32px; color:#DDD; font-size:13px; }
+
+    /* ── 크롭 에디터 모달 ── */
+    .crop-modal {
+      display:none; position:fixed; inset:0; z-index:10000;
+      background:rgba(0,0,0,0.93); flex-direction:column;
+      align-items:center; justify-content:center; gap:16px;
+    }
+    .crop-modal.open { display:flex; }
+    .crop-title { color:rgba(255,255,255,.6); font-size:13px; font-weight:600; }
+    .crop-frame {
+      width:min(82vw, 340px); height:min(82vw, 340px);
+      border-radius:12px; overflow:hidden; position:relative;
+      background:#111; flex-shrink:0; cursor:grab; touch-action:none;
+    }
+    .crop-frame:active { cursor:grabbing; }
+    .crop-frame img {
+      position:absolute; transform-origin:0 0;
+      pointer-events:none; user-select:none; -webkit-user-select:none;
+    }
+    .crop-controls { width:min(82vw, 340px); display:flex; flex-direction:column; gap:12px; }
+    .crop-zoom-row { display:flex; align-items:center; gap:10px; color:rgba(255,255,255,.7); font-size:13px; }
+    .crop-zoom-row input[type=range] { flex:1; accent-color:#E04E14; height:4px; }
+    .crop-btn-row { display:flex; gap:10px; }
+    .crop-btn {
+      flex:1; padding:13px; border-radius:12px; border:none;
+      font-size:15px; font-weight:700; font-family:inherit; cursor:pointer;
+    }
+    .crop-btn.cancel { background:#2A2A2A; color:#888; }
+    .crop-btn.confirm { background:#E04E14; color:white; }
 
     /* Memory write modal extras */
     .mem-photo-area {
@@ -1163,17 +1161,14 @@
       background:#F0F0F0;
       border-radius:14px;
     }
-    /* drawer 안 mem-card — 인스타그램 카드 스타일 유지, 이미지 높이만 제한 */
+    /* drawer 안 mem-card */
     .drawer-mem-feed .mem-card {
       border-radius:14px;
       box-shadow:0 2px 8px rgba(0,0,0,.09), 0 0 0 1px rgba(0,0,0,.05);
       background: white;
     }
-    .drawer-mem-feed .mem-card-img {
-      aspect-ratio:4/3; max-height:220px; object-fit:cover;
-    }
-    .drawer-mem-feed .mem-card-header { padding:10px 12px 0; }
-    .drawer-mem-feed .mem-card-user-row { padding:10px 12px 8px; }
+    .drawer-mem-feed .mem-card-img { aspect-ratio:1/1; object-fit:cover; }
+    .drawer-mem-feed .mem-card-info-row { padding:10px 11px 0; }
     .drawer-mem-feed .mem-card-body { padding:6px 12px 12px; }
     /* legacy — 하위호환 */
     .drawer-mem-card {
@@ -6657,20 +6652,140 @@ async function compressToWebP(file, maxW = 400, quality = 0.82) {
 }
 
 /* 사진 선택 핸들러 */
-async function onMemPhotoSelected(e) {
+function onMemPhotoSelected(e) {
   const file = e.target.files[0];
   if (!file) return;
-  const hint = document.getElementById('mem-photo-hint');
-  hint.textContent = '압축 중...';
-  memPhotoBlob = await compressToWebP(file);
-  if (!memPhotoBlob) { hint.textContent = '사진 변환 실패. 다시 시도해주세요'; return; }
-  const sizeKB = Math.round(memPhotoBlob.size / 1024);
-  const fmt = memPhotoBlob.type === 'image/jpeg' ? 'JPEG' : 'WebP';
-  document.getElementById('mem-photo-size').textContent = `${sizeKB}KB (${fmt} 최적화됨)`;
-  hint.textContent = '사진 변경하기';
-  const preview = document.getElementById('mem-photo-preview');
-  preview.src = URL.createObjectURL(memPhotoBlob);
-  preview.style.display = 'block';
+  e.target.value = ''; // 같은 파일 재선택 가능
+  openCropEditor(file);
+}
+
+// ══════════════════════════════════════════════════════
+//  CROP EDITOR
+// ══════════════════════════════════════════════════════
+let _cropFile = null;
+let _cropNW = 0, _cropNH = 0;
+let _cropScale = 1, _cropMinScale = 1;
+let _cropOX = 0, _cropOY = 0;
+let _cropFW = 0;
+let _cropDragging = false, _cropLX = 0, _cropLY = 0;
+let _cropDragInited = false;
+
+function openCropEditor(file) {
+  _cropFile = file;
+  const modal = document.getElementById('crop-modal');
+  modal.classList.add('open');
+  const frame = document.getElementById('crop-frame');
+  // offsetWidth가 0이면 잠깐 후 재시도
+  const tryInit = () => {
+    _cropFW = frame.offsetWidth || parseInt(getComputedStyle(frame).width) || 300;
+    const img = document.getElementById('crop-img');
+    const slider = document.getElementById('crop-zoom-slider');
+    slider.value = 100;
+    document.getElementById('crop-zoom-pct').textContent = '100%';
+    const reader = new FileReader();
+    reader.onload = ev => {
+      img.onload = () => {
+        _cropNW = img.naturalWidth; _cropNH = img.naturalHeight;
+        _cropMinScale = Math.max(_cropFW / _cropNW, _cropFW / _cropNH);
+        _cropScale = _cropMinScale;
+        _cropOX = (_cropFW - _cropNW * _cropScale) / 2;
+        _cropOY = (_cropFW - _cropNH * _cropScale) / 2;
+        _applyCrop();
+      };
+      img.src = ev.target.result;
+    };
+    reader.readAsDataURL(file);
+  };
+  if (!_cropDragInited) { _initCropDrag(); _cropDragInited = true; }
+  requestAnimationFrame(tryInit);
+}
+
+function _applyCrop() {
+  const img = document.getElementById('crop-img');
+  const sw = _cropNW * _cropScale, sh = _cropNH * _cropScale;
+  _cropOX = Math.min(0, Math.max(_cropFW - sw, _cropOX));
+  _cropOY = Math.min(0, Math.max(_cropFW - sh, _cropOY));
+  img.style.width  = sw + 'px';
+  img.style.height = sh + 'px';
+  img.style.transform = `translate(${_cropOX}px, ${_cropOY}px)`;
+}
+
+function onCropZoom(val) {
+  const pct = parseInt(val);
+  document.getElementById('crop-zoom-pct').textContent = pct + '%';
+  const newScale = _cropMinScale * (pct / 100);
+  // 화면 중앙 기준으로 줌
+  const cx = _cropFW / 2 - _cropOX;
+  const cy = _cropFW / 2 - _cropOY;
+  const r = newScale / _cropScale;
+  _cropScale = newScale;
+  _cropOX = _cropFW / 2 - cx * r;
+  _cropOY = _cropFW / 2 - cy * r;
+  _applyCrop();
+}
+
+function _initCropDrag() {
+  const frame = document.getElementById('crop-frame');
+  const move = (dx, dy) => { _cropOX += dx; _cropOY += dy; _applyCrop(); };
+  // Mouse
+  frame.addEventListener('mousedown', e => {
+    _cropDragging = true; _cropLX = e.clientX; _cropLY = e.clientY; e.preventDefault();
+  });
+  document.addEventListener('mousemove', e => {
+    if (!_cropDragging) return;
+    move(e.clientX - _cropLX, e.clientY - _cropLY);
+    _cropLX = e.clientX; _cropLY = e.clientY;
+  });
+  document.addEventListener('mouseup', () => { _cropDragging = false; });
+  // Touch
+  frame.addEventListener('touchstart', e => {
+    if (e.touches.length !== 1) return;
+    _cropDragging = true; _cropLX = e.touches[0].clientX; _cropLY = e.touches[0].clientY;
+    e.preventDefault();
+  }, { passive: false });
+  frame.addEventListener('touchmove', e => {
+    if (!_cropDragging || e.touches.length !== 1) return;
+    move(e.touches[0].clientX - _cropLX, e.touches[0].clientY - _cropLY);
+    _cropLX = e.touches[0].clientX; _cropLY = e.touches[0].clientY;
+    e.preventDefault();
+  }, { passive: false });
+  frame.addEventListener('touchend', () => { _cropDragging = false; });
+}
+
+function closeCropModal() {
+  document.getElementById('crop-modal').classList.remove('open');
+  document.getElementById('crop-img').src = '';
+  _cropFile = null;
+}
+
+async function confirmCrop() {
+  const img = document.getElementById('crop-img');
+  if (!_cropNW) return;
+  const outSize = 900;
+  const canvas = document.createElement('canvas');
+  canvas.width = outSize; canvas.height = outSize;
+  const ctx = canvas.getContext('2d');
+  // 프레임에서 보이는 이미지 영역 역산
+  const srcX = -_cropOX / _cropScale;
+  const srcY = -_cropOY / _cropScale;
+  const srcW = _cropFW / _cropScale;
+  const srcH = _cropFW / _cropScale;
+  // 새 Image로 그려야 CORS 없이 안전
+  const tmpImg = new Image();
+  tmpImg.src = img.src;
+  await new Promise(r => { tmpImg.onload = r; if (tmpImg.complete) r(); });
+  ctx.drawImage(tmpImg, srcX, srcY, srcW, srcH, 0, 0, outSize, outSize);
+  canvas.toBlob(blob => {
+    if (!blob) { showToast('⚠️ 사진 크롭 실패. 다시 시도해주세요'); return; }
+    memPhotoBlob = blob;
+    const sizeKB = Math.round(blob.size / 1024);
+    document.getElementById('mem-photo-size').textContent = `${sizeKB}KB`;
+    document.getElementById('mem-photo-hint').textContent = '✅ 사진 선택됨 (변경하려면 탭)';
+    const preview = document.getElementById('mem-photo-preview');
+    preview.src = URL.createObjectURL(blob);
+    preview.style.display = 'block';
+    closeCropModal();
+  }, 'image/webp', 0.82);
 }
 
 /* Firebase Storage 업로드 — 진행률 표시 + 30초 타임아웃 */
@@ -7072,63 +7187,68 @@ function timeAgo(ts) {
   return d.toLocaleDateString('ko-KR', { month:'short', day:'numeric' });
 }
 
-/* 추억 피드 렌더링 — Instagram 스타일 */
+/* 나이 포맷: "3" → "3살", "3살" 그대로 */
+function formatDogAge(age) {
+  if (!age) return '';
+  const s = String(age).trim();
+  if (!s) return '';
+  if (/살|년|개월|세/.test(s)) return s;
+  if (/^\d+(\.\d+)?$/.test(s)) return s + '살';
+  return s;
+}
+
+/* 날짜 포맷: "2025.03.19" */
+function formatMemDate(ts) {
+  try {
+    const d = ts && ts.toDate ? ts.toDate() : new Date(ts);
+    if (isNaN(d)) return '';
+    const y = d.getFullYear();
+    const mo = String(d.getMonth()+1).padStart(2,'0');
+    const day = String(d.getDate()).padStart(2,'0');
+    return `${y}.${mo}.${day}`;
+  } catch(e) { return ''; }
+}
+
+/* 추억 카드 렌더링 */
 function renderMemoryCard(m, showPlace = true) {
   const isMyMem = m.userId && currentUser?.uid && m.userId === currentUser.uid;
   const safePlace = (m.placeName||'').replace(/'/g,"\\'");
 
-  // ── ① 유저 행: 아바타 + 이름 + 시간 + 수정/삭제 ──
-  const avatarHtml = m.userPhotoURL
-    ? `<img class="mem-card-avatar" src="${m.userPhotoURL}" alt="" onerror="this.outerHTML='<div class=\\'mem-card-avatar-placeholder\\'>🐾</div>'">`
-    : `<div class="mem-card-avatar-placeholder">🐾</div>`;
-
+  // ── 수정/삭제 메뉴 ──
   const menuHtml = isMyMem ? `
     <div class="mem-card-menu">
       <button class="mem-card-menu-btn" onclick="openEditMemory('${m.id}')">수정</button>
       <button class="mem-card-menu-btn del" onclick="confirmDeleteMemory('${m.id}','${safePlace}')">삭제</button>
     </div>` : '';
 
-  const userRowHtml = `
-    <div class="mem-card-user-row">
-      ${avatarHtml}
-      <div class="mem-card-user-info">
-        <div class="mem-card-username">${m.userName || '익명'}</div>
-        <div class="mem-card-time">${timeAgo(m.createdAt)}</div>
-      </div>
-      ${menuHtml}
-    </div>`;
-
-  // ── ② 장소 행 (항상 표시 — 드로어/피드 공통) ──
-  const placeRowHtml = m.placeName ? `
-    <div class="mem-card-place-row">
-      <span class="place-pin">📍</span>
-      <span class="place-name">${m.placeName}</span>
-      ${m.placeArea ? `<span class="place-area">${m.placeArea}</span>` : ''}
-    </div>` : '';
-
-  // ── ③ 강아지 행 (독립 섹션 — 이름 + 나이 + 사진) ──
-  let dogRowHtml = '';
-  if (m.dogName) {
-    const dogPhotoHtml = m.dogPhotoURL
-      ? `<img class="mem-card-dog-photo" src="${m.dogPhotoURL}" alt="" onerror="this.outerHTML='<span class=\\'mem-card-dog-icon\\'>🐕</span>'">`
-      : `<span class="mem-card-dog-icon">🐕</span>`;
-    dogRowHtml = `
-    <div class="mem-card-dog-row">
+  // ── 강아지 섹션 (왼쪽) ──
+  const dogPhotoHtml = m.dogPhotoURL
+    ? `<img class="mc-dog-photo" src="${m.dogPhotoURL}" alt="" onerror="this.outerHTML='<span class=\\'mc-dog-icon\\'>🐕</span>'">`
+    : `<span class="mc-dog-icon">🐕</span>`;
+  const ageStr = formatDogAge(m.dogAge);
+  const dogSecHtml = `
+    <div class="mem-card-dog-sec">
       ${dogPhotoHtml}
-      <div class="mem-card-dog-info">
-        <span class="mem-card-dog-name-text">${m.dogName}</span>
-        ${m.dogAge ? `<span class="mem-card-dog-age-text">${m.dogAge}</span>` : ''}
-      </div>
+      ${m.dogName ? `<span class="mc-dog-name">${m.dogName}</span>` : ''}
+      ${ageStr ? `<span class="mc-dog-age">${ageStr}</span>` : ''}
     </div>`;
-  }
 
-  // ── ④ 사진 (전체 너비) ──
+  // ── 장소 섹션 (오른쪽) ──
+  const placeSecHtml = m.placeName ? `
+    <div class="mem-card-place-sec">
+      <div class="mc-place-name">📍 ${m.placeName}</div>
+      ${m.placeArea ? `<div class="mc-place-area">${m.placeArea}</div>` : ''}
+    </div>` : '<div class="mem-card-place-sec"></div>';
+
+  // ── 날짜 ──
+  const dateStr = formatMemDate(m.createdAt);
+
+  // ── 사진 (정사각형) ──
   const imgHtml = m.photoURL
-    ? `<img class="mem-card-img" src="${m.photoURL}" loading="lazy" alt=""
-         onerror="this.style.display='none'">`
+    ? `<img class="mem-card-img" src="${m.photoURL}" loading="lazy" alt="" onerror="this.style.display='none'">`
     : '';
 
-  // ── ⑤ 본문 텍스트 ──
+  // ── 본문 ──
   const privNote = (m.isPublic === false && isMyMem)
     ? `<span class="mem-private-label">🔒 나만 보기</span>` : '';
   const bodyHtml = (m.text || privNote) ? `
@@ -7137,9 +7257,12 @@ function renderMemoryCard(m, showPlace = true) {
       ${privNote}
     </div>` : '';
 
-  // 인스타그램 레이아웃: 유저행 → 장소행 → 강아지행 → 사진 → 본문
   return `<div class="mem-card" data-mem-id="${m.id}">
-    ${userRowHtml}${placeRowHtml}${dogRowHtml}${imgHtml}${bodyHtml}
+    <div class="mem-card-info-row">
+      ${dogSecHtml}${placeSecHtml}${menuHtml}
+    </div>
+    ${dateStr ? `<div class="mem-card-date">${dateStr}</div>` : ''}
+    ${imgHtml}${bodyHtml}
   </div>`;
 }
 
@@ -10990,5 +11113,25 @@ document.addEventListener('DOMContentLoaded', () => {
 // ── 홍시 SVG 아이콘 주입 ──
 // hongsi icon injected directly in HTML
 </script>
+
+<!-- ── 사진 크롭 에디터 모달 ── -->
+<div id="crop-modal" class="crop-modal">
+  <div class="crop-title">사진 영역 선택 · 드래그로 이동</div>
+  <div class="crop-frame" id="crop-frame">
+    <img id="crop-img" alt="" draggable="false">
+  </div>
+  <div class="crop-controls">
+    <div class="crop-zoom-row">
+      <span style="font-size:16px">🔍</span>
+      <input type="range" id="crop-zoom-slider" min="100" max="400" value="100"
+             oninput="onCropZoom(this.value)">
+      <span id="crop-zoom-pct" style="min-width:38px;text-align:right">100%</span>
+    </div>
+    <div class="crop-btn-row">
+      <button class="crop-btn cancel" onclick="closeCropModal()">취소</button>
+      <button class="crop-btn confirm" onclick="confirmCrop()">선택 완료</button>
+    </div>
+  </div>
+</div>
 </body>
 </html>
