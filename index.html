@@ -4575,22 +4575,19 @@ function doLiveSearch() {
           const gu     = reg?.region_2depth_name || '';
           // 동(洞) + 구(區) 두 레벨 모두 검색 — 구 레벨은 더 넓은 범위 커버
           const searchAreas = [...new Set([dong, gu].filter(Boolean))];
-          // 뷰포트 기준 검색 반경 — 위치 바운딩 없으면 전국 결과가 나와서 로컬 장소 누락
-          const rgRadiusM = Math.min(Math.round(Math.sqrt(
-            Math.pow(viewKmW * 1000, 2) + Math.pow(viewKmH * 1000, 2)) / 2 * 1.5), 10000);
-          const rgLocQ = `x=${ctr.lng}&y=${ctr.lat}&radius=${rgRadiusM}`;
-          // 넓은 키워드(' 반려견')가 태그 없는 로컬 인기 장소를 잡는 핵심 — 좁히지 말 것
-          const petKwSuffixes = [' 반려견 카페', ' 애견 카페', ' 강아지 카페', ' 반려동물 카페', ' 펫카페', ' 반려견', ' 강아지', ' 애견'];
+          // radius 없이 지역명 포함 쿼리로 검색 — radius 추가 시 Kakao가 거리순 정렬로
+          // 바뀌어 콩카세같이 태그없는 인기장소가 페이지 밖으로 밀림. 쿼리에 지역명이
+          // 이미 있으므로 radius 없어도 해당 지역 결과가 상위에 나옴.
+          const petKwSuffixes = [' 반려견 카페', ' 애견 카페', ' 강아지 카페', ' 반려동물 카페', ' 펫카페', ' 반려견동반', ' 반려견', ' 강아지'];
           for (const area of searchAreas) {
             for (const suffix of petKwSuffixes) {
               const kw = area + suffix;
               tasks.push((async () => {
                 for (let page = 1; page <= 3; page++) {
                   try {
-                    // 위치 반경 바운딩: 현재 뷰포트 중심 기준 → 지금 화면의 로컬 장소 우선
                     const resp = await fetch(
                       `https://dapi.kakao.com/v2/local/search/keyword.json` +
-                      `?query=${encodeURIComponent(kw)}&${rgLocQ}&size=15&page=${page}`,
+                      `?query=${encodeURIComponent(kw)}&size=15&page=${page}`,
                       { headers: { 'Authorization': `KakaoAK ${KAKAO_REST_KEY}` },
                         signal: AbortSignal.timeout(6000) }
                     );
