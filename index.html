@@ -272,14 +272,57 @@
     .list-section-header .sec-line { flex:1; height:1px; background:#F0F0F0; }
     .place-card {
       padding:11px 12px; border-radius:12px; cursor:pointer;
-      transition:all .13s; margin-bottom:4px;
-      border:1.5px solid transparent; background:#FAFAFA;
+      transition:background .13s, box-shadow .13s; margin-bottom:4px;
+      border:2px solid transparent; background:#FAFAFA;
     }
     .place-card:hover { background:white; border-color:#ECC4AC; box-shadow:0 3px 12px rgba(224,78,20,.1); }
-    .place-card.active { background:white; border-color:#E04E14; box-shadow:0 4px 16px rgba(224,78,20,.2); }
+    .place-card.active { background:white; box-shadow:0 4px 16px rgba(0,0,0,.15); }
     .place-card.has-fee { border-left:3px solid #D4A017; }
     .place-card.has-fee:hover { border-color:#D4A017; }
     .place-card.has-fee.active { border-color:#D4A017; }
+
+    /* ── 마커 이름 말풍선 (Leaflet tooltip override) ── */
+    .place-name-tooltip {
+      --tt-color: #E04E14;
+      background: white;
+      border: 2px solid var(--tt-color);
+      border-radius: 10px 10px 10px 2px;
+      padding: 6px 12px;
+      font-size: 13px;
+      font-weight: 700;
+      color: #1A1A1A;
+      white-space: nowrap;
+      box-shadow: 0 3px 12px rgba(0,0,0,.22);
+      pointer-events: auto !important;  /* 클릭 가능하게 */
+      cursor: pointer;
+      user-select: none;
+    }
+    .place-name-tooltip:hover { opacity: .85; }
+    .place-name-tooltip::before {
+      border-top-color: var(--tt-color) !important;
+    }
+    .place-name-tooltip .tt-hint {
+      display: block;
+      font-size: 10px;
+      font-weight: 500;
+      color: #999;
+      margin-top: 1px;
+    }
+
+    /* ── 카드 하단 보기 버튼 ── */
+    .pc-footer { display:flex; align-items:flex-end; justify-content:space-between; gap:6px; margin-top:6px; }
+    .pc-footer .pc-tags { margin-top:0; flex:1; }
+    .card-view-btn {
+      flex-shrink: 0;
+      background: #E04E14; color: white;
+      border: none; border-radius: 8px;
+      padding: 5px 11px; font-size: 12px; font-weight: 700;
+      cursor: pointer; white-space: nowrap;
+      transition: background .13s, transform .1s;
+      align-self: flex-end;
+    }
+    .card-view-btn:hover  { background: #C03A00; }
+    .card-view-btn:active { transform: scale(.95); }
     .pc-top { display:flex; align-items:flex-start; gap:9px; margin-bottom:6px; }
     .pc-emoji { width:36px; height:36px; border-radius:10px; background:#FDEEE8; display:flex; align-items:center; justify-content:center; font-size:17px; flex-shrink:0; }
     .pc-info { flex:1; min-width:0; }
@@ -977,41 +1020,62 @@
     .mem-card-menu-btn:hover { background:#F5F5F5; color:#555; }
     .mem-card-menu-btn.del { color:#E04E14; }
     .mem-card-menu-btn.del:hover { background:#FFF0EC; }
-    /* User + dog row (above image, Instagram style) */
+    /* ── 유저 행 ── */
     .mem-card-user-row {
-      display:flex; align-items:center; padding:10px 14px 8px; gap:9px;
+      display:flex; align-items:center; padding:12px 14px 8px; gap:10px;
     }
     .mem-card-avatar {
-      width:34px; height:34px; border-radius:50%; object-fit:cover;
-      background:#EEE; flex-shrink:0;
-      border:2px solid #F0EBE8;
+      width:36px; height:36px; border-radius:50%; object-fit:cover;
+      background:#EEE; flex-shrink:0; border:2px solid #F0EBE8;
     }
     .mem-card-avatar-placeholder {
-      width:34px; height:34px; border-radius:50%; background:#F0E8E4;
+      width:36px; height:36px; border-radius:50%; background:#F0E8E4;
       display:flex; align-items:center; justify-content:center;
-      font-size:16px; flex-shrink:0;
-      border:2px solid #F0EBE8;
+      font-size:17px; flex-shrink:0; border:2px solid #F0EBE8;
     }
     .mem-card-user-info { flex:1; min-width:0; }
     .mem-card-username { font-size:13px; font-weight:700; color:#1A1A1A; }
     .mem-card-time { font-size:11px; color:#BBBBBB; margin-top:1px; }
-    .mem-card-dog-badge {
-      display:flex; align-items:center; gap:5px; flex-shrink:0;
-      background:#FFF4EF; border-radius:20px; padding:4px 10px 4px 6px;
+
+    /* ── 장소 행 ── */
+    .mem-card-place-row {
+      display:flex; align-items:center; gap:5px;
+      padding:0 14px 8px; flex-wrap:wrap;
     }
-    .mem-card-dog-avatar { width:22px; height:22px; border-radius:50%; object-fit:cover; }
-    .mem-card-dog-name { font-size:11px; font-weight:700; color:#E04E14; }
-    /* Full-width photo — square-ish crop */
+    .mem-card-place-row .place-pin { font-size:13px; }
+    .mem-card-place-row .place-name {
+      font-size:13px; font-weight:700; color:#E04E14;
+      white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:180px;
+    }
+    .mem-card-place-row .place-area {
+      font-size:11px; color:#BBBBBB; flex-shrink:0;
+    }
+
+    /* ── 강아지 행 (독립 섹션 — 인스타그램 위치 태그 스타일) ── */
+    .mem-card-dog-row {
+      display:flex; align-items:center; gap:8px;
+      padding:6px 14px 10px;
+      background:#FFF8F5; border-top:1px solid #F5EEE9;
+    }
+    .mem-card-dog-photo {
+      width:30px; height:30px; border-radius:50%; object-fit:cover;
+      flex-shrink:0; border:2px solid #F5C4A8;
+    }
+    .mem-card-dog-icon { font-size:20px; flex-shrink:0; line-height:1; }
+    .mem-card-dog-info { display:flex; flex-direction:column; gap:1px; }
+    .mem-card-dog-name-text { font-size:13px; font-weight:700; color:#C0440A; }
+    .mem-card-dog-age-text  { font-size:11px; color:#BBBBBB; }
+
+    /* ── 사진 (전체 너비) ── */
     .mem-card-img {
       width:100%; aspect-ratio:4/3; object-fit:cover; display:block;
     }
-    /* Body */
+    /* ── 본문 ── */
     .mem-card-body { padding:10px 14px 14px; }
     .mem-text { font-size:14px; color:#1A1A1A; line-height:1.65; }
     .mem-private-label { font-size:11px; color:#CCC; margin-top:6px; display:flex; align-items:center; gap:3px; }
-    .mem-place-tag {
-      display:inline-block; font-size:11px; font-weight:700; color:#E04E14; margin-bottom:5px;
-    }
+    /* legacy place tag (unused but keep for compat) */
+    .mem-place-tag { display:inline-block; font-size:11px; font-weight:700; color:#E04E14; margin-bottom:5px; }
     .mem-meta { font-size:11px; color:#C0C0C0; margin-top:7px; display:flex; gap:8px; }
     .mem-empty { text-align:center; padding:48px 20px; color:#CCC; font-size:13px; line-height:1.7; }
     .mem-loading { text-align:center; padding:32px; color:#DDD; font-size:13px; }
@@ -1091,20 +1155,25 @@
     /* Drawer memories section */
     .drawer-mem-section { margin-top:4px; }
     /* 드로어 추억 피드 — 인스타그램 카드 스타일 */
+    /* ★ 핵심: 회색 배경으로 흰 카드가 뜨도록 (메모리 패널과 동일한 패턴) */
     .drawer-mem-feed {
       display:flex; flex-direction:column; gap:12px;
-      margin-top:10px; padding-bottom:8px; background:transparent;
+      margin-top:10px;
+      padding:14px;
+      background:#F0F0F0;
+      border-radius:14px;
     }
     /* drawer 안 mem-card — 인스타그램 카드 스타일 유지, 이미지 높이만 제한 */
     .drawer-mem-feed .mem-card {
       border-radius:14px;
-      box-shadow:0 1px 6px rgba(0,0,0,.08), 0 0 0 1px rgba(0,0,0,.05);
+      box-shadow:0 2px 8px rgba(0,0,0,.09), 0 0 0 1px rgba(0,0,0,.05);
+      background: white;
     }
     .drawer-mem-feed .mem-card-img {
       aspect-ratio:4/3; max-height:220px; object-fit:cover;
     }
     .drawer-mem-feed .mem-card-header { padding:10px 12px 0; }
-    .drawer-mem-feed .mem-card-user-row { padding:8px 12px 6px; }
+    .drawer-mem-feed .mem-card-user-row { padding:10px 12px 8px; }
     .drawer-mem-feed .mem-card-body { padding:6px 12px 12px; }
     /* legacy — 하위호환 */
     .drawer-mem-card {
@@ -3622,10 +3691,9 @@ function initMap() {
     console.error('[initMap] Leaflet 초기화 실패:', e.message);
     return;
   }
-  // 한글 지명 표기를 위해 OSM 표준 타일 사용 (한국 지역은 한글 레이블)
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution:'',
-    subdomains:'abc', maxZoom:19
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+    subdomains: 'abcd', maxZoom: 19
   }).addTo(map);
   map.attributionControl.setPrefix('');
   setTimeout(() => map.invalidateSize(), 300);
@@ -3993,7 +4061,7 @@ function upgradeToHeartMarker(placeId) {
   const html = `<div class="m-heart" style="color:${color};font-size:${hs}px;margin-left:${-hs/2}px;margin-top:${-hs*0.9}px" data-id="${placeId}">♥</div>`;
   const icon = L.divIcon({ html, className:'', iconSize:[hs,hs], iconAnchor:[hs/2,hs*0.9] });
   const m = L.marker([place.lat, place.lng], { icon })
-    .on('click', e => { L.DomEvent.stopPropagation(e); if (mapPickMode) { setPickedPlace(place); showToast(`"${place.name}" 선택됐어요 🐾`); exitMapPickMode(); } else { openPlace(place); } });
+    .on('click', e => { L.DomEvent.stopPropagation(e); if (mapPickMode) { setPickedPlace(place); showToast(`"${place.name}" 선택됐어요 🐾`); exitMapPickMode(); } else { selectPlace(place); } });
   clusterGroup ? clusterGroup.addLayer(m) : m.addTo(map);
   markers[placeId] = { marker: m, color, isHeart: true };
 }
@@ -4012,7 +4080,7 @@ function upgradeToGreenHeartMarker(placeId) {
   const html = `<div class="m-wrap"><div class="m-heart" style="color:${color};font-size:${hs}px" data-id="${place.id}">♥</div>${typeLabel?`<div class="m-type-label">${typeLabel}</div>`:''}</div>`;
   const icon = L.divIcon({ html, className:'', iconSize:[hs+40, hs+16], iconAnchor:[hs/2+20, hs*0.9] });
   const m = L.marker([place.lat, place.lng], { icon })
-    .on('click', e => { L.DomEvent.stopPropagation(e); openPlace(place); });
+    .on('click', e => { L.DomEvent.stopPropagation(e); selectPlace(place); });
   if (info) clusterGroup.removeLayer(info.marker);
   clusterGroup.addLayer(m);
   markers[placeId] = { marker:m, color, isHeart:true };
@@ -4156,7 +4224,7 @@ function addMarker(p) {
 
   const sz        = map ? getMarkerSizeForZoom(map.getZoom()) : 20;
   const typeLabel = getTypeLabel(p);
-  const onClick   = e => { L.DomEvent.stopPropagation(e); if (mapPickMode) { setPickedPlace(p); showToast(`"${p.name}" 선택됐어요 🐾`); exitMapPickMode(); } else { openPlace(p); } };
+  const onClick   = e => { L.DomEvent.stopPropagation(e); if (mapPickMode) { setPickedPlace(p); showToast(`"${p.name}" 선택됐어요 🐾`); exitMapPickMode(); } else { selectPlace(p); } };
 
   // ── ID 정규화: Set.has()는 strict 비교라 Number/String 혼용 시 실패 → Number()로 통일
   const _nid = Number(p.id);
@@ -4215,6 +4283,37 @@ function setMarkerActive(id, active) {
     dot.style.background = active ? '#D32F2F' : m.color;
     if (active) dot.classList.add('active'); else dot.classList.remove('active');
   }
+
+  // ── 말풍선 이름 표시/숨김 ──────────────────────────────────────────────────
+  if (active) {
+    const p = places.find(x => x && x.id === id);
+    if (p) {
+      const color = m.color || '#E04E14';
+      const tooltipContent = `${p.name}<span class="tt-hint">탭하면 상세 보기 →</span>`;
+      try {
+        m.marker.bindTooltip(tooltipContent, {
+          permanent: true,
+          direction: 'top',
+          className: 'place-name-tooltip',
+          offset: [0, -4]
+        });
+        m.marker.openTooltip();
+      } catch(e) {}
+      // 말풍선 border 색 + 클릭 → 드로어 열기
+      setTimeout(() => {
+        try {
+          const ttEl = m.marker.getTooltip()?.getElement();
+          if (ttEl) {
+            ttEl.style.borderColor = color;
+            ttEl.style.setProperty('--tt-color', color);
+            ttEl.onclick = (e) => { e.stopPropagation(); openPlace(p); };
+          }
+        } catch(e) {}
+      }, 30);
+    }
+  } else {
+    try { m.marker.unbindTooltip(); } catch(e) {}
+  }
 }
 
 // ══════════════════════════════════════════════════════
@@ -4261,6 +4360,8 @@ function initKakaoSearch() {
 }
 
 let _liveSearchRunning = false;
+let _sessionQuotaHit = false; // REST 429 감지 시 true → 캐시 저장 금지
+let _liveAllEnded    = true;  // 모든 REST 호출이 is_end:true로 끝나야 true
 
 function _setLiveFabState(loading) {
   const label = document.getElementById('feedback-fab-label');
@@ -4296,8 +4397,39 @@ function toggleLiveSearch() {
 // 뷰포트 기반 결과 캐시 (15분 TTL) — 동일 위치 재검색 시 keyword.json 호출 절약
 const _liveCache = new Map();
 
-function doLiveSearch() {
+// ── Firestore 그리드 완료 캐시 (30일 TTL) ─────────────────────────────────
+// 모든 REST 결과가 is_end:true로 소진된 그리드 → 30일간 재검색 생략
+async function _checkGridCache(cacheKey) {
+  if (!firebaseReady || !db) return null;
+  try {
+    const doc = await db.collection('liveSearchCache').doc(cacheKey).get();
+    if (!doc.exists) return null;
+    const d = doc.data();
+    if (!d || !d.completedAt) return null;
+    const age = Date.now() - d.completedAt.toMillis();
+    if (age > 30 * 24 * 60 * 60 * 1000) return null; // 30일 만료
+    return d;
+  } catch(e) { return null; }
+}
+
+async function _writeGridCache(cacheKey, resultCount) {
+  if (!firebaseReady || !db) return;
+  if (_sessionQuotaHit) return;  // 429 발생 시 저장 금지 (불완전 결과 방지)
+  if (!_liveAllEnded)  return;  // is_end:false 페이지 있으면 저장 금지
+  try {
+    await db.collection('liveSearchCache').doc(cacheKey).set({
+      completedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      resultCount,
+      zoom: map.getZoom(),
+    });
+    console.log('[gridCache] 저장:', cacheKey, 'results:', resultCount);
+  } catch(e) { console.warn('[_writeGridCache]', e); }
+}
+
+async function doLiveSearch() {
   _setLiveFabState(true);
+  _sessionQuotaHit = false; // 새 검색마다 초기화
+  _liveAllEnded    = true;  // 낙관적 초기화 → REST 루프에서 반증 시 false
 
   // ── 캐시 확인: 동일 뷰포트 15분 내 재검색이면 API 호출 없이 바로 표시 ──────
   const _ctr = map.getCenter();
@@ -4306,6 +4438,16 @@ function doLiveSearch() {
   if (_cached && Date.now() - _cached.ts < 5 * 60 * 1000) {
     showToast('📦 캐시된 결과로 표시합니다');
     renderLiveResults(_cached.data);
+    return;
+  }
+
+  // ── Firestore 그리드 완료 캐시 확인 (30일 TTL) ────────────────────────────
+  // is_end:true로 완전 탐색된 구역 → 재검색 생략, DB 장소만 노출
+  const _gridCached = await _checkGridCache(_cacheKey);
+  if (_gridCached) {
+    showToast('✅ 이미 완전 탐색된 구역이에요 (최근 30일)');
+    _setLiveFabState(false);
+    filterPlaces();
     return;
   }
 
@@ -4360,6 +4502,7 @@ function doLiveSearch() {
   function checkAllDone() {
     if (sdkDone && restDone) {
       _liveCache.set(_cacheKey, { data: allResults, ts: Date.now() });
+      _writeGridCache(_cacheKey, allResults.length); // 30일 Firestore 캐시 저장 (조건부)
       renderLiveResults(allResults);
     }
   }
@@ -4408,13 +4551,15 @@ function doLiveSearch() {
                   { headers: { 'Authorization': `KakaoAK ${KAKAO_REST_KEY}` },
                     signal: AbortSignal.timeout(6000) }
                 );
+                if (resp.status === 429) { _sessionQuotaHit = true; break; } // 쿼터 초과 → 캐시 저장 금지
                 if (!resp.ok) break;
                 const json = await resp.json();
                 if (json.documents?.length) {
                   // 카테고리 검색 결과 → _fromPetKeyword 없음 (반려동물 확인 필요)
                   allResults = allResults.concat(json.documents);
                 }
-                if (json.meta?.is_end !== false) break;
+                if (json.meta?.is_end !== false) break; // is_end:true → 완전 수집
+                if (page === 45) _liveAllEnded = false; // 45p에서도 is_end:false → 미완료
               } catch(e) { break; }
             }
           })());
@@ -4433,6 +4578,7 @@ function doLiveSearch() {
                   { headers: { 'Authorization': `KakaoAK ${KAKAO_REST_KEY}` },
                     signal: AbortSignal.timeout(6000) }
                 );
+                if (resp.status === 429) { _sessionQuotaHit = true; break; } // 쿼터 초과
                 if (!resp.ok) break;
                 const json = await resp.json();
                 if (json.documents?.length) {
@@ -4483,6 +4629,7 @@ function doLiveSearch() {
                       { headers: { 'Authorization': `KakaoAK ${KAKAO_REST_KEY}` },
                         signal: AbortSignal.timeout(6000) }
                     );
+                    if (resp.status === 429) { _sessionQuotaHit = true; break; } // 쿼터 초과
                     if (!resp.ok) break;
                     const json = await resp.json();
                     if (json.documents?.length) {
@@ -4534,6 +4681,24 @@ async function renderLiveResults(rawData) {
     liveData = [];
     filterPlaces();
     return;
+  }
+
+  // ── 뷰포트 영역 필터 (8% 버퍼) ─────────────────────────────────────────────
+  // 카카오 원형 반경 검색이 뷰포트 바깥 장소도 포함하므로 클라이언트에서 필터
+  {
+    const vpB   = map.getBounds();
+    const latPd = (vpB.getNorth() - vpB.getSouth()) * 0.08;
+    const lngPd = (vpB.getEast()  - vpB.getWest())  * 0.08;
+    const ext   = L.latLngBounds(
+      [vpB.getSouth() - latPd, vpB.getWest()  - lngPd],
+      [vpB.getNorth() + latPd, vpB.getEast()  + lngPd]
+    );
+    const before = data.length;
+    const vpFiltered = data.filter(d => ext.contains([parseFloat(d.y), parseFloat(d.x)]));
+    const removed = before - vpFiltered.length;
+    if (removed > 0) console.log(`[viewportFilter] 뷰포트 바깥 ${removed}개 제거`);
+    data.length = 0;
+    vpFiltered.forEach(d => data.push(d));
   }
 
   // Check which are already in our DB (kakaoId 우선, 이름+좌표 폴백)
@@ -5707,7 +5872,7 @@ function cardHtml(p) {
   const isLiked  = userLikedPlaceIds.has(p.id);
   return `
   <div class="place-card ${isActive?'active':''} ${p.entryFee?'has-fee':''}" id="card-${p.id}"
-       onclick="openPlace(places.find(x=>x.id==${p.id}))">
+       onclick="selectPlace(places.find(x=>x.id==${p.id}))">
     <div class="pc-top">
       <div class="pc-emoji">${p.emoji}</div>
       <div class="pc-info">
@@ -5718,13 +5883,40 @@ function cardHtml(p) {
               onclick="event.stopPropagation();toggleLikedPlace(${p.id})"
               title="${isLiked?'관심 장소 취소':'관심 장소 추가'}">${isLiked?'★':'☆'}</button>
     </div>
-    <div class="pc-tags">
-      ${p.large === true ? '<span class="tag t-green">🐕 대형견 OK</span>' : p.large === false ? '<span class="tag t-gray">소형견만</span>' : '<span class="tag t-gray">🐕 견종 미확인</span>'}
-      ${p.indoor === true ? '<span class="tag t-blue">🏠 실내 가능</span>' : p.indoor === false ? '<span class="tag t-orange">🌿 테라스만</span>' : '<span class="tag t-gray">🏠 실내여부 미확인</span>'}
-      ${p.cage === true ? '<span class="tag t-red">📦 케이지 필수</span>' : p.cage === false ? '' : ''}
-      ${p.entryFee ? `<span class="tag t-gold">💰 입장료 있음</span>` : ''}
+    <div class="pc-footer">
+      <div class="pc-tags">
+        ${p.large === true ? '<span class="tag t-green">🐕 대형견 OK</span>' : p.large === false ? '<span class="tag t-gray">소형견만</span>' : '<span class="tag t-gray">🐕 견종 미확인</span>'}
+        ${p.indoor === true ? '<span class="tag t-blue">🏠 실내 가능</span>' : p.indoor === false ? '<span class="tag t-orange">🌿 테라스만</span>' : '<span class="tag t-gray">🏠 실내여부 미확인</span>'}
+        ${p.cage === true ? '<span class="tag t-red">📦 케이지 필수</span>' : p.cage === false ? '' : ''}
+        ${p.entryFee ? `<span class="tag t-gold">💰 입장료 있음</span>` : ''}
+      </div>
+      <button class="card-view-btn" onclick="event.stopPropagation();openPlace(places.find(x=>x.id==${p.id}))">보기</button>
     </div>
   </div>`;
+}
+
+// ══════════════════════════════════════════════════════
+//  SELECT PLACE  (하이라이트만 — 드로어 열지 않음)
+// ══════════════════════════════════════════════════════
+function selectPlace(p) {
+  if (!p) return;
+  if (activePlace?.id === p.id) return; // 이미 선택됨 → 말풍선/테두리 유지
+  if (activePlace) setMarkerActive(activePlace.id, false);
+  activePlace = p;
+  setMarkerActive(p.id, true);
+  if (p.lat != null && p.lng != null && !map.getBounds().contains([p.lat, p.lng])) {
+    map.setView([p.lat, p.lng], map.getZoom(), { animate: true, duration: 0.5 });
+  }
+  filterPlaces();
+  setTimeout(() => {
+    const card = document.getElementById(`card-${p.id}`);
+    if (card) {
+      card.scrollIntoView({ behavior:'smooth', block:'nearest' });
+      const markerColor = markers[p.id]?.color || '#E04E14';
+      card.style.borderColor = markerColor;
+      card.style.boxShadow = `0 4px 18px ${markerColor}55`;
+    }
+  }, 80);
 }
 
 // ══════════════════════════════════════════════════════
@@ -5732,7 +5924,8 @@ function cardHtml(p) {
 // ══════════════════════════════════════════════════════
 function openPlace(p) {
   if (!p) return;
-  if (activePlace) setMarkerActive(activePlace.id, false);
+  // 드로어 열기 전 선택 상태 강제 갱신 (이미 선택됐어도 다시 적용)
+  if (activePlace && activePlace.id !== p.id) setMarkerActive(activePlace.id, false);
   activePlace = p;
   setMarkerActive(p.id, true);
   // 뷰포트 안에 있으면 지도 고정, 밖에 있을 때만 이동 (현재 줌 유지)
@@ -5755,7 +5948,12 @@ function openPlace(p) {
   filterPlaces();
   setTimeout(() => {
     const card = document.getElementById(`card-${p.id}`);
-    if (card) card.scrollIntoView({ behavior:'smooth', block:'nearest' });
+    if (card) {
+      card.scrollIntoView({ behavior:'smooth', block:'nearest' });
+      const markerColor = markers[p.id]?.color || '#E04E14';
+      card.style.borderColor = markerColor;
+      card.style.boxShadow = `0 4px 18px ${markerColor}55`;
+    }
   }, 80);
 
   const hoursHtml = (p.hours || [{d:'영업시간', t:'카카오맵 확인'}]).map(h => `
@@ -6734,7 +6932,15 @@ async function submitMemory() {
   btn.disabled = true; btn.textContent = '저장 중...';
 
   let photoURL = null;
-  if (memPhotoBlob) photoURL = await uploadMemPhoto(memPhotoBlob);
+  if (memPhotoBlob) {
+    photoURL = await uploadMemPhoto(memPhotoBlob);
+    if (!photoURL) {
+      // 업로드 실패 — 사진 유실 방지: 저장 자체를 중단하고 사용자에게 알림
+      btn.disabled = false; btn.textContent = '기록하기';
+      showToast('⚠️ 사진 업로드에 실패했어요. 네트워크 확인 후 다시 시도해주세요.');
+      return;
+    }
+  }
 
   const place = places.find(p => p.id === placeId);
   const isPublic = document.getElementById('mem-is-public')?.checked !== false; // 기본 true
@@ -6871,20 +7077,11 @@ function renderMemoryCard(m, showPlace = true) {
   const isMyMem = m.userId && currentUser?.uid && m.userId === currentUser.uid;
   const safePlace = (m.placeName||'').replace(/'/g,"\\'");
 
-  // ── 유저 행: 아바타 + 이름 + 시간 (이미지 위에 표시 — 인스타그램과 동일) ──
+  // ── ① 유저 행: 아바타 + 이름 + 시간 + 수정/삭제 ──
   const avatarHtml = m.userPhotoURL
-    ? `<img class="mem-card-avatar" src="${m.userPhotoURL}" alt="">`
+    ? `<img class="mem-card-avatar" src="${m.userPhotoURL}" alt="" onerror="this.outerHTML='<div class=\\'mem-card-avatar-placeholder\\'>🐾</div>'">`
     : `<div class="mem-card-avatar-placeholder">🐾</div>`;
 
-  let dogBadgeHtml = '';
-  if (m.dogName) {
-    const dogAv = m.dogPhotoURL
-      ? `<img class="mem-card-dog-avatar" src="${m.dogPhotoURL}" alt="">`
-      : `<span style="font-size:13px">🐶</span>`;
-    dogBadgeHtml = `<div class="mem-card-dog-badge">${dogAv}<span class="mem-card-dog-name">${m.dogName}${m.dogAge ? ' · '+m.dogAge : ''}</span></div>`;
-  }
-
-  // 수정/삭제 메뉴 (내 글만)
   const menuHtml = isMyMem ? `
     <div class="mem-card-menu">
       <button class="mem-card-menu-btn" onclick="openEditMemory('${m.id}')">수정</button>
@@ -6898,23 +7095,40 @@ function renderMemoryCard(m, showPlace = true) {
         <div class="mem-card-username">${m.userName || '익명'}</div>
         <div class="mem-card-time">${timeAgo(m.createdAt)}</div>
       </div>
-      ${dogBadgeHtml}
       ${menuHtml}
     </div>`;
 
-  // ── 장소 태그 (추억 탭에서만 표시) ──
-  const placeTagHtml = showPlace && m.placeName ? `
-    <div style="padding:0 14px 0; margin-top:-2px">
-      <span style="font-size:12px;font-weight:700;color:#E04E14">📍 ${m.placeName}</span>
-      ${m.placeArea ? `<span style="font-size:11px;color:#BBBBBB;margin-left:4px">${m.placeArea}</span>` : ''}
+  // ── ② 장소 행 (항상 표시 — 드로어/피드 공통) ──
+  const placeRowHtml = m.placeName ? `
+    <div class="mem-card-place-row">
+      <span class="place-pin">📍</span>
+      <span class="place-name">${m.placeName}</span>
+      ${m.placeArea ? `<span class="place-area">${m.placeArea}</span>` : ''}
     </div>` : '';
 
-  // ── 사진 (전체 너비) ──
+  // ── ③ 강아지 행 (독립 섹션 — 이름 + 나이 + 사진) ──
+  let dogRowHtml = '';
+  if (m.dogName) {
+    const dogPhotoHtml = m.dogPhotoURL
+      ? `<img class="mem-card-dog-photo" src="${m.dogPhotoURL}" alt="" onerror="this.outerHTML='<span class=\\'mem-card-dog-icon\\'>🐕</span>'">`
+      : `<span class="mem-card-dog-icon">🐕</span>`;
+    dogRowHtml = `
+    <div class="mem-card-dog-row">
+      ${dogPhotoHtml}
+      <div class="mem-card-dog-info">
+        <span class="mem-card-dog-name-text">${m.dogName}</span>
+        ${m.dogAge ? `<span class="mem-card-dog-age-text">${m.dogAge}</span>` : ''}
+      </div>
+    </div>`;
+  }
+
+  // ── ④ 사진 (전체 너비) ──
   const imgHtml = m.photoURL
-    ? `<img class="mem-card-img" src="${m.photoURL}" loading="lazy" alt="">`
+    ? `<img class="mem-card-img" src="${m.photoURL}" loading="lazy" alt=""
+         onerror="this.style.display='none'">`
     : '';
 
-  // ── 본문 ──
+  // ── ⑤ 본문 텍스트 ──
   const privNote = (m.isPublic === false && isMyMem)
     ? `<span class="mem-private-label">🔒 나만 보기</span>` : '';
   const bodyHtml = (m.text || privNote) ? `
@@ -6923,9 +7137,9 @@ function renderMemoryCard(m, showPlace = true) {
       ${privNote}
     </div>` : '';
 
-  // 인스타그램 레이아웃: 유저행 → 장소태그 → 이미지 → 본문
+  // 인스타그램 레이아웃: 유저행 → 장소행 → 강아지행 → 사진 → 본문
   return `<div class="mem-card" data-mem-id="${m.id}">
-    ${userRowHtml}${placeTagHtml}${imgHtml}${bodyHtml}
+    ${userRowHtml}${placeRowHtml}${dogRowHtml}${imgHtml}${bodyHtml}
   </div>`;
 }
 
@@ -7044,8 +7258,8 @@ async function refreshDrawerMemories(placeId) {
     inner.innerHTML = `<div style="font-size:13px;color:#CCC;text-align:center;padding:16px 0">${msg}</div>`;
     return;
   }
-  // renderMemoryCard(m, showPlace=false) — 장소 헤더 생략, 수정/삭제 버튼은 내 글에만
-  inner.innerHTML = mems.map(m => renderMemoryCard(m, false)).join('');
+  // showPlace=true — 장소명 항상 표시 (인스타그램 카드 완성도)
+  inner.innerHTML = mems.map(m => renderMemoryCard(m, true)).join('');
 }
 
 // ══════════════════════════════════════════════════════
