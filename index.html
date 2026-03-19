@@ -947,20 +947,74 @@
       border-radius:16px; font-size:12px; font-weight:700; cursor:pointer;
       font-family:inherit; flex-shrink:0;
     }
-    .mem-feed { flex:1; overflow-y:auto; padding:10px; -webkit-overflow-scrolling:touch; }
+    .mem-feed { flex:1; overflow-y:auto; padding:0; -webkit-overflow-scrolling:touch; background:#F5F5F5; }
     .mem-feed::-webkit-scrollbar { width:3px; }
-    .mem-feed::-webkit-scrollbar-thumb { background:#EEE; border-radius:2px; }
+    .mem-feed::-webkit-scrollbar-thumb { background:#DDD; border-radius:2px; }
+    /* Instagram-style feed card */
     .mem-card {
-      background:white; border-radius:14px; margin-bottom:10px;
-      overflow:hidden; border:1.5px solid #F0F0F0;
+      background:white; margin-bottom:8px; border-bottom:1px solid #EFEFEF;
     }
-    .mem-card-img { width:100%; max-height:200px; object-fit:cover; display:block; }
-    .mem-card-body { padding:10px 13px 12px; }
+    /* Card header: place name + region + menu */
+    .mem-card-header {
+      display:flex; align-items:center; padding:10px 14px 8px;
+      gap:8px;
+    }
+    .mem-card-place {
+      flex:1; min-width:0;
+    }
+    .mem-card-place-name {
+      font-size:13px; font-weight:800; color:#1A1A1A;
+      white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+    }
+    .mem-card-place-area {
+      font-size:11px; color:#999; margin-top:1px;
+    }
+    .mem-card-menu {
+      display:flex; gap:6px; flex-shrink:0;
+    }
+    .mem-card-menu-btn {
+      background:none; border:none; cursor:pointer; font-size:12px; color:#999;
+      padding:3px 7px; border-radius:8px; font-family:inherit; font-weight:600;
+      transition:background .15s;
+    }
+    .mem-card-menu-btn:hover { background:#F5F5F5; color:#555; }
+    .mem-card-menu-btn.del { color:#E04E14; }
+    .mem-card-menu-btn.del:hover { background:#FFF0EC; }
+    /* Full-width photo */
+    .mem-card-img { width:100%; max-height:300px; object-fit:cover; display:block; }
+    /* User + dog row */
+    .mem-card-user-row {
+      display:flex; align-items:center; padding:10px 14px 4px; gap:9px;
+    }
+    .mem-card-avatar {
+      width:30px; height:30px; border-radius:50%; object-fit:cover;
+      background:#EEE; flex-shrink:0;
+    }
+    .mem-card-avatar-placeholder {
+      width:30px; height:30px; border-radius:50%; background:#F0E8E4;
+      display:flex; align-items:center; justify-content:center;
+      font-size:15px; flex-shrink:0;
+    }
+    .mem-card-user-info { flex:1; min-width:0; }
+    .mem-card-username { font-size:12px; font-weight:700; color:#2D2D2D; }
+    .mem-card-time { font-size:10px; color:#BBBBBB; margin-top:1px; }
+    .mem-card-dog-badge {
+      display:flex; align-items:center; gap:5px; flex-shrink:0;
+      background:#FFF4EF; border-radius:20px; padding:3px 9px 3px 5px;
+    }
+    .mem-card-dog-avatar {
+      width:20px; height:20px; border-radius:50%; object-fit:cover;
+    }
+    .mem-card-dog-name { font-size:11px; font-weight:700; color:#E04E14; }
+    /* Body */
+    .mem-card-body { padding:4px 14px 12px; }
+    .mem-text { font-size:13px; color:#2D2D2D; line-height:1.65; }
+    .mem-private-label { font-size:10px; color:#AAA; margin-top:5px; }
+    /* Legacy — kept for drawer cards */
     .mem-place-tag {
       display:inline-block; font-size:11px; font-weight:700; color:#E04E14;
       margin-bottom:5px;
     }
-    .mem-text { font-size:13px; color:#2D2D2D; line-height:1.6; }
     .mem-meta { font-size:11px; color:#C0C0C0; margin-top:7px; display:flex; gap:8px; }
     .mem-empty { text-align:center; padding:48px 20px; color:#CCC; font-size:13px; line-height:1.7; }
     .mem-loading { text-align:center; padding:32px; color:#DDD; font-size:13px; }
@@ -1039,7 +1093,19 @@
 
     /* Drawer memories section */
     .drawer-mem-section { margin-top:4px; }
-    .drawer-mem-feed { display:flex; flex-direction:column; gap:8px; margin-top:10px; }
+    .drawer-mem-feed { display:flex; flex-direction:column; gap:0; margin-top:8px;
+      background:#F7F7F7; border-radius:14px; overflow:hidden; }
+    /* drawer 안 mem-card 오버라이드 — 둥근 배경 없이 리스트처럼 */
+    .drawer-mem-feed .mem-card {
+      margin-bottom:0; border-bottom:1px solid #EFEFEF; border-radius:0;
+      background:white;
+    }
+    .drawer-mem-feed .mem-card:last-child { border-bottom:none; }
+    .drawer-mem-feed .mem-card-img { max-height:180px; }
+    .drawer-mem-feed .mem-card-header { padding:8px 12px 6px; }
+    .drawer-mem-feed .mem-card-user-row { padding:8px 12px 3px; }
+    .drawer-mem-feed .mem-card-body { padding:3px 12px 10px; }
+    /* legacy — 하위호환 */
     .drawer-mem-card {
       background:#FAFAFA; border-radius:12px; overflow:hidden; border:1.5px solid #F0F0F0;
     }
@@ -3662,13 +3728,13 @@ async function loadAllMemoryPlaceIds() {
       const pid = doc.data().placeId;
       if (pid != null) { uniqueIds.add(Number(pid)); allMemoryPlaceIds.add(Number(pid)); }
     });
-    // 이미 로딩된 마커 → 연두색 하트로 업그레이드
-    uniqueIds.forEach(pid => {
-      if (!userVisitedPlaceIds.has(pid)) upgradeToGreenHeartMarker(pid);
-    });
     // 아직 로딩 안 된 장소 → 전체 데이터 로딩 (마커 표시에 필요), 최대 200개 제한
     const missingIds = [...uniqueIds].filter(id => !places.find(p => p.id === id)).slice(0, 200);
     if (missingIds.length) await batchLoadPlacesByIds(missingIds);
+    // 전체 장소 로딩 완료 후 연두색 하트로 업그레이드 (race condition 방지)
+    uniqueIds.forEach(pid => {
+      if (!userVisitedPlaceIds.has(pid)) upgradeToGreenHeartMarker(pid);
+    });
   } catch(e) { console.warn('[loadAllMemoryPlaceIds]', e); }
 }
 
@@ -6292,6 +6358,9 @@ function openWriteMemory(placeId) {
       badge.style.display = 'none';
     }
   }
+  // 수정 모드였다면 버튼 원복
+  const btn = document.getElementById('mem-submit-btn');
+  if (btn) { btn.textContent = '기록하기'; btn.onclick = submitMemory; delete btn.dataset.editId; }
   document.getElementById('memory-modal').classList.add('open');
 }
 
@@ -6314,8 +6383,9 @@ async function submitMemory() {
     placeId,
     placeName: place ? place.name : '',
     placeArea: place ? place.area : '',
-    userId:    currentUser?.uid || 'anonymous',
-    userName:  currentUser?.displayName || currentUser?.email?.split('@')[0] || '익명',
+    userId:       currentUser?.uid || 'anonymous',
+    userName:     currentUser?.displayName || currentUser?.email?.split('@')[0] || '익명',
+    userPhotoURL: currentUser?.photoURL || null,
     text,
     photoURL,
     isPublic,  // ★ 공개/비공개
@@ -6351,6 +6421,78 @@ async function submitMemory() {
   if (activePlace?.id === placeId) refreshDrawerMemories(placeId);
 }
 
+/* 추억 삭제 확인 */
+function confirmDeleteMemory(memId, placeName) {
+  if (!confirm(`"${placeName || '이 추억'}"을 삭제할까요?\n삭제 후 복구가 어려워요.`)) return;
+  deleteMemory(memId);
+}
+async function deleteMemory(memId) {
+  if (!firebaseReady || !db || !currentUser) return;
+  try {
+    await db.collection('memories').doc(memId).delete();
+    // DOM에서 즉시 제거
+    const card = document.querySelector(`.mem-card[data-mem-id="${memId}"]`);
+    if (card) card.remove();
+    showToast('🗑️ 추억이 삭제됐어요');
+    // feed가 비었으면 empty 메시지 표시
+    const feed = document.getElementById('mem-feed');
+    if (feed && !feed.querySelector('.mem-card')) {
+      const isMine = currentMemTab === 'mine';
+      feed.innerHTML = isMine
+        ? `<div class="mem-empty">아직 기록이 없어요 🐾<br>강아지와 다녀온 곳의 기억을 남겨봐요!</div>`
+        : `<div class="mem-empty">아직 아무도 기록을 남기지 않았어요 🐾</div>`;
+    }
+  } catch(e) { showToast('삭제 실패: ' + e.message); }
+}
+
+/* 추억 수정 — 기존 모달 재사용 */
+async function openEditMemory(memId) {
+  if (!firebaseReady || !db) return;
+  try {
+    const doc = await db.collection('memories').doc(memId).get();
+    if (!doc.exists) { showToast('추억을 찾을 수 없어요'); return; }
+    const m = { id: doc.id, ...doc.data() };
+    // 모달 열기 후 값 채우기
+    openModal('memory-modal');
+    setTimeout(() => {
+      const textEl = document.getElementById('mem-text');
+      if (textEl) textEl.value = m.text || '';
+      if (m.placeId) {
+        document.getElementById('mem-place-select').value = m.placeId;
+        const place = places.find(p => p.id === m.placeId);
+        if (place) {
+          const pickerInput = document.getElementById('place-picker-input');
+          if (pickerInput) { pickerInput.value = `${place.name}${place.area ? ' · '+place.area : ''}`; pickerInput.classList.add('has-val'); }
+        }
+      }
+      // 제출 버튼을 "수정 저장"으로 변경 및 id 태깅
+      const btn = document.getElementById('mem-submit-btn');
+      if (btn) {
+        btn.textContent = '수정 저장';
+        btn.dataset.editId = memId;
+        btn.onclick = () => saveEditMemory(memId);
+      }
+    }, 100);
+  } catch(e) { showToast('불러오기 실패: ' + e.message); }
+}
+async function saveEditMemory(memId) {
+  const text = document.getElementById('mem-text').value.trim();
+  const btn = document.getElementById('mem-submit-btn');
+  btn.disabled = true; btn.textContent = '저장 중...';
+  try {
+    await db.collection('memories').doc(memId).update({ text });
+    showToast('✅ 수정됐어요!');
+    closeModal('memory-modal');
+    // 버튼 원복
+    btn.textContent = '기록하기'; delete btn.dataset.editId;
+    btn.onclick = submitMemory;
+    loadMemoriesFeed();
+  } catch(e) {
+    showToast('수정 실패: ' + e.message);
+    btn.disabled = false; btn.textContent = '수정 저장';
+  }
+}
+
 /* 시간 포맷 */
 function timeAgo(ts) {
   if (!ts) return '';
@@ -6363,32 +6505,68 @@ function timeAgo(ts) {
   return d.toLocaleDateString('ko-KR', { month:'short', day:'numeric' });
 }
 
-/* 추억 피드 렌더링 */
+/* 추억 피드 렌더링 — Instagram 스타일 */
 function renderMemoryCard(m, showPlace = true) {
-  const img = m.photoURL ? `<img class="mem-card-img" src="${m.photoURL}" loading="lazy" alt="">` : '';
-  const placeTag = showPlace && m.placeName ? `<div class="mem-place-tag">${m.placeName}</div>` : '';
-  // 강아지 정보 배지
-  let dogBadge = '';
-  if (m.dogName) {
-    const dogImg = m.dogPhotoURL ? `<img src="${m.dogPhotoURL}" style="width:20px;height:20px;border-radius:50%;object-fit:cover;vertical-align:middle;margin-right:4px">` : '🐶 ';
-    dogBadge = `<span style="display:inline-flex;align-items:center;font-size:11px;color:#E04E14;font-weight:600;margin-right:6px">${dogImg}${m.dogName}${m.dogAge ? ' · ' + m.dogAge : ''}</span>`;
-  }
-  // 비공개 배지 (내 글에서만 표시)
   const isMyMem = m.userId && currentUser?.uid && m.userId === currentUser.uid;
-  const privBadge = (m.isPublic === false && isMyMem)
-    ? `<span class="mem-private-badge">🔒 비공개</span>` : '';
-  return `<div class="mem-card">
-    ${img}
+
+  // ── 헤더: 장소명 + 지역 + 수정/삭제 버튼 (내 글만) ──
+  const headerHtml = showPlace ? `
+    <div class="mem-card-header">
+      <div class="mem-card-place">
+        ${m.placeName ? `<div class="mem-card-place-name">📍 ${m.placeName}</div>` : ''}
+        ${m.placeArea ? `<div class="mem-card-place-area">${m.placeArea}</div>` : ''}
+      </div>
+      ${isMyMem ? `<div class="mem-card-menu">
+        <button class="mem-card-menu-btn" onclick="openEditMemory('${m.id}')">수정</button>
+        <button class="mem-card-menu-btn del" onclick="confirmDeleteMemory('${m.id}','${(m.placeName||'').replace(/'/g,"\\'")}')">삭제</button>
+      </div>` : ''}
+    </div>` : '';
+
+  // ── 전체 사진 ──
+  const imgHtml = m.photoURL
+    ? `<img class="mem-card-img" src="${m.photoURL}" loading="lazy" alt="">`
+    : '';
+
+  // ── 유저 행: 아바타 + 이름 + 시간 + 강아지 배지 ──
+  const avatarHtml = m.userPhotoURL
+    ? `<img class="mem-card-avatar" src="${m.userPhotoURL}" alt="">`
+    : `<div class="mem-card-avatar-placeholder">🐾</div>`;
+
+  let dogBadgeHtml = '';
+  if (m.dogName) {
+    const dogAv = m.dogPhotoURL
+      ? `<img class="mem-card-dog-avatar" src="${m.dogPhotoURL}" alt="">`
+      : `<span style="font-size:14px">🐶</span>`;
+    dogBadgeHtml = `<div class="mem-card-dog-badge">${dogAv}<span class="mem-card-dog-name">${m.dogName}${m.dogAge ? ' · '+m.dogAge : ''}</span></div>`;
+  }
+
+  const userRowHtml = `
+    <div class="mem-card-user-row">
+      ${avatarHtml}
+      <div class="mem-card-user-info">
+        <div class="mem-card-username">${m.userName || '익명'}</div>
+        <div class="mem-card-time">${timeAgo(m.createdAt)}</div>
+      </div>
+      ${dogBadgeHtml}
+    </div>`;
+
+  // ── 본문 ──
+  const privNote = (m.isPublic === false && isMyMem) ? `<div class="mem-private-label">🔒 나만 보기</div>` : '';
+  const bodyHtml = (m.text || privNote) ? `
     <div class="mem-card-body">
-      <div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap">
-        ${placeTag}${privBadge}
-      </div>
       ${m.text ? `<div class="mem-text">${m.text.replace(/\n/g,'<br>')}</div>` : ''}
-      <div class="mem-meta">
-        ${dogBadge}<span>${m.userName || '익명'}</span>
-        <span>${timeAgo(m.createdAt)}</span>
-      </div>
-    </div>
+      ${privNote}
+    </div>` : '';
+
+  // ── 내 글이지만 showPlace=false (drawer)이면 메뉴 버튼 포함 ──
+  const drawerMenu = !showPlace && isMyMem ? `
+    <div style="display:flex;gap:6px;padding:0 14px 10px">
+      <button class="mem-card-menu-btn" onclick="openEditMemory('${m.id}')">수정</button>
+      <button class="mem-card-menu-btn del" onclick="confirmDeleteMemory('${m.id}','${(m.placeName||'').replace(/'/g,"\\'")}')">삭제</button>
+    </div>` : '';
+
+  return `<div class="mem-card" data-mem-id="${m.id}">
+    ${headerHtml}${imgHtml}${userRowHtml}${bodyHtml}${drawerMenu}
   </div>`;
 }
 
@@ -6412,12 +6590,20 @@ async function loadMemoriesFeed() {
 
   if (firebaseReady && db) {
     try {
-      let query = db.collection('memories').orderBy('createdAt','desc');
       if (isMine && currentUser?.uid) {
-        query = query.where('userId', '==', currentUser.uid);
+        // userId 단독 쿼리 → composite index 불필요, 클라이언트 정렬
+        const snap = await db.collection('memories')
+          .where('userId', '==', currentUser.uid).limit(100).get();
+        mems = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+          .sort((a, b) => {
+            const ta = a.createdAt?.toMillis?.() ?? (a.createdAt?.seconds ?? 0) * 1000;
+            const tb = b.createdAt?.toMillis?.() ?? (b.createdAt?.seconds ?? 0) * 1000;
+            return tb - ta;
+          });
+      } else {
+        const snap = await db.collection('memories').orderBy('createdAt','desc').limit(100).get();
+        mems = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       }
-      const snap = await query.limit(100).get();
-      mems = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     } catch(e) { console.warn('memories load error:', e); }
   }
 
@@ -6441,7 +6627,7 @@ async function loadMemoriesFeed() {
     feed.innerHTML = emptyMsg;
     return;
   }
-  feed.innerHTML = mems.map(m => renderMemoryCard(m, isMine)).join('');
+  feed.innerHTML = mems.map(m => renderMemoryCard(m, true)).join('');
 }
 
 /* 특정 가게 추억 로드 (detail drawer) */
@@ -6449,10 +6635,15 @@ async function loadPlaceMemories(placeId) {
   let mems = [];
   if (firebaseReady && db) {
     try {
+      // placeId 단독 쿼리 → composite index 불필요, 클라이언트 정렬
       const snap = await db.collection('memories')
-        .where('placeId','==', placeId)
-        .orderBy('createdAt','desc').limit(30).get();
-      mems = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        .where('placeId','==', placeId).limit(50).get();
+      mems = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+        .sort((a, b) => {
+          const ta = a.createdAt?.toMillis?.() ?? (a.createdAt?.seconds ?? 0) * 1000;
+          const tb = b.createdAt?.toMillis?.() ?? (b.createdAt?.seconds ?? 0) * 1000;
+          return tb - ta;
+        });
     } catch(e) { console.warn('place memories error:', e); }
   }
   const local = JSON.parse(localStorage.getItem('mem_local') || '[]');
@@ -6466,25 +6657,17 @@ async function loadPlaceMemories(placeId) {
 
 /* Drawer 추억 섹션 새로고침 */
 async function refreshDrawerMemories(placeId) {
-  const section = document.getElementById('drawer-mem-section');
-  if (!section) return;
-  const mems = await loadPlaceMemories(placeId);
   const inner = document.getElementById('drawer-mem-list');
   if (!inner) return;
+  const mems = await loadPlaceMemories(placeId);
+  // 드로어가 이미 닫혔으면 렌더 스킵
+  if (!document.getElementById('drawer-mem-list')) return;
   if (!mems.length) {
     inner.innerHTML = '<div style="font-size:13px;color:#CCC;text-align:center;padding:16px 0">아직 기록이 없어요. 첫 번째로 남겨봐요 🐾</div>';
     return;
   }
-  inner.innerHTML = mems.map(m => {
-    const dogPart = m.dogName ? `🐶 ${m.dogName}${m.dogAge ? ' · '+m.dogAge : ''} · ` : '';
-    return `<div class="drawer-mem-card">
-      ${m.photoURL ? `<img src="${m.photoURL}" loading="lazy" alt="">` : ''}
-      <div class="drawer-mem-card-body">
-        ${m.text ? `<div class="drawer-mem-text">${m.text.replace(/\n/g,'<br>')}</div>` : ''}
-        <div class="drawer-mem-meta">${dogPart}${m.userName || '익명'} · ${timeAgo(m.createdAt)}</div>
-      </div>
-    </div>`;
-  }).join('');
+  // renderMemoryCard(m, showPlace=false) — 장소 헤더 생략, 수정/삭제 버튼은 내 글에만
+  inner.innerHTML = mems.map(m => renderMemoryCard(m, false)).join('');
 }
 
 // ══════════════════════════════════════════════════════
