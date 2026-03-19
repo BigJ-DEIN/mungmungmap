@@ -7778,21 +7778,25 @@ async function adminRelocateMemory(memId) {
   setTimeout(() => document.getElementById('arloc-input')?.focus(), 80);
 }
 
+let _relocateSearchTimer = null;
 function adminRelocateSearch(q) {
+  clearTimeout(_relocateSearchTimer);
   const dropdown = document.getElementById('arloc-results');
   if (!q.trim()) { dropdown.style.display = 'none'; return; }
-  const kw = q.trim().toLowerCase();
-  const matches = places
-    .filter(p => p && p.id != null && p.name && (p.name.toLowerCase().includes(kw) || (p.area||'').toLowerCase().includes(kw)))
-    .sort((a, b) => a.name.localeCompare(b.name, 'ko'))
-    .slice(0, 20);
-  if (!matches.length) {
+  dropdown.style.display = 'block';
+  dropdown.innerHTML = `<div style="padding:10px 12px;font-size:13px;color:#AAA">검색 중...</div>`;
+  _relocateSearchTimer = setTimeout(() => _doAdminRelocateSearch(q.trim()), 300);
+}
+
+function _renderRelocateResults(results) {
+  const dropdown = document.getElementById('arloc-results');
+  if (!results.length) {
     dropdown.innerHTML = `<div style="padding:10px 12px;font-size:13px;color:#AAA">검색 결과 없음</div>`;
   } else {
-    dropdown.innerHTML = matches.map(p =>
+    dropdown.innerHTML = results.map(p =>
       `<div onclick="adminRelocateConfirm(${p.id},'${(p.name||'').replace(/'/g,"\\'")}','${(p.area||'').replace(/'/g,"\\'")}')"
         style="padding:9px 12px;border-bottom:1px solid #F5F5F5;cursor:pointer;font-size:13px">
-        <span style="font-weight:600">${p.name.replace(/</g,'&lt;')}</span>
+        <span style="font-weight:600">${(p.name||'').replace(/</g,'&lt;')}</span>
         ${p.area ? `<span style="color:#AAA;margin-left:6px;font-size:11px">${p.area}</span>` : ''}
         <span style="float:right;font-size:10px;color:#CCC">id:${p.id}</span>
       </div>`
@@ -7801,27 +7805,95 @@ function adminRelocateSearch(q) {
   dropdown.style.display = 'block';
 }
 
+async function _doAdminRelocateSearch(q) {
+  const kw = q.toLowerCase();
+  // ① in-memory places 먼저 검색
+  const memMatches = places
+    .filter(p => p && p.id != null && p.name &&
+      (p.name.toLowerCase().includes(kw) || (p.area||'').toLowerCase().includes(kw)))
+    .sort((a, b) => a.name.localeCompare(b.name, 'ko'))
+    .slice(0, 20);
+
+  if (memMatches.length >= 3) { _renderRelocateResults(memMatches); return; }
+
+  // ② Firestore에서 이름으로 검색 (places에 없는 장소도 포함)
+  if (!firebaseReady || !db) { _renderRelocateResults(memMatches); return; }
+  try {
+    // Firestore 한글 prefix 검색: name >= q AND name < q+"힣"
+    const end = q + '\uf8ff';
+    const snap = await db.collection('places')
+      .where('name', '>=', q)
+      .where('name', '<=', end)
+      .limit(20).get();
+    const fsMatches = [];
+    snap.docs.forEach(doc => {
+      const p = { ...doc.data(), firestoreId: doc.id };
+      if (!p.id || !p.name) return;
+      // in-memory에 없으면 추가
+      if (!places.find(x => x.id == p.id)) places.push(p);
+      if (!memMatches.find(x => x.id == p.id)) fsMatches.push(p);
+    });
+    const combined = [...memMatches, ...fsMatches]
+      .sort((a, b) => a.name.localeCompare(b.name, 'ko'))
+      .slice(0, 20);
+    _renderRelocateResults(combined);
+  } catch(e) {
+    console.warn('[adminRelocateSearch] Firestore 검색 실패:', e);
+    _renderRelocateResults(memMatches);
+  }
+}
+
 async function adminRelocateConfirm(newPlaceId, placeName, placeArea) {
   const memId = _adminRelocateMemId;
   if (!memId || !newPlaceId) return;
   const m = _adminMemList.find(x => x.id === memId);
-  const oldName = m ? (m.placeName || '?') : '?';
+  const oldName    = m ? (m.placeName || '?') : '?';
+  const oldPlaceId = m ? m.placeId : null;
   if (!confirm(`"${oldName}" → "${placeName}"(${placeArea})\n\n장소를 변경할까요?`)) return;
   const p = places.find(x => x.id == newPlaceId);
   const updateData = {
-    placeId:   newPlaceId,
+    placeId:   Number(newPlaceId),          // ★ 항상 Number로 저장
     placeName: placeName,
     placeArea: placeArea,
     ...(p ? { placeLat: p.lat ?? null, placeLng: p.lng ?? null } : {})
   };
   try {
     await db.collection('memories').doc(memId).update(updateData);
-    if (m) { m.placeId = newPlaceId; m.placeName = placeName; m.placeArea = placeArea; }
+    if (m) {
+      m.placeId   = Number(newPlaceId);
+      m.placeName = placeName;
+      m.placeArea = placeArea;
+    }
     document.getElementById('admin-relocate-modal').style.display = 'none';
     _renderAdminMemUI();
     showToast(`✅ 장소를 "${placeName}"으로 수정했어요`);
-    // 캐시 무효화 — 다음 viewport 로딩 시 하트 마커 재조정
-    allMemoryPlaceIds.add(Number(newPlaceId));
+
+    // ★ allMemoryPlaceIds 갱신: 이전 placeId 제거 + 새 placeId 추가
+    // 단, 이전 placeId로 다른 추억이 있으면 제거하지 않음
+    const newNid = Number(newPlaceId);
+    allMemoryPlaceIds.add(newNid);
+    if (oldPlaceId != null) {
+      const oldNid = Number(oldPlaceId);
+      const stillUsed = _adminMemList.some(x => x.id !== memId && Number(x.placeId) === oldNid);
+      if (!stillUsed) {
+        allMemoryPlaceIds.delete(oldNid);
+        // 구 placeId가 더 이상 추억 장소가 아님 → 초록 하트 마커 제거
+        const oldMarkerInfo = markers[oldNid];
+        if (oldMarkerInfo?.isHeart && !userVisitedPlaceIds.has(oldNid) && !userLikedPlaceIds.has(oldNid)) {
+          if (clusterGroup) clusterGroup.removeLayer(oldMarkerInfo.marker);
+          delete markers[oldNid];
+          // 점 마커로 재등록
+          const oldPlace = places.find(x => Number(x.id) === oldNid);
+          if (oldPlace) { try { addMarker(oldPlace); } catch(e) {} }
+        }
+      }
+    }
+    // 새 placeId 하트 마커 생성
+    if (p && clusterGroup) {
+      const existing = markers[newNid];
+      if (!existing) { try { addMarker(p); } catch(e) {} }
+      if (!userVisitedPlaceIds.has(newNid)) upgradeToGreenHeartMarker(newNid);
+    }
     invalidatePlacesCache();
   } catch(e) { showToast('❌ 수정 실패: ' + e.message); }
 }
