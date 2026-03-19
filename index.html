@@ -1138,12 +1138,24 @@
       padding:2px 6px; border-radius:6px; margin-left:6px; flex-shrink:0;
     }
     .drawer-mem-meta { font-size:11px; color:#C0C0C0; margin-top:5px; }
-    .btn-write-mem-drawer {
-      width:100%; padding:10px; margin-top:10px; background:#FFF3EE;
-      border:1.5px solid #ECC4AC; border-radius:11px; font-size:13px; font-weight:700;
-      color:#E04E14; cursor:pointer; font-family:inherit; transition:background .2s;
+    /* Drawer memory header: tabs + write button */
+    .drawer-mem-header {
+      display:flex; align-items:center; justify-content:space-between;
+      margin:0 0 6px;
     }
-    .btn-write-mem-drawer:hover { background:#FFE8DC; }
+    .drawer-mem-tabs { display:flex; gap:4px; }
+    .drawer-mem-tab {
+      padding:5px 13px; border-radius:20px; font-size:13px; font-weight:600;
+      border:1.5px solid #E8E8E8; background:#F7F7F7; color:#999;
+      cursor:pointer; font-family:inherit; transition:all .15s;
+    }
+    .drawer-mem-tab.active { background:#F07030; color:#fff; border-color:#F07030; }
+    .btn-mem-write-small {
+      padding:5px 12px; border-radius:20px; font-size:12px; font-weight:700;
+      background:#FFF3EE; border:1.5px solid #ECC4AC; color:#E04E14;
+      cursor:pointer; font-family:inherit; transition:background .2s; white-space:nowrap;
+    }
+    .btn-mem-write-small:hover { background:#FFE8DC; }
 
     /* ── 좋아요 버튼 ── */
     .like-btn {
@@ -1929,7 +1941,7 @@
     <button class="atab" data-tab="views"     onclick="switchAdminTab(this,'views')">📍 방문 기록</button>
     <button class="atab" data-tab="reports"   onclick="switchAdminTab(this,'reports')">📝 장소 제보</button>
     <button class="atab" data-tab="notices"   onclick="switchAdminTab(this,'notices')">📢 공지 관리</button>
-    <button class="atab" data-tab="importer"  onclick="switchAdminTab(this,'importer')">🔍 장소 수집</button>
+    <button class="atab" data-tab="memories"  onclick="switchAdminTab(this,'memories')">💬 추억 기록</button>
     <button class="atab" data-tab="verify"    onclick="switchAdminTab(this,'verify')">✅ 검증 관리</button>
     <button class="atab" data-tab="feedback"  onclick="switchAdminTab(this,'feedback')">🐛 피드백</button>
     <button class="atab" data-tab="corrections" onclick="switchAdminTab(this,'corrections')">🔧 수정 요청</button>
@@ -3728,29 +3740,53 @@ async function loadAllMemoryPlaceIds() {
       const pid = doc.data().placeId;
       if (pid != null) { uniqueIds.add(Number(pid)); allMemoryPlaceIds.add(Number(pid)); }
     });
-    // 아직 로딩 안 된 장소 → 전체 데이터 로딩 (마커 표시에 필요), 최대 200개 제한
-    // ★ 느슨한 동등비교(==)로 문자열/숫자 타입 불일치 방지
-    const missingIds = [...uniqueIds].filter(id => !places.find(p => p.id == id)).slice(0, 200);
+
+    // ① ID 배치 로딩 (느슨한 == 으로 타입 불일치 방지)
+    const missingIds = [...uniqueIds].filter(id => !isNaN(id) && !places.find(p => p.id == id)).slice(0, 200);
     if (missingIds.length) await batchLoadPlacesByIds(missingIds);
-    // Firestore에도 없는 장소 → 추억 데이터에서 lat/lng 스텁 생성
-    uniqueIds.forEach(pid => {
-      if (!places.find(p => p.id == pid)) {
-        const memDoc = snap.docs.find(d => Number(d.data().placeId) == pid);
-        if (memDoc) {
-          const md = memDoc.data();
-          if (md.placeLat != null && md.placeLng != null) {
-            const stub = {
-              id: pid, name: md.placeName || '알 수 없는 장소',
-              lat: md.placeLat, lng: md.placeLng, area: md.placeArea || '',
-              petStatus: 'confirmed', active: true, _stub: true
-            };
-            places.push(stub);
-            if (clusterGroup) { try { addMarker(stub); } catch(e) {} }
-          }
-        }
+
+    // ② 여전히 없는 장소 → 3단계 복구
+    for (const pid of [...uniqueIds].filter(id => !places.find(p => p.id == id))) {
+      const memDoc = snap.docs.find(d => Number(d.data().placeId) == pid);
+      if (!memDoc) continue;
+      const md = memDoc.data();
+
+      // ②-a: 새 추억 → placeLat/Lng 저장돼 있으면 즉시 스텁 생성
+      if (md.placeLat != null && md.placeLng != null) {
+        const stub = {
+          id: pid, name: md.placeName || '알 수 없는 장소',
+          lat: md.placeLat, lng: md.placeLng, area: md.placeArea || '',
+          petStatus: 'confirmed', active: true, _stub: true
+        };
+        places.push(stub);
+        if (clusterGroup) { try { addMarker(stub); } catch(e) {} }
+        continue;
       }
-    });
-    // 전체 장소 로딩 완료 후 연두색 하트로 업그레이드 (race condition 방지)
+
+      // ②-b: 구형 추억 → Firestore에서 이름으로 장소 검색
+      if (md.placeName) {
+        try {
+          const nameSnap = await db.collection('places')
+            .where('name', '==', md.placeName).limit(5).get();
+          if (!nameSnap.empty) {
+            // 지역이 일치하는 문서 우선, 없으면 첫 번째 결과 사용
+            const matchDoc = nameSnap.docs.find(d => {
+              const a = d.data().area || '';
+              return !md.placeArea || a.includes(md.placeArea) || md.placeArea.includes(a);
+            }) || nameSnap.docs[0];
+            // ★ id를 memory의 placeId로 오버라이드 → upgradeToGreenHeartMarker(pid) 매칭 보장
+            const p = { ...matchDoc.data(), id: pid, firestoreId: matchDoc.id };
+            if (!places.find(x => x.id == pid)) {
+              places.push(p);
+              if (clusterGroup) { try { addMarker(p); } catch(e) {} }
+            }
+            console.log('[loadAllMemoryPlaceIds] 이름 검색으로 복구:', md.placeName, '→ pid:', pid);
+          }
+        } catch(nameErr) { console.warn('[loadAllMemoryPlaceIds] 이름 검색 실패:', nameErr); }
+      }
+    }
+
+    // ③ 전체 장소 로딩 완료 후 연두색 하트로 업그레이드 (race condition 방지)
     uniqueIds.forEach(pid => {
       if (!userVisitedPlaceIds.has(pid)) upgradeToGreenHeartMarker(pid);
     });
@@ -5543,6 +5579,7 @@ function openPlace(p) {
       </div>
     </div>` : '';
 
+  currentDrawerMemTab = 'all';
   document.getElementById('drawer-content').innerHTML = `
     <div class="d-header">
       <div class="d-icon" style="${p.isClosed ? 'filter:grayscale(1);opacity:.6' : ''}">${p.emoji}</div>
@@ -5586,7 +5623,6 @@ function openPlace(p) {
       ${p.note || ''}
     </div>
     <div class="warn-note">⚠️ 방문 전 전화로 최신 정보 확인을 권장합니다</div>
-    <button class="btn-write-mem-drawer" onclick="openWriteMemory(${p.id})" style="margin-bottom:10px">✏️ 추억 남기기</button>
     <div class="action-row">
       <button class="btn-act btn-primary" onclick="openKakaoMap(${p.id})">
         <i class="fa fa-location-dot"></i> 상세 보기
@@ -5597,7 +5633,13 @@ function openPlace(p) {
     </div>
     <div class="drawer-mem-section" id="drawer-mem-section">
       <div class="divider"></div>
-      <div class="sec-label">추억</div>
+      <div class="drawer-mem-header">
+        <div class="drawer-mem-tabs">
+          <button class="drawer-mem-tab active" id="drawer-tab-all" onclick="switchDrawerMemTab('all')">모두의 추억</button>
+          <button class="drawer-mem-tab" id="drawer-tab-mine" onclick="switchDrawerMemTab('mine')">나의 추억</button>
+        </div>
+        <button class="btn-mem-write-small" onclick="openWriteMemory(${p.id})">✏️ 남기기</button>
+      </div>
       <div class="drawer-mem-feed" id="drawer-mem-list">
         <div style="font-size:13px;color:#DDD;text-align:center;padding:12px 0">기억 꺼내는 중...</div>
       </div>
@@ -5619,6 +5661,14 @@ function openPlace(p) {
 
 let _drawerOpenAt = 0;
 let _drawerExpanded = false;
+let currentDrawerMemTab = 'all';
+
+function switchDrawerMemTab(tab) {
+  currentDrawerMemTab = tab;
+  document.getElementById('drawer-tab-all')?.classList.toggle('active', tab === 'all');
+  document.getElementById('drawer-tab-mine')?.classList.toggle('active', tab === 'mine');
+  if (activePlace) refreshDrawerMemories(activePlace.id);
+}
 
 function toggleDrawerExpand() {
   _drawerExpanded = !_drawerExpanded;
@@ -6683,9 +6733,12 @@ async function loadMemoriesFeed() {
     mems = [...local, ...mems];
   }
 
-  // ★ 모두의 추억: 비공개 글 필터링 (isPublic === false인 것 제외, 기존 글은 undefined → 공개 처리)
+  // ★ 모두의 추억: 비공개·숨김 글 필터링
   if (!isMine) {
-    mems = mems.filter(m => m.isPublic !== false);
+    mems = mems.filter(m => m.isPublic !== false && m.hidden !== true);
+  } else {
+    // 나의 추억: 관리자가 숨긴 글도 제외 (isPublic은 본인은 볼 수 있음)
+    mems = mems.filter(m => m.hidden !== true);
   }
 
   mems = mems.slice(0, 60);
@@ -6719,9 +6772,13 @@ async function loadPlaceMemories(placeId) {
   const local = JSON.parse(localStorage.getItem('mem_local') || '[]');
   const localFiltered = local.filter(m => m.placeId === placeId);
   let all = [...localFiltered, ...mems];
-  // 비공개 글은 본인만 볼 수 있음
+  // 비공개 글은 본인만 볼 수 있음, 숨김 처리된 글은 관리자 외 모두 제외
   const myUid = currentUser?.uid;
-  all = all.filter(m => m.isPublic !== false || (myUid && m.userId === myUid));
+  const isAdmin = currentUser?.isAdmin === true;
+  all = all.filter(m =>
+    (m.isPublic !== false || (myUid && m.userId === myUid)) &&
+    (m.hidden !== true || isAdmin)
+  );
   return all.slice(0, 20);
 }
 
@@ -6729,11 +6786,19 @@ async function loadPlaceMemories(placeId) {
 async function refreshDrawerMemories(placeId) {
   const inner = document.getElementById('drawer-mem-list');
   if (!inner) return;
-  const mems = await loadPlaceMemories(placeId);
+  const allMems = await loadPlaceMemories(placeId);
   // 드로어가 이미 닫혔으면 렌더 스킵
   if (!document.getElementById('drawer-mem-list')) return;
+  // 탭 필터: 나의 추억 = 내 글만, 모두의 추억 = 전체 공개
+  let mems = allMems;
+  if (currentDrawerMemTab === 'mine') {
+    mems = allMems.filter(m => m.userId === currentUser?.uid);
+  }
   if (!mems.length) {
-    inner.innerHTML = '<div style="font-size:13px;color:#CCC;text-align:center;padding:16px 0">아직 기록이 없어요. 첫 번째로 남겨봐요 🐾</div>';
+    const msg = currentDrawerMemTab === 'mine'
+      ? (currentUser ? '아직 내 기록이 없어요. ✏️ 남기기로 첫 추억을 남겨봐요 🐾' : '로그인 후 나의 추억을 남겨봐요 🐾')
+      : '아직 기록이 없어요. 첫 번째로 남겨봐요 🐾';
+    inner.innerHTML = `<div style="font-size:13px;color:#CCC;text-align:center;padding:16px 0">${msg}</div>`;
     return;
   }
   // renderMemoryCard(m, showPlace=false) — 장소 헤더 생략, 수정/삭제 버튼은 내 글에만
@@ -7063,7 +7128,7 @@ function switchAdminTab(btn, tab) {
 async function loadAdminTab(tab) {
   const content = document.getElementById('admin-content');
 
-  if (tab === 'importer')  { renderAdminImporter(); return; }
+  if (tab === 'memories')  { await renderAdminMemories(); return; }
   if (tab === 'verify')    { renderVerifyTab(); return; }
   if (tab === 'batchfill') { renderAdminBatchFill(); return; }
 
@@ -7081,7 +7146,7 @@ async function loadAdminTab(tab) {
     else if (tab === 'views') await renderAdminViews();
     else if (tab === 'reports') await renderAdminReports();
     else if (tab === 'notices') await renderAdminNotices();
-    else if (tab === 'importer') renderAdminImporter();
+    else if (tab === 'memories') await renderAdminMemories();
     else if (tab === 'verify') renderVerifyTab();
     else if (tab === 'feedback') await renderAdminFeedback();
     else if (tab === 'corrections') await renderAdminCorrections();
@@ -7455,6 +7520,128 @@ async function deleteNotice(id) {
   showToast('🗑️ 공지가 삭제됐어요');
   loadNotices();
   renderAdminNotices();
+}
+
+// ══════════════════════════════════════════════════════
+//  ADMIN: 추억 기록 관리
+// ══════════════════════════════════════════════════════
+let _adminMemFilter = 'all'; // 'all' | 'hidden'
+let _adminMemCursor = null;
+let _adminMemList   = [];
+
+async function renderAdminMemories() {
+  const content = document.getElementById('admin-content');
+  content.innerHTML = `<div class="empty-state"><div class="es-icon">⏳</div><p>추억 불러오는 중...</p></div>`;
+  if (!firebaseReady || !db) {
+    content.innerHTML = `<div class="empty-state"><div class="es-icon">⚠️</div><p>Firebase 연결이 필요합니다.</p></div>`;
+    return;
+  }
+  _adminMemFilter = 'all';
+  _adminMemCursor = null;
+  _adminMemList   = [];
+  await _loadAdminMemBatch();
+  _renderAdminMemUI();
+}
+
+async function _loadAdminMemBatch(after = null) {
+  let q = db.collection('memories').orderBy('createdAt','desc').limit(50);
+  if (after) q = q.startAfter(after);
+  const snap = await q.get();
+  const batch = snap.docs.map(d => ({ id: d.id, ...d.data(), _snap: d }));
+  _adminMemList = [..._adminMemList, ...batch];
+  _adminMemCursor = snap.docs[snap.docs.length - 1] || null;
+}
+
+function _renderAdminMemUI() {
+  const content = document.getElementById('admin-content');
+  const filtered = _adminMemFilter === 'hidden'
+    ? _adminMemList.filter(m => m.hidden === true)
+    : _adminMemList;
+
+  const filterBtns = [
+    { key:'all',    label:'전체' },
+    { key:'hidden', label:'🚫 숨김 처리됨' },
+  ].map(f => `<button onclick="adminMemSetFilter('${f.key}')" style="padding:5px 14px;border-radius:20px;border:1.5px solid ${_adminMemFilter===f.key?'#E04E14':'#DDD'};background:${_adminMemFilter===f.key?'#FDEEE8':'white'};color:${_adminMemFilter===f.key?'#E04E14':'#555'};font-size:12px;font-weight:${_adminMemFilter===f.key?700:500};cursor:pointer;font-family:inherit">${f.label}</button>`).join('');
+
+  const cards = filtered.map(m => {
+    const isHidden = m.hidden === true;
+    const timeStr = m.createdAt ? new Date((m.createdAt.seconds||0)*1000).toLocaleString('ko-KR',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}) : '';
+    const hiddenBadge = isHidden ? `<span style="font-size:10px;font-weight:700;background:#FFF0F0;color:#C62828;padding:2px 7px;border-radius:5px;border:1px solid #FFCDD2">🚫 숨김</span>` : '';
+    const privateBadge = m.isPublic === false ? `<span style="font-size:10px;font-weight:700;background:#F5F5F5;color:#888;padding:2px 7px;border-radius:5px;border:1px solid #E0E0E0">🔒 비공개</span>` : '';
+    const imgHtml = m.photoURL ? `<img src="${m.photoURL}" loading="lazy" style="width:100%;max-height:160px;object-fit:cover;display:block">` : '';
+    const textHtml = m.text ? `<div style="font-size:13px;color:#333;line-height:1.55;padding:6px 12px 8px;white-space:pre-line">${m.text.replace(/</g,'&lt;')}</div>` : '';
+    const avatarHtml = m.userPhotoURL
+      ? `<img src="${m.userPhotoURL}" style="width:26px;height:26px;border-radius:50%;object-fit:cover;flex-shrink:0" alt="">`
+      : `<div style="width:26px;height:26px;border-radius:50%;background:#F0F0F0;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0">🐾</div>`;
+    const safeId = m.id.replace(/'/g,"\\'");
+    const safeName = (m.placeName||'이 추억').replace(/'/g,"\\'");
+    return `
+      <div id="amem-${m.id}" style="background:white;border-radius:12px;overflow:hidden;border:1.5px solid ${isHidden?'#FFCDD2':'#EFEFEF'};margin-bottom:10px;opacity:${isHidden?0.7:1}">
+        <div style="display:flex;align-items:center;gap:8px;padding:10px 12px">
+          ${avatarHtml}
+          <div style="flex:1;min-width:0">
+            <div style="font-size:13px;font-weight:700;color:#222">${(m.userName||'익명').replace(/</g,'&lt;')}</div>
+            <div style="font-size:11px;color:#AAA">${timeStr}</div>
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
+            ${hiddenBadge}${privateBadge}
+          </div>
+        </div>
+        ${m.placeName ? `<div style="padding:2px 12px 6px;font-size:12px;font-weight:700;color:#E04E14">📍 ${(m.placeName||'').replace(/</g,'&lt;')}${m.placeArea?` · ${m.placeArea}`:''}</div>` : ''}
+        ${imgHtml}
+        ${textHtml}
+        <div style="display:flex;gap:8px;padding:8px 12px 10px;border-top:1px solid #F5F5F5">
+          <button onclick="adminHideMemory('${safeId}',${!isHidden})" style="flex:1;padding:7px;border-radius:9px;border:1.5px solid ${isHidden?'#43A047':'#E04E14'};background:${isHidden?'#E8F5E9':'#FFF3EE'};color:${isHidden?'#2E7D32':'#E04E14'};font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">
+            ${isHidden ? '👁 공개 복구' : '🚫 숨김 처리'}
+          </button>
+          <button onclick="adminDeleteMemory('${safeId}','${safeName}')" style="flex:1;padding:7px;border-radius:9px;border:1.5px solid #FFCDD2;background:#FFF5F5;color:#C62828;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">
+            🗑 삭제
+          </button>
+        </div>
+      </div>`;
+  }).join('') || `<div style="text-align:center;padding:48px 0;color:#CCC;font-size:14px">${_adminMemFilter==='hidden'?'숨김 처리된 추억이 없어요 ✅':'아직 추억이 없어요 🐾'}</div>`;
+
+  content.innerHTML = `
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px">
+      ${filterBtns}
+      <span style="font-size:12px;color:#AAA;margin-left:4px">총 ${_adminMemList.length}개 로드됨 (최신순)</span>
+      <button onclick="_adminMemLoadMore()" style="margin-left:auto;padding:5px 14px;border-radius:20px;border:1.5px solid #DDD;background:white;color:#555;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">더 불러오기</button>
+    </div>
+    <div id="admin-mem-list">${cards}</div>`;
+}
+
+function adminMemSetFilter(f) {
+  _adminMemFilter = f;
+  _renderAdminMemUI();
+}
+
+async function _adminMemLoadMore() {
+  if (!_adminMemCursor) { showToast('더 이상 없어요'); return; }
+  await _loadAdminMemBatch(_adminMemCursor);
+  _renderAdminMemUI();
+}
+
+async function adminHideMemory(memId, hide) {
+  if (!firebaseReady || !db) return;
+  try {
+    await db.collection('memories').doc(memId).update({ hidden: hide });
+    // 로컬 목록 업데이트
+    const m = _adminMemList.find(x => x.id === memId);
+    if (m) m.hidden = hide;
+    _renderAdminMemUI();
+    showToast(hide ? '🚫 추억을 숨겼어요' : '👁 추억을 다시 공개했어요');
+  } catch(e) { showToast('처리 실패: ' + e.message); }
+}
+
+async function adminDeleteMemory(memId, placeName) {
+  if (!confirm(`"${placeName || '이 추억'}"을 완전히 삭제할까요?\n삭제 후 복구가 불가능해요.`)) return;
+  if (!firebaseReady || !db) return;
+  try {
+    await db.collection('memories').doc(memId).delete();
+    _adminMemList = _adminMemList.filter(x => x.id !== memId);
+    _renderAdminMemUI();
+    showToast('🗑️ 추억이 삭제됐어요');
+  } catch(e) { showToast('삭제 실패: ' + e.message); }
 }
 
 // ══════════════════════════════════════════════════════
