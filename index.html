@@ -3206,7 +3206,17 @@ async function loadViewportPlaces() {
     });
 
     if (newBatch.length > 0 && clusterGroup) {
-      newBatch.forEach(p => { try { addMarker(p); } catch(e) {} });
+      newBatch.forEach(p => {
+        try { addMarker(p); } catch(e) {}
+        // addMarker 시점에 allMemoryPlaceIds/userVisitedPlaceIds가 이미 채워져 있다면
+        // 정상 처리되지만, loadViewportPlaces가 loadAllMemoryPlaceIds보다 늦게 실행될 경우를 위해
+        // 새로 추가된 장소에 대해 하트 업그레이드를 명시적으로 재확인
+        const nid = Number(p.id);
+        if (!isNaN(nid)) {
+          if (userVisitedPlaceIds.has(nid)) upgradeToHeartMarker(nid);
+          else if (allMemoryPlaceIds.has(nid) && !userVisitedPlaceIds.has(nid)) upgradeToGreenHeartMarker(nid);
+        }
+      });
       places.sort((a, b) => (a.id || 0) - (b.id || 0));
       filterPlaces();
     }
@@ -3721,7 +3731,7 @@ async function batchLoadPlacesByIds(ids) {
       const snap = await db.collection('places').where('id', 'in', batch).get();
       snap.docs.forEach(doc => {
         const p = { ...doc.data(), firestoreId: doc.id };
-        if (!places.find(x => x.id === p.id)) {
+        if (!places.find(x => x.id == p.id)) {   // == 느슨한 비교 — String/Number 타입 불일치 방지
           places.push(p);
           if (clusterGroup) { try { addMarker(p); } catch(e) {} }
         }
@@ -3784,6 +3794,41 @@ async function loadAllMemoryPlaceIds() {
           }
         } catch(nameErr) { console.warn('[loadAllMemoryPlaceIds] 이름 검색 실패:', nameErr); }
       }
+
+      // ②-c: Firestore에도 없음 → 카카오 REST API로 좌표 복구 (최후 수단)
+      if (!places.find(x => x.id == pid) && md.placeName) {
+        try {
+          const kUrl = `https://dapi.kakao.com/v2/local/search/keyword.json?query=${encodeURIComponent(md.placeName)}&size=5`;
+          const kResp = await fetch(kUrl, { headers: { Authorization: `KakaoAK ${KAKAO_REST_KEY}` }});
+          if (kResp.ok) {
+            const kData = await kResp.json();
+            if (kData.documents?.length > 0) {
+              // 지역이 일치하는 결과 우선
+              const best = kData.documents.find(d =>
+                md.placeArea && (d.address_name || '').includes(md.placeArea)
+              ) || kData.documents[0];
+              const stub = {
+                id: pid, name: md.placeName,
+                lat: parseFloat(best.y), lng: parseFloat(best.x),
+                area: md.placeArea || '', province: '',
+                petStatus: 'confirmed', active: true,
+                _stub: true, _recovered: 'kakao'
+              };
+              if (!places.find(x => x.id == pid)) {
+                places.push(stub);
+                if (clusterGroup) { try { addMarker(stub); } catch(e) {} }
+                console.log('[loadAllMemoryPlaceIds] 카카오 API로 좌표 복구:', md.placeName, stub.lat, stub.lng);
+                // 복구된 장소를 Firestore에도 저장 (다른 사용자 세션에서도 사용 가능하도록)
+                if (firebaseReady && db) {
+                  const ref = db.collection('places').doc();
+                  stub.firestoreId = ref.id;
+                  ref.set(stub).catch(e => console.warn('[loadAllMemoryPlaceIds] Firestore 저장 실패:', e));
+                }
+              }
+            }
+          }
+        } catch(kakaoErr) { console.warn('[loadAllMemoryPlaceIds] 카카오 API 좌표 복구 실패:', kakaoErr); }
+      }
     }
 
     // ③ 전체 장소 로딩 완료 후 연두색 하트로 업그레이드 (race condition 방지)
@@ -3810,7 +3855,7 @@ async function loadUserLikedPlaces(uid) {
       }
     });
     // 아직 로딩 안 된 장소 → 전체 데이터 로딩 (마커 표시에 필요), 최대 200개 제한
-    const missingIds = ids.filter(id => !places.find(p => p.id === id)).slice(0, 200);
+    const missingIds = ids.filter(id => !places.find(p => p.id == id)).slice(0, 200);  // == 느슨한 비교
     if (missingIds.length) await batchLoadPlacesByIds(missingIds);
   } catch(e) { console.warn('[loadUserLikedPlaces]', e); }
 }
@@ -4004,8 +4049,11 @@ function addMarker(p) {
   const typeLabel = getTypeLabel(p);
   const onClick   = e => { L.DomEvent.stopPropagation(e); if (mapPickMode) { setPickedPlace(p); showToast(`"${p.name}" 선택됐어요 🐾`); exitMapPickMode(); } else { openPlace(p); } };
 
+  // ── ID 정규화: Set.has()는 strict 비교라 Number/String 혼용 시 실패 → Number()로 통일
+  const _nid = Number(p.id);
+
   // ── 우선순위 1: 본인 추억 남긴 곳 → 홍시 오렌지 하트 ──
-  if (userVisitedPlaceIds.has(p.id)) {
+  if (userVisitedPlaceIds.has(_nid)) {
     const color = p.isClosed ? '#AAAAAA' : '#F07030';
     const hs    = Math.round(sz * 1.6);
     const html  = `<div class="m-wrap"><div class="m-heart" style="color:${color};font-size:${hs}px" data-id="${p.id}">♥</div>${typeLabel?`<div class="m-type-label">${typeLabel}</div>`:''}</div>`;
@@ -4015,7 +4063,7 @@ function addMarker(p) {
     markers[p.id] = { marker:m, color, isHeart:true };
 
   // ── 우선순위 2: 다른 사람이 추억 남긴 곳 → 연두색 하트 ──
-  } else if (allMemoryPlaceIds.has(p.id)) {
+  } else if (allMemoryPlaceIds.has(_nid)) {
     const color = p.isClosed ? '#AAAAAA' : '#7BC74D';
     const hs    = Math.round(sz * 1.6);
     const html  = `<div class="m-wrap"><div class="m-heart" style="color:${color};font-size:${hs}px" data-id="${p.id}">♥</div>${typeLabel?`<div class="m-type-label">${typeLabel}</div>`:''}</div>`;
@@ -4025,7 +4073,7 @@ function addMarker(p) {
     markers[p.id] = { marker:m, color, isHeart:true };
 
   // ── 우선순위 3: 좋아요 누른 곳 → 홍시색 원형 마커 ──
-  } else if (userLikedPlaceIds.has(p.id)) {
+  } else if (userLikedPlaceIds.has(_nid)) {
     const color = p.isClosed ? '#AAAAAA' : '#F07030';
     const html  = `<div class="m-wrap"><div class="m-dot" style="background:${color};width:${sz}px;height:${sz}px" data-id="${p.id}"></div>${typeLabel?`<div class="m-type-label">${typeLabel}</div>`:''}</div>`;
     const icon  = L.divIcon({ html, className:'', iconSize:[sz+40, sz+16], iconAnchor:[sz/2+20, sz/2] });
@@ -5427,6 +5475,16 @@ function filterPlaces() {
         if (m.ratingScore) needRerate = true; // 등급 재적용 필요
       }
       if (!show && inCluster) clusterGroup.removeLayer(m.marker);
+    });
+    // ★ 하트 재조정: 추억 있는 장소 중 dot 마커로 잘못 생성된 것을 하트로 교체
+    // (addMarker 시점과 allMemoryPlaceIds 채워지는 시점의 race condition 보정)
+    places.forEach(p => {
+      const nid = Number(p.id);
+      if (isNaN(nid)) return;
+      const m = markers[nid];
+      if (m?.isHeart) return; // 이미 하트면 패스
+      if (userVisitedPlaceIds.has(nid) && m) { upgradeToHeartMarker(nid); return; }
+      if (allMemoryPlaceIds.has(nid) && !userVisitedPlaceIds.has(nid)) upgradeToGreenHeartMarker(nid);
     });
     // 뷰포트에서 벗어났다 돌아온 마커는 Leaflet이 새 DOM을 생성하므로
     // 저장된 등급 데이터를 새 DOM에 다시 적용해야 함
