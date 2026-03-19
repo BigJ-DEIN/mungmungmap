@@ -411,6 +411,49 @@
     .warn-note { font-size:11px; color:#CCC; margin-top:8px; display:flex; align-items:center; gap:4px; }
     .divider { height:1px; background:#F5F5F5; margin:14px 0; }
     .action-row { display:flex; gap:8px; margin-top:18px; }
+    /* ── 카카오맵 웹뷰 오버레이 ── */
+    #kakao-webview {
+      position:fixed; inset:0; z-index:3000;
+      display:none; flex-direction:column; background:#fff;
+    }
+    #kakao-webview.open { display:flex; }
+    #kw-bar {
+      display:flex; align-items:center; gap:8px;
+      padding:10px 14px; border-bottom:1px solid #EEE;
+      flex-shrink:0; background:#fff;
+    }
+    #kw-back {
+      background:none; border:none; font-size:14px; font-weight:700;
+      color:#E04E14; font-family:inherit; cursor:pointer; padding:4px 6px;
+      flex-shrink:0;
+    }
+    #kw-title {
+      flex:1; font-size:14px; font-weight:600;
+      white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+    }
+    #kw-ext {
+      font-size:12px; color:#E04E14; text-decoration:none;
+      font-weight:600; flex-shrink:0; padding:4px 6px;
+    }
+    #kw-frame { flex:1; border:none; width:100%; }
+    #kw-blocked {
+      display:none; flex:1; flex-direction:column;
+      align-items:center; justify-content:center;
+      gap:12px; padding:32px;
+    }
+    #kw-blocked p { font-size:14px; color:#666; text-align:center; line-height:1.6; }
+    #kw-blocked a {
+      display:block; padding:12px 28px; background:#E04E14; color:#fff;
+      border-radius:12px; font-weight:700; text-decoration:none; font-size:14px;
+    }
+    /* ── 미니 마커 ── */
+    .mini-marker {
+      display:inline-flex; align-items:center; justify-content:center;
+      width:16px; height:16px; border-radius:50%;
+      font-size:9px; font-weight:800; color:#fff;
+      flex-shrink:0; box-shadow:0 1px 3px rgba(0,0,0,.2);
+      vertical-align:middle; margin-right:3px; line-height:1;
+    }
     .btn-act {
       flex:1; padding:12px 8px; border-radius:11px; border:none;
       font-family:inherit; font-size:13px; font-weight:700; cursor:pointer;
@@ -1025,10 +1068,10 @@
     /* ── 좋아요 버튼 ── */
     .like-btn {
       background:none; border:none; font-size:20px; cursor:pointer;
-      color:#DDD; flex-shrink:0; padding:2px 5px; line-height:1;
+      color:#CCC; flex-shrink:0; padding:2px 5px; line-height:1;
       transition:color .2s, transform .15s; align-self:flex-start;
     }
-    .like-btn.liked { color:#F07030; }
+    .like-btn.liked { color:#FFC107; }
     .like-btn:active { transform:scale(1.35); }
     /* 드로어 액션 행 좋아요 버튼 */
     .btn-act.like-btn { font-size:14px; color:#888; gap:4px; display:flex; align-items:center; }
@@ -1491,7 +1534,7 @@
       </div>
       <div class="legend-item"><span style="font-size:14px;color:#F07030;line-height:1">♥</span><span>나의 추억</span></div>
       <div class="legend-item"><span style="font-size:14px;color:#7BC74D;line-height:1">♥</span><span>친구 추억</span></div>
-      <div class="legend-item"><div class="legend-dot" style="background:#F07030"></div><span>관심 장소</span></div>
+      <div class="legend-item"><span style="font-size:15px;color:#FFC107;line-height:1">★</span><span>관심 장소</span></div>
       <div class="legend-item"><div class="legend-dot" style="background:#8B8B4A"></div><span>검증 완료</span></div>
       <div class="legend-item"><div class="legend-dot" style="background:#7BC74D"></div><span>검색 완료</span></div>
     </div>
@@ -1815,6 +1858,21 @@
   </div>
   <div id="admin-content">
     <div class="empty-state"><div class="es-icon">⏳</div><p>데이터 로딩 중...</p></div>
+  </div>
+</div>
+
+<!-- 카카오맵 상세보기 웹뷰 오버레이 -->
+<div id="kakao-webview">
+  <div id="kw-bar">
+    <button id="kw-back" onclick="closeKakaoWebview()">← 닫기</button>
+    <span id="kw-title"></span>
+    <a id="kw-ext" href="#" target="_blank">외부 열기 ↗</a>
+  </div>
+  <iframe id="kw-frame" src="" sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-top-navigation"
+          onload="onKwFrameLoad()" onerror="onKwFrameError()"></iframe>
+  <div id="kw-blocked">
+    <p>카카오맵이 앱 내 표시를 막고 있어요.<br>아래 버튼으로 직접 열어볼 수 있어요.</p>
+    <a id="kw-blocked-link" href="#" target="_blank">카카오맵에서 보기 →</a>
   </div>
 </div>
 
@@ -3103,7 +3161,7 @@ async function toggleLikedPlace(placeId) {
         { likedPlaceIds: firebase.firestore.FieldValue.arrayUnion(id) }, { merge:true }
       );
     } catch(e) { userLikedPlaceIds.delete(id); console.warn('like failed:', e); return; }
-    showToast('💛 관심 장소에 추가됐어요! 접속할 때마다 지도에 표시돼요');
+    showToast('⭐ 관심 장소에 추가됐어요! 접속할 때마다 지도에 표시돼요');
   }
 
   // ── 마커 재생성 (클러스터 내 마커도 정확히 반영) ──────────────────────────
@@ -3130,7 +3188,7 @@ async function toggleLikedPlace(placeId) {
   // ── 모든 관심 장소 버튼 UI 동기화 ──
   document.querySelectorAll(`.like-btn[data-id="${id}"]`).forEach(btn => {
     const liked = userLikedPlaceIds.has(id);
-    btn.textContent = liked ? '♥' : '♡';
+    btn.textContent = liked ? '★' : '☆';
     btn.classList.toggle('liked', liked);
     btn.title = liked ? '관심 장소 취소' : '관심 장소 추가';
   });
@@ -3755,8 +3813,13 @@ async function fetchKakaoRating(kakaoId) {
 }
 
 async function loadRatingForMarker(p) {
-  if (!p.kakaoId) return;
-  const r = await fetchKakaoRating(p.kakaoId);
+  // 저장된 blogScore 우선 사용 (API 호출 없음), 없으면 panel3 조회
+  let r = null;
+  if (p.blogScore && p.blogScore > 0) {
+    r = { blog: p.blogCount || 0, score: p.blogScore };
+  } else if (p.kakaoId) {
+    r = await fetchKakaoRating(p.kakaoId);
+  }
   if (!r || r.score <= 0) return;
 
   const m = markers[p.id];
@@ -3769,8 +3832,8 @@ async function loadRatingForMarker(p) {
   const sz = parseInt(dot.style.height) || 20;
   if (sz < 16) return; // 줌아웃 시 너무 작으면 표시 안 함
 
-  // 채도: 1점(최고)=100%, 10점(최저)=50% — score가 낮을수록 선명
-  const saturate = (1 - (r.score - 1) / 9 * 0.5).toFixed(2);
+  // 채도: 1점=saturate(1.5) 선명, 10점=saturate(0.3) 탁한 — 범위 넓혀 시각 차이 극대화
+  const saturate = (1.5 - (r.score - 1) / 9 * 1.2).toFixed(2);
   dot.classList.add('has-rating');
   dot.style.height = sz + 'px';
   dot.style.minWidth = sz + 'px';
@@ -5234,6 +5297,15 @@ function liveCardHtml(d) {
   </div>`;
 }
 
+/* 미니 마커 HTML — 목록/드로어 인라인 등급 표시 */
+function miniMarkerHtml(p) {
+  const score = p.blogScore || 0;
+  if (score <= 0) return '';
+  const color = p.isClosed ? '#AAAAAA' : (STATUS_COLORS[getPlaceStatus(p)] || STATUS_COLORS.unverified);
+  const sat   = (1.5 - (score - 1) / 9 * 1.2).toFixed(2);
+  return `<span class="mini-marker" style="background:${color};filter:saturate(${sat})">${score}</span>`;
+}
+
 function cardHtml(p) {
   const isActive = activePlace?.id === p.id;
   const isLiked  = userLikedPlaceIds.has(p.id);
@@ -5244,11 +5316,11 @@ function cardHtml(p) {
       <div class="pc-emoji">${p.emoji}</div>
       <div class="pc-info">
         <div class="pc-name">${p.name}</div>
-        <div class="pc-meta">${areaBadge(p.area)}&nbsp;${p.cat}</div>
+        <div class="pc-meta">${miniMarkerHtml(p)}${areaBadge(p.area)}&nbsp;${p.cat}</div>
       </div>
       <button class="like-btn${isLiked?' liked':''}" data-id="${p.id}"
               onclick="event.stopPropagation();toggleLikedPlace(${p.id})"
-              title="${isLiked?'관심 장소 취소':'관심 장소 추가'}">${isLiked?'♥':'♡'}</button>
+              title="${isLiked?'관심 장소 취소':'관심 장소 추가'}">${isLiked?'★':'☆'}</button>
     </div>
     <div class="pc-tags">
       ${p.large === true ? '<span class="tag t-green">🐕 대형견 OK</span>' : p.large === false ? '<span class="tag t-gray">소형견만</span>' : '<span class="tag t-gray">🐕 견종 미확인</span>'}
@@ -5324,9 +5396,9 @@ function openPlace(p) {
           <div class="d-name" style="flex:1;min-width:0;${p.isClosed ? 'color:#999;text-decoration:line-through' : ''}">${p.name}${p.isClosed ? ' <span style="font-size:11px;font-weight:700;color:#999;background:#F0F0F0;padding:2px 6px;border-radius:6px;text-decoration:none;display:inline-block">폐업</span>' : ''}</div>
           <button class="like-btn${userLikedPlaceIds.has(p.id)?' liked':''}" data-id="${p.id}"
                   onclick="toggleLikedPlace(${p.id})" title="${userLikedPlaceIds.has(p.id)?'관심 장소 취소':'관심 장소 추가'}"
-                  style="font-size:22px;margin-top:1px;flex-shrink:0">${userLikedPlaceIds.has(p.id)?'♥':'♡'}</button>
+                  style="font-size:22px;margin-top:1px;flex-shrink:0">${userLikedPlaceIds.has(p.id)?'★':'☆'}</button>
         </div>
-        <div class="d-sub">${areaBadge(p.area)}&nbsp;${p.cat}${p.entryFee?'&nbsp;<span class="ab ab-fee">💰 입장료</span>':''}</div>
+        <div class="d-sub">${miniMarkerHtml(p)}&nbsp;${areaBadge(p.area)}&nbsp;${p.cat}${p.entryFee?'&nbsp;<span class="ab ab-fee">💰 입장료</span>':''}</div>
         <div class="d-sub" style="margin-top:3px">📍 ${p.addr}</div>
         ${p.phone ? `<div class="d-sub">📞 <a href="tel:${p.phone}" style="color:inherit">${p.phone}</a></div>` : ''}
       </div>
@@ -5419,10 +5491,47 @@ function closeDrawer() {
 // ══════════════════════════════════════════════════════
 //  ACTIONS
 // ══════════════════════════════════════════════════════
-function openKakaoMap(id) {
+function openKakaoMap(id) { showDetailWebview(id); } // 하위 호환 alias
+
+function showDetailWebview(id) {
   const p = places.find(x => x.id === id); if (!p) return;
-  const url = p.kakaoUrl ? p.kakaoUrl : p.googleUrl ? p.googleUrl : `https://map.kakao.com/?q=${encodeURIComponent(p.name)}`;
-  window.open(url, '_blank');
+  const url = p.kakaoUrl || (p.kakaoId ? `https://place.map.kakao.com/${p.kakaoId}` : `https://map.kakao.com/?q=${encodeURIComponent(p.name)}`);
+  const wv  = document.getElementById('kakao-webview');
+  const fr  = document.getElementById('kw-frame');
+  const bl  = document.getElementById('kw-blocked');
+  if (!wv || !fr) { window.open(url, '_blank'); return; }
+  document.getElementById('kw-title').textContent   = p.name;
+  document.getElementById('kw-ext').href            = url;
+  document.getElementById('kw-blocked-link').href   = url;
+  fr.style.display  = 'block';
+  if (bl) bl.style.display = 'none';
+  fr.src = url;
+  wv.classList.add('open');
+}
+
+function closeKakaoWebview() {
+  const wv = document.getElementById('kakao-webview');
+  const fr = document.getElementById('kw-frame');
+  if (wv) wv.classList.remove('open');
+  if (fr) { fr.src = ''; fr.style.display = 'block'; }
+}
+
+function onKwFrameLoad() {
+  // iframe이 로드됐지만 X-Frame-Options로 차단된 경우 body가 비어있음
+  try {
+    const fr = document.getElementById('kw-frame');
+    if (!fr) return;
+    // 같은 도메인이 아니면 contentDocument 접근 불가 → blocked 상태
+    const doc = fr.contentDocument;
+    if (!doc || !doc.body || doc.body.innerHTML.trim() === '') onKwFrameError();
+  } catch(e) { onKwFrameError(); }
+}
+
+function onKwFrameError() {
+  const fr = document.getElementById('kw-frame');
+  const bl = document.getElementById('kw-blocked');
+  if (fr) fr.style.display = 'none';
+  if (bl) bl.style.display = 'flex';
 }
 
 // ══════════════════════════════════════════════════════
