@@ -6779,7 +6779,7 @@ function closeCropModal() {
 async function confirmCrop() {
   const img = document.getElementById('crop-img');
   if (!_cropNW) return;
-  const outSize = 500;
+  const outSize = 600;
   const canvas = document.createElement('canvas');
   canvas.width = outSize; canvas.height = outSize;
   const ctx = canvas.getContext('2d');
@@ -6792,6 +6792,8 @@ async function confirmCrop() {
   const tmpImg = new Image();
   tmpImg.src = img.src;
   await new Promise(r => { tmpImg.onload = r; if (tmpImg.complete) r(); });
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
   ctx.drawImage(tmpImg, srcX, srcY, srcW, srcH, 0, 0, outSize, outSize);
   canvas.toBlob(blob => {
     if (!blob) { showToast('⚠️ 사진 크롭 실패. 다시 시도해주세요'); return; }
@@ -6803,7 +6805,7 @@ async function confirmCrop() {
     preview.src = URL.createObjectURL(blob);
     preview.style.display = 'block';
     closeCropModal();
-  }, 'image/webp', 0.82);
+  }, 'image/webp', 0.92);
 }
 
 /* Firebase Storage 업로드 — 진행률 표시 + 30초 타임아웃 */
