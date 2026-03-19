@@ -9430,6 +9430,7 @@ async function batchFillPetDetails() {
       const d = doc.data();
       return d.kakaoId &&
         (d.large === null || d.large === undefined ||
+         d.small === null || d.small === undefined ||
          d.indoor === null || d.indoor === undefined ||
          d.outdoor === null || d.outdoor === undefined ||
          d.cage === null || d.cage === undefined ||
@@ -9454,18 +9455,27 @@ async function batchFillPetDetails() {
         if (!res.ok) throw new Error('HTTP ' + res.status);
         const data = await res.json();
 
-        // 아이콘/태그 추출 (fetchKakaoPagePetSignal과 동일 로직)
-        const iconItems = (data?.place_add_info?.ai_mate?.store_facility_icons || []).map(i => i?.text || '');
-        const tagItems  = (data?.place_add_info?.tags || []).map(t => t?.text || t?.tag || '');
-        const iconTexts = iconItems.join(' ');
-        const tagText   = tagItems.join(' ');
-        const sig = iconTexts + ' ' + tagText;
+        // 아이콘/태그 추출 — fetchKakaoPagePetSignal과 동일 로직
+        // icons: 객체 배열 → .text 추출 / tags: 문자열 배열 → 그대로 사용
+        const iconItems = (data?.place_add_info?.ai_mate?.store_facility_icons || [])
+          .map(i => (i?.text || '').toLowerCase());
+        const tagItems  = (data?.place_add_info?.tags || [])
+          .map(t => (t != null ? String(t) : '').toLowerCase());
+        const sig = iconItems.join(' ') + ' ' + tagItems.join(' ');
 
         const updateData = {};
         // large
         if (d.large === null || d.large === undefined) {
           if (sig.includes('대형견') && !sig.includes('대형견 불가') && !sig.includes('대형견불가'))
             updateData.large = true;
+        }
+        // small (fetchKakaoPagePetSignal과 동일 로직)
+        if (d.small === null || d.small === undefined) {
+          if (sig.includes('소형견')) updateData.small = true;
+          else if (sig.includes('반려동물 동반') || sig.includes('반려견 동반') ||
+                   sig.includes('반려동물 가능') || sig.includes('반려견 가능') ||
+                   sig.includes('반려동물동반') || sig.includes('반려견동반'))
+            updateData.small = true;
         }
         // indoor
         if (d.indoor === null || d.indoor === undefined) {
