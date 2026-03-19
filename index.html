@@ -1204,6 +1204,8 @@
       /* 데스크탑: FAB 2배 크기 */
       #feedback-fab-img { width:100px; height:100px; border-width:4px; }
       #feedback-fab-label { font-size:13px; padding:4px 12px; }
+      /* 데스크탑: 말풍선 위치 — FAB 왼쪽 */
+      #hongsi-bubble { right:140px; bottom:calc(24px + 44px + 36px); font-size:15px; padding:12px 18px; }
       /* 데스크탑: 필터 토글 버튼·드로어 헤더 숨기고 패널 항상 표시 */
       #filter-toggle-btn { display:none; }
       #drawer-header { display:none; }
@@ -1258,6 +1260,42 @@
       padding:2px 7px; box-shadow:0 2px 6px rgba(0,0,0,.15);
       white-space:nowrap;
     }
+    /* ── 홍시 말풍선 (카카오톡 스타일) ── */
+    #hongsi-bubble {
+      position:fixed;
+      right:76px;
+      bottom:calc(var(--tabs-h) + env(safe-area-inset-bottom,0px) + 28px);
+      z-index:719;
+      background:#FEE500; /* 카카오 노랑 */
+      color:#1A1A1A;
+      font-size:13px; font-weight:700;
+      line-height:1.5;
+      padding:10px 14px;
+      border-radius:18px 18px 4px 18px;
+      box-shadow:0 3px 14px rgba(0,0,0,.18);
+      white-space:nowrap;
+      pointer-events:none;
+      opacity:0; transform:scale(0.8) translateX(10px);
+      transform-origin:right bottom;
+      transition:opacity .25s ease, transform .25s ease;
+    }
+    #hongsi-bubble.visible {
+      opacity:1; transform:scale(1) translateX(0);
+      pointer-events:auto;
+    }
+    /* 말풍선 꼬리 — 오른쪽 하단을 향해 */
+    #hongsi-bubble::after {
+      content:'';
+      position:absolute; right:-7px; bottom:10px;
+      border:7px solid transparent;
+      border-left-color:#FEE500;
+      border-right:0;
+    }
+    @keyframes bubble-bounce {
+      0%,100% { transform:scale(1) translateX(0); }
+      50%      { transform:scale(1.04) translateX(0); }
+    }
+    #hongsi-bubble.visible { animation:bubble-bounce 2s ease 0.6s infinite; }
 
     /* ── 피드백 모달 ── */
     #feedback-modal {
@@ -1595,6 +1633,9 @@
     <span>📍 마커를 눌러 장소를 선택하세요</span>
     <button onclick="exitMapPickMode()">취소</button>
   </div>
+
+  <!-- ══ 홍시 말풍선 (첫 방문/로그인 시) ══ -->
+  <div id="hongsi-bubble" onclick="dismissHongsiBubble()">어디 갈꺼야? 내가 찾아줄게♥</div>
 
   <!-- ══ 홍시야 찾아줘! — 카카오 주변 장소 검색 FAB ══ -->
   <div id="feedback-fab" onclick="toggleLiveSearch()" title="홍시야 찾아줘!">
@@ -3060,6 +3101,30 @@ function showIOSInstallGuide() {
 //  START APP
 // ══════════════════════════════════════════════════════
 /* ── 유저 뱃지 업데이트 — 강아지 사진 > 강아지 이름 첫 글자 > 유저 이름 첫 글자 순서 ── */
+/* ── 홍시 말풍선: 첫 방문/로그인 시 1회 표시 ── */
+let _bubbleTimer = null;
+
+function showHongsiBubble() {
+  // 이미 본 적 있으면 표시하지 않음
+  if (localStorage.getItem('hongsi_bubble_seen')) return;
+  const el = document.getElementById('hongsi-bubble');
+  if (!el) return;
+  // 앱이 완전히 뜬 후 1.2초 딜레이로 자연스럽게 등장
+  setTimeout(() => {
+    el.classList.add('visible');
+    // 6초 후 자동 사라짐
+    _bubbleTimer = setTimeout(() => dismissHongsiBubble(), 6000);
+  }, 1200);
+}
+
+function dismissHongsiBubble() {
+  clearTimeout(_bubbleTimer);
+  const el = document.getElementById('hongsi-bubble');
+  if (!el) return;
+  el.classList.remove('visible');
+  localStorage.setItem('hongsi_bubble_seen', '1');
+}
+
 function updateUserBadge() {
   const initialEl = document.getElementById('user-initial');
   const imgEl     = document.getElementById('user-badge-img');
@@ -3099,6 +3164,9 @@ function startApp(user) {
     document.getElementById('tab-list-dot').style.display = 'block';
   }
 
+
+  // 홍시 말풍선 — 첫 방문/로그인 시 1회 표시
+  showHongsiBubble();
 
   // load dog profile async (non-blocking)
   loadUserDogProfile(user.uid).catch(() => {});
@@ -3554,9 +3622,10 @@ function initMap() {
     console.error('[initMap] Leaflet 초기화 실패:', e.message);
     return;
   }
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+  // 한글 지명 표기를 위해 OSM 표준 타일 사용 (한국 지역은 한글 레이블)
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     attribution:'',
-    subdomains:'abcd', maxZoom:19
+    subdomains:'abc', maxZoom:19
   }).addTo(map);
   map.attributionControl.setPrefix('');
   setTimeout(() => map.invalidateSize(), 300);
