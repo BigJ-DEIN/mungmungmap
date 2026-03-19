@@ -303,6 +303,8 @@
       transition:width .2s, height .2s, transform .2s, margin .2s;
     }
     .m-dot.active { transform:scale(1.5) !important; box-shadow:0 3px 12px rgba(0,0,0,.35); }
+    .m-dot.has-rating { border-radius:10px; display:flex; align-items:center; justify-content:center; width:auto !important; padding:0 5px; }
+    .m-rating { font-size:10px; font-weight:800; color:#fff; line-height:1; white-space:nowrap; pointer-events:none; }
     /* 마커 유형 레이블 */
     .m-wrap { display:flex; flex-direction:column; align-items:center; position:relative; }
     .m-type-label {
@@ -1779,6 +1781,7 @@
     <button class="atab" data-tab="verify"    onclick="switchAdminTab(this,'verify')">✅ 검증 관리</button>
     <button class="atab" data-tab="feedback"  onclick="switchAdminTab(this,'feedback')">🐛 피드백</button>
     <button class="atab" data-tab="corrections" onclick="switchAdminTab(this,'corrections')">🔧 수정 요청</button>
+    <button class="atab" data-tab="batchfill"   onclick="switchAdminTab(this,'batchfill')">🐾 정보 채우기</button>
   </div>
   <div id="admin-content">
     <div class="empty-state"><div class="es-icon">⏳</div><p>데이터 로딩 중...</p></div>
@@ -2776,6 +2779,29 @@ async function rejectCorrectionRequest(docId) {
   } catch(e) { showToast('❌ ' + e.message); }
 }
 
+function renderAdminBatchFill() {
+  const content = document.getElementById('admin-content');
+  content.innerHTML = `
+    <div style="padding:8px 0">
+      <h2 style="font-size:16px;font-weight:700;margin-bottom:8px">🐾 장소 pet 정보 자동 채우기</h2>
+      <p style="font-size:13px;color:#666;margin-bottom:12px">
+        kakaoId가 있고 large/indoor/outdoor/cage/entryFee 중 하나라도 비어 있는 장소를 찾아<br>
+        panel3 API로 자동으로 채워 넣습니다.
+      </p>
+      <div style="background:#fff3cd;border:1px solid #ffc107;border-radius:8px;padding:10px;margin-bottom:12px;font-size:12px">
+        ⚠️ 장소 수에 따라 수 분이 걸릴 수 있습니다. 실행 중에는 페이지를 닫지 마세요.
+      </div>
+      <button id="batch-fill-btn"
+        onclick="batchFillPetDetails()"
+        style="background:#ff6b35;color:#fff;border:none;border-radius:10px;padding:12px 24px;font-size:14px;font-weight:700;cursor:pointer;margin-bottom:12px">
+        🚀 배치 실행
+      </button>
+      <div id="batch-fill-progress" style="font-size:13px;color:#555;margin-bottom:8px"></div>
+      <pre id="batch-fill-log"
+        style="background:#1a1a2e;color:#00ff88;border-radius:8px;padding:12px;font-size:11px;max-height:300px;overflow-y:auto;white-space:pre-wrap;word-break:break-all"></pre>
+    </div>`;
+}
+
 //  PWA 홈화면 추가
 // ══════════════════════════════════════════════════════
 function isPWAInstalled() {
@@ -3285,8 +3311,20 @@ function updateAllMarkerSizes() {
   const z = map.getZoom();
   const sz = getMarkerSizeForZoom(z);
   document.querySelectorAll('.m-dot').forEach(dot => {
-    dot.style.width  = sz + 'px';
     dot.style.height = sz + 'px';
+    if (dot.classList.contains('has-rating')) {
+      dot.style.minWidth = sz + 'px';
+      // 줌아웃으로 너무 작아지면 별점 숨김
+      if (sz < 16) {
+        dot.classList.remove('has-rating');
+        dot.style.width = sz + 'px';
+        dot.style.minWidth = '';
+        dot.style.filter = '';
+        dot.innerHTML = '';
+      }
+    } else {
+      dot.style.width = sz + 'px';
+    }
   });
   const hs = Math.round(sz * 1.6);
   document.querySelectorAll('.m-heart').forEach(h => {
@@ -3624,6 +3662,92 @@ function getTypeLabel(p) {
   return CAT_LABEL[getCatKey(p)] || '📍 기타';
 }
 
+// ── 카카오 별점 캐시 & 로더 ──────────────────────────────────────────────────
+const _ratingCache = new Map(); // kakaoId → { blog, review, score }
+
+// 블로그 수 → 1~10 인기 점수 (1이 최고, 10이 최저)
+// 실제 DB 분포 기반 ×2 등비 구간 — 중간값(~28개)이 6점
+// 500+→1, 300→2, 150→3, 80→4, 40→5, 20→6, 10→7, 5→8, 2→9, 1→10
+function calcPopScore(blogCount) {
+  if (!blogCount || blogCount <= 0) return 0;
+  if (blogCount >= 500) return 1;
+  if (blogCount >= 300) return 2;
+  if (blogCount >= 150) return 3;
+  if (blogCount >=  80) return 4;
+  if (blogCount >=  40) return 5;
+  if (blogCount >=  20) return 6;
+  if (blogCount >=  10) return 7;
+  if (blogCount >=   5) return 8;
+  if (blogCount >=   2) return 9;
+  return 10;
+}
+
+async function fetchKakaoRating(kakaoId) {
+  if (!kakaoId) return null;
+  if (_ratingCache.has(kakaoId)) return _ratingCache.get(kakaoId);
+
+  // 1) Firestore 캐시 확인 (30일 TTL)
+  if (firebaseReady && db) {
+    try {
+      const doc = await db.collection('place_ratings').doc(String(kakaoId)).get();
+      if (doc.exists) {
+        const d = doc.data();
+        if (d.ts && Date.now() - d.ts < 30 * 24 * 60 * 60 * 1000) {
+          const r = { blog: d.blog || 0, review: d.review || 0, score: calcPopScore(d.blog || 0) }; // 항상 최신 기준으로 재계산
+          _ratingCache.set(kakaoId, r);
+          return r;
+        }
+      }
+    } catch(e) {}
+  }
+
+  // 2) panel3 API 호출 (프록시 경유)
+  try {
+    const url = `https://place-api.map.kakao.com/places/panel3/${kakaoId}`;
+    const res = await fetch(
+      `https://mungmungmap-proxy.jaypark.workers.dev/?url=${encodeURIComponent(url)}`,
+      { signal: AbortSignal.timeout(5000) }
+    );
+    if (!res.ok) return null;
+    const data = await res.json();
+    const blog   = data?.blog_review?.review_count || 0;          // 블로그 리뷰 수
+    const review = data?.kakaomap_review?.score_set?.review_count || 0; // 카카오맵 후기 수
+    const score  = calcPopScore(blog);
+    const r = { blog, review, score };
+    _ratingCache.set(kakaoId, r);
+    // 블로그 있는 경우만 Firestore에 저장 (백그라운드)
+    if (firebaseReady && db && blog > 0) {
+      db.collection('place_ratings').doc(String(kakaoId))
+        .set({ blog, review, score, ts: Date.now() }).catch(() => {});
+    }
+    return r;
+  } catch(e) { return null; }
+}
+
+async function loadRatingForMarker(p) {
+  if (!p.kakaoId) return;
+  const r = await fetchKakaoRating(p.kakaoId);
+  if (!r || r.score <= 0) return;
+
+  const m = markers[p.id];
+  if (!m || m.isHeart) return; // 하트 마커는 제외
+  const el = m.marker.getElement();
+  if (!el) return;
+  const dot = el.querySelector('.m-dot');
+  if (!dot) return;
+
+  const sz = parseInt(dot.style.height) || 20;
+  if (sz < 16) return; // 줌아웃 시 너무 작으면 표시 안 함
+
+  // 채도: 1점(최고)=100%, 10점(최저)=50% — score가 낮을수록 선명
+  const saturate = (1 - (r.score - 1) / 9 * 0.5).toFixed(2);
+  dot.classList.add('has-rating');
+  dot.style.height = sz + 'px';
+  dot.style.minWidth = sz + 'px';
+  dot.style.filter = `saturate(${saturate})`;
+  dot.innerHTML = `<span class="m-rating">${r.score}</span>`;
+}
+
 function addMarker(p) {
   if (!clusterGroup) return; // 지도 초기화 전이면 skip
   if (markers[p.id]) return; // 이미 마커 존재 — 중복 생성 방지
@@ -3663,6 +3787,7 @@ function addMarker(p) {
     const m = L.marker([p.lat, p.lng], { icon }).on('click', onClick);
     clusterGroup.addLayer(m);
     markers[p.id] = { marker:m, color };
+    loadRatingForMarker(p);
 
   // ── 우선순위 4: 일반 장소 → 상태별 색상 원형 마커 ──
   } else {
@@ -3672,6 +3797,7 @@ function addMarker(p) {
     const m = L.marker([p.lat, p.lng], { icon }).on('click', onClick);
     clusterGroup.addLayer(m);
     markers[p.id] = { marker:m, color };
+    loadRatingForMarker(p);
   }
 }
 
@@ -6382,8 +6508,9 @@ function switchAdminTab(btn, tab) {
 async function loadAdminTab(tab) {
   const content = document.getElementById('admin-content');
 
-  if (tab === 'importer') { renderAdminImporter(); return; }
-  if (tab === 'verify')   { renderVerifyTab(); return; }
+  if (tab === 'importer')  { renderAdminImporter(); return; }
+  if (tab === 'verify')    { renderVerifyTab(); return; }
+  if (tab === 'batchfill') { renderAdminBatchFill(); return; }
 
   if (!firebaseReady || !db) {
     content.innerHTML = `<div class="empty-state"><div class="es-icon">⚠️</div><p>Firebase가 연결되지 않았어요.<br>설정 후 사용할 수 있어요.</p></div>`;
@@ -6403,6 +6530,7 @@ async function loadAdminTab(tab) {
     else if (tab === 'verify') renderVerifyTab();
     else if (tab === 'feedback') await renderAdminFeedback();
     else if (tab === 'corrections') await renderAdminCorrections();
+    else if (tab === 'batchfill') renderAdminBatchFill();
   } catch(e) {
     content.innerHTML = `<div class="empty-state"><div class="es-icon">❌</div><p>오류가 발생했어요.<br>${e.message}</p></div>`;
   }
@@ -7760,7 +7888,7 @@ async function fetchKakaoPagePetSignal(url, kakaoId) {
         );
       }
 
-      const petDetails = { large: null, small: null, indoor: null, outdoor: null };
+      const petDetails = { large: null, small: null, indoor: null, outdoor: null, cage: null, entryFee: null };
       // 대형견
       if (signalStr.includes('대형견') && !signalStr.includes('대형견 불가') && !signalStr.includes('대형견불가'))
         petDetails.large = true;
@@ -7776,6 +7904,14 @@ async function fetchKakaoPagePetSignal(url, kakaoId) {
       if (signalStr.includes('실내')) petDetails.indoor = true;
       // 야외/테라스
       if (signalStr.includes('야외') || signalStr.includes('테라스')) petDetails.outdoor = true;
+      // 케이지: 불필요(false) vs 필수/필요/대여(true)
+      if (signalStr.includes('케이지 불필요') || signalStr.includes('노케이지') || signalStr.includes('케이지없') || signalStr.includes('케이지 없'))
+        petDetails.cage = false;
+      else if (signalStr.includes('케이지 필수') || signalStr.includes('케이지필수') || signalStr.includes('케이지 필요') || signalStr.includes('케이지 대여'))
+        petDetails.cage = true;
+      // 입장료
+      if (signalStr.includes('입장료') || signalStr.includes('입장비'))
+        petDetails.entryFee = true;
 
       // ── 카카오 최근 3개월 리뷰에서 반려견 키워드 체크 (→ verified 신호) ──
       const cutoff3mo = Date.now() - 90 * 24 * 60 * 60 * 1000;
@@ -7806,6 +7942,119 @@ async function fetchKakaoPagePetSignal(url, kakaoId) {
     }
   }
   return { found: false, error: true };
+}
+
+/* ══ 배치: 기존 장소의 pet 필터 정보(large/indoor/outdoor/cage/entryFee) 자동 채우기 ══ */
+let _batchRunning = false;
+
+async function batchFillPetDetails() {
+  if (_batchRunning) { showToast('이미 실행 중입니다'); return; }
+  if (!firebaseReady || !db) { showToast('Firebase 연결 필요'); return; }
+
+  _batchRunning = true;
+  const logEl = document.getElementById('batch-fill-log');
+  const progEl = document.getElementById('batch-fill-progress');
+  const btnEl = document.getElementById('batch-fill-btn');
+  if (btnEl) btnEl.disabled = true;
+
+  function log(msg) {
+    if (logEl) logEl.textContent = (logEl.textContent ? logEl.textContent + '\n' : '') + msg;
+    console.log('[batchFill]', msg);
+  }
+
+  log('Firestore에서 장소 목록 불러오는 중...');
+
+  try {
+    // 모든 places 문서 가져오기 (배치로 나눠 처리)
+    const snap = await db.collection('places').get();
+    const docs = snap.docs;
+    log(`총 ${docs.length}개 장소 확인`);
+
+    // kakaoId가 있고, large/indoor/outdoor 중 하나 이상 null인 곳 필터
+    const targets = docs.filter(doc => {
+      const d = doc.data();
+      return d.kakaoId &&
+        (d.large === null || d.large === undefined ||
+         d.indoor === null || d.indoor === undefined ||
+         d.outdoor === null || d.outdoor === undefined ||
+         d.cage === null || d.cage === undefined ||
+         d.entryFee === null || d.entryFee === undefined);
+    });
+
+    log(`업데이트 대상: ${targets.length}개`);
+    if (targets.length === 0) { log('모두 완료되어 있습니다!'); _batchRunning = false; if (btnEl) btnEl.disabled = false; return; }
+
+    let done = 0, updated = 0, failed = 0;
+
+    for (const docSnap of targets) {
+      const d = docSnap.data();
+      const kakaoId = d.kakaoId;
+
+      if (progEl) progEl.textContent = `진행: ${done}/${targets.length} | 업데이트: ${updated} | 실패: ${failed}`;
+
+      try {
+        // panel3 호출
+        const proxyUrl = `https://mungmungmap-proxy.jaypark.workers.dev/?url=${encodeURIComponent('https://place-api.map.kakao.com/places/panel3/' + kakaoId)}`;
+        const res = await fetch(proxyUrl);
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const data = await res.json();
+
+        // 아이콘/태그 추출 (fetchKakaoPagePetSignal과 동일 로직)
+        const iconItems = (data?.place_add_info?.ai_mate?.store_facility_icons || []).map(i => i?.text || '');
+        const tagItems  = (data?.place_add_info?.tags || []).map(t => t?.text || t?.tag || '');
+        const iconTexts = iconItems.join(' ');
+        const tagText   = tagItems.join(' ');
+        const sig = iconTexts + ' ' + tagText;
+
+        const updateData = {};
+        // large
+        if (d.large === null || d.large === undefined) {
+          if (sig.includes('대형견') && !sig.includes('대형견 불가') && !sig.includes('대형견불가'))
+            updateData.large = true;
+        }
+        // indoor
+        if (d.indoor === null || d.indoor === undefined) {
+          if (sig.includes('실내')) updateData.indoor = true;
+        }
+        // outdoor
+        if (d.outdoor === null || d.outdoor === undefined) {
+          if (sig.includes('야외') || sig.includes('테라스')) updateData.outdoor = true;
+        }
+        // cage
+        if (d.cage === null || d.cage === undefined) {
+          if (sig.includes('케이지 불필요') || sig.includes('노케이지') || sig.includes('케이지없') || sig.includes('케이지 없'))
+            updateData.cage = false;
+          else if (sig.includes('케이지 필수') || sig.includes('케이지필수') || sig.includes('케이지 필요') || sig.includes('케이지 대여'))
+            updateData.cage = true;
+        }
+        // entryFee
+        if (d.entryFee === null || d.entryFee === undefined) {
+          if (sig.includes('입장료') || sig.includes('입장비')) updateData.entryFee = true;
+        }
+
+        if (Object.keys(updateData).length > 0) {
+          await db.collection('places').doc(docSnap.id).update(updateData);
+          updated++;
+          log(`✅ ${d.name || kakaoId}: ${JSON.stringify(updateData)}`);
+        }
+      } catch(e) {
+        failed++;
+        log(`⚠️ ${d.name || kakaoId}: ${e.message}`);
+      }
+
+      done++;
+      // 과부하 방지: 200ms 딜레이
+      await new Promise(r => setTimeout(r, 200));
+    }
+
+    log(`\n완료! ${done}개 처리, ${updated}개 업데이트, ${failed}개 실패`);
+    if (progEl) progEl.textContent = `완료: ${done}/${targets.length} | 업데이트: ${updated} | 실패: ${failed}`;
+  } catch(e) {
+    log(`오류: ${e.message}`);
+  }
+
+  _batchRunning = false;
+  if (btnEl) btnEl.disabled = false;
 }
 
 /* Firestore에서 최근 3개월 이내 방문 기록 확인 */
