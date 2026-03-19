@@ -5351,6 +5351,8 @@ function filterPlaces() {
     let needRerate = false;
     places.forEach(p => {
       const m = markers[p.id]; if (!m) return;
+      // ★ 하트 마커 (나의 추억·친구 추억)는 뷰포트 필터 적용 안 함 — 항상 지도에 표시
+      if (m.isHeart) return;
       const show = filteredSet.has(p.id);
       const inCluster = clusterGroup.hasLayer(m.marker);
       if (show && !inCluster) {
@@ -5630,7 +5632,12 @@ function showDetailWebview(id) {
   if (!wv || !ct) { window.open(url, '_blank'); return; }
   document.getElementById('kw-title').textContent = p.name;
   document.getElementById('kw-ext').href          = url;
-  ct.innerHTML = _kwRenderBasic(p);
+  try {
+    ct.innerHTML = _kwRenderBasic(p);
+  } catch(e) {
+    console.error('[showDetailWebview] render error:', e);
+    ct.innerHTML = `<div class="kw-hero"><div class="kw-meta-row"><span>${p.name}</span></div><div style="font-size:13px;color:#999;margin-top:8px">정보를 불러올 수 없어요. 카카오맵에서 확인해주세요.</div></div>`;
+  }
   wv.classList.add('open');
   if (p.kakaoId) _kwLoadPanel3(p, ct);
 }
@@ -5673,8 +5680,12 @@ function _kwRenderBasic(p) {
     ? `<div class="kw-info-row"><span class="kw-info-icon">📍</span><span class="kw-info-text">${esc(addrStr)}</span></div>` : '';
   const phoneHtml = p.phone
     ? `<div class="kw-info-row"><span class="kw-info-icon">📞</span><span class="kw-info-text"><a href="tel:${esc(p.phone)}" style="color:#E04E14;text-decoration:none">${esc(p.phone)}</a></span></div>` : '';
-  const hoursHtml = p.hours
-    ? `<div class="kw-info-row"><span class="kw-info-icon">🕐</span><span class="kw-info-text">${esc(p.hours)}</span></div>` : '';
+  // hours는 배열([{d,t}]) 또는 문자열 모두 처리
+  const hoursStr = Array.isArray(p.hours)
+    ? p.hours.map(h => `${h.d||''} ${h.t||''}`).filter(s => s.trim()).join(' · ')
+    : (p.hours || '');
+  const hoursHtml = hoursStr
+    ? `<div class="kw-info-row"><span class="kw-info-icon">🕐</span><span class="kw-info-text">${esc(hoursStr)}</span></div>` : '';
   const noteHtml  = p.note
     ? `<div class="kw-info-row"><span class="kw-info-icon">📝</span><span class="kw-info-text">${esc(p.note)}</span></div>` : '';
 
@@ -5736,6 +5747,28 @@ async function _kwLoadPanel3(p, ct) {
 //  🔧 정보 수정 요청 / 관리자 직접 수정
 // ══════════════════════════════════════════════════════
 
+/* Firestore 장소 필드 저장 helper — document not found 시 전체 set으로 fallback */
+async function savePlaceField(p, updateObj) {
+  if (!firebaseReady || !db) throw new Error('Firebase 연결 필요');
+  // firestoreId 없으면 신규 문서 생성
+  if (!p.firestoreId) {
+    const ref = db.collection('places').doc();
+    p.firestoreId = ref.id;
+    await ref.set({ ...p, ...updateObj });
+    return;
+  }
+  try {
+    await db.collection('places').doc(p.firestoreId).update(updateObj);
+  } catch(e) {
+    if (e.code === 'not-found' || (e.message && e.message.includes('No document to update'))) {
+      // 문서가 없으면 전체 장소 데이터로 새로 생성
+      await db.collection('places').doc(p.firestoreId).set({ ...p, ...updateObj });
+    } else {
+      throw e;
+    }
+  }
+}
+
 const FIELD_META = {
   large:    { label:'🐕 대형견 입장',    type:'bool', trueText:'가능',   falseText:'불가',   trueClass:'yes', falseClass:'no',   trueIcon:'✅', falseIcon:'❌' },
   small:    { label:'🐩 소형견 입장',    type:'bool', trueText:'가능',   falseText:'불가',   trueClass:'yes', falseClass:'no',   trueIcon:'✅', falseIcon:'❌' },
@@ -5769,14 +5802,14 @@ function onFieldClick(placeId, field) {
 /* ── 관리자: 불리언 즉시 토글 / 텍스트 인라인 편집 ── */
 async function adminEditField(placeId, field) {
   const p = places.find(x => x.id === placeId);
-  if (!p || !p.firestoreId) { showToast('Firestore ID 없음'); return; }
+  if (!p) { showToast('장소를 찾을 수 없음'); return; }
   const meta = FIELD_META[field];
   if (!meta) return;
 
   if (meta.type === 'bool') {
     const newVal = !p[field];
     try {
-      await db.collection('places').doc(p.firestoreId).update({ [field]: newVal, manuallyEdited: true });
+      await savePlaceField(p, { [field]: newVal, manuallyEdited: true });
       p[field] = newVal; // 로컬 반영
       p.manuallyEdited = true;
       invalidatePlacesCache();
@@ -5815,10 +5848,10 @@ function openAdminTextEdit(placeId, field, currentVal) {
 
 async function submitAdminTextEdit(placeId, field) {
   const p = places.find(x => x.id === placeId);
-  if (!p || !p.firestoreId) return;
+  if (!p) return;
   const newVal = document.getElementById('admin-edit-textarea').value.trim();
   try {
-    await db.collection('places').doc(p.firestoreId).update({ [field]: newVal });
+    await savePlaceField(p, { [field]: newVal });
     p[field] = newVal;
     invalidatePlacesCache();
     showToast('✅ 저장됐어요');
@@ -5846,14 +5879,14 @@ function openAdminHoursEdit(placeId, hours) {
 
 async function submitAdminHoursEdit(placeId) {
   const p = places.find(x => x.id === placeId);
-  if (!p || !p.firestoreId) return;
+  if (!p) return;
   const raw = document.getElementById('admin-hours-textarea').value;
   const newHours = raw.split('\n').filter(l => l.trim()).map(l => {
     const parts = l.split('\t');
     return { d: (parts[0]||'').trim(), t: (parts[1]||'').trim() };
   }).filter(h => h.d || h.t);
   try {
-    await db.collection('places').doc(p.firestoreId).update({ hours: newHours });
+    await savePlaceField(p, { hours: newHours });
     p.hours = newHours;
     invalidatePlacesCache();
     showToast('✅ 영업시간 저장됐어요');
@@ -5920,10 +5953,10 @@ function openUserDirectEdit(placeId, field) {
 
 async function applyUserDirectEdit(placeId, field, newVal) {
   const p = places.find(x => x.id === placeId);
-  if (!p || !p.firestoreId) { showToast('Firestore ID 없음'); return; }
+  if (!p) { showToast('장소를 찾을 수 없음'); return; }
   const oldVal = p[field];
   try {
-    await db.collection('places').doc(p.firestoreId).update({ [field]: newVal, manuallyEdited: true });
+    await savePlaceField(p, { [field]: newVal, manuallyEdited: true });
     await logPlaceEdit(p, field, oldVal, newVal);
     p[field] = newVal;
     p.manuallyEdited = true;
@@ -5941,11 +5974,11 @@ async function applyUserDirectEdit(placeId, field, newVal) {
 
 async function applyUserTextEdit(placeId, field) {
   const p = places.find(x => x.id === placeId);
-  if (!p || !p.firestoreId) return;
+  if (!p) return;
   const newVal = document.getElementById('user-edit-textarea').value.trim();
   const oldVal = p[field];
   try {
-    await db.collection('places').doc(p.firestoreId).update({ [field]: newVal });
+    await savePlaceField(p, { [field]: newVal });
     await logPlaceEdit(p, field, oldVal, newVal);
     p[field] = newVal;
     invalidatePlacesCache();
@@ -5957,14 +5990,14 @@ async function applyUserTextEdit(placeId, field) {
 
 async function applyUserHoursEdit(placeId) {
   const p = places.find(x => x.id === placeId);
-  if (!p || !p.firestoreId) return;
+  if (!p) return;
   const raw = document.getElementById('user-hours-textarea').value;
   const newHours = raw.split('\n').filter(l=>l.trim()).map(l=>{
     const pt = l.split('\t'); return { d:(pt[0]||'').trim(), t:(pt[1]||'').trim() };
   }).filter(h=>h.d||h.t);
   const oldVal = p.hours;
   try {
-    await db.collection('places').doc(p.firestoreId).update({ hours: newHours });
+    await savePlaceField(p, { hours: newHours });
     await logPlaceEdit(p, 'hours', JSON.stringify(oldVal), JSON.stringify(newHours));
     p.hours = newHours;
     invalidatePlacesCache();
