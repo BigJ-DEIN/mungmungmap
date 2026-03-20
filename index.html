@@ -4419,7 +4419,8 @@ async function _checkGridCache(cacheKey) {
     if (!doc.exists) return null;
     const d = doc.data();
     if (!d || !d.completedAt) return null;
-    if (!d.v || d.v < _GRID_CACHE_VERSION) return null; // 구버전 캐시 무시 (버전 불일치)
+    // v 필드가 명시된 경우에만 버전 체크 — v 없는 기존 문서는 호환성 유지 (유효로 처리)
+    if (d.v && d.v < _GRID_CACHE_VERSION) return null;
     const age = Date.now() - d.completedAt.toMillis();
     if (age > 30 * 24 * 60 * 60 * 1000) return null; // 30일 만료
     return d;
@@ -4506,6 +4507,11 @@ async function doLiveSearch() {
   _setLiveFabState(true);
   _sessionQuotaHit = false; // 새 검색마다 초기화
   _liveAllEnded    = true;  // 낙관적 초기화 → REST 루프에서 반증 시 false
+
+  // ── DB 장소 먼저 로딩 — 뷰포트 내 기등록 장소를 places에 추가 ─────────────
+  // filterPlaces() 호출 전에 필수: places가 비어있으면 기존 DB 마커가 즉시 표시 안 됨
+  // _loadedTiles 캐시로 중복 로딩 방지 (이미 로딩된 뷰포트는 Firestore 재쿼리 없음)
+  await loadViewportPlaces();
 
   // ── 캐시 확인: 동일 뷰포트 15분 내 재검색이면 API 호출 없이 바로 표시 ──────
   const _ctr = map.getCenter();
