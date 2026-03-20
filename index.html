@@ -4419,6 +4419,7 @@ async function _checkGridCache(cacheKey) {
     if (!doc.exists) return null;
     const d = doc.data();
     if (!d || !d.completedAt) return null;
+    if (!d.v || d.v < _GRID_CACHE_VERSION) return null; // 구버전 캐시 무시 (버전 불일치)
     const age = Date.now() - d.completedAt.toMillis();
     if (age > 30 * 24 * 60 * 60 * 1000) return null; // 30일 만료
     return d;
@@ -4432,11 +4433,73 @@ async function _writeGridCache(cacheKey, resultCount) {
   try {
     await db.collection('liveSearchCache').doc(cacheKey).set({
       completedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      v: _GRID_CACHE_VERSION, // 버전 기록 — 구버전 캐시 무효화에 사용
       resultCount,
       zoom: map.getZoom(),
     });
     console.log('[gridCache] 저장:', cacheKey, 'results:', resultCount);
   } catch(e) { console.warn('[_writeGridCache]', e); }
+}
+
+// ── 섹션 C 단독 실행 함수 ─────────────────────────────────────────────────────
+// 그리드 캐시 히트 시에만 호출 — A·B 없이 동네명 기반 키워드 검색만 수행
+// 목적: 캐시 유효 기간(30일) 내에 새로 오픈한 미등록 장소 발굴 (콩카세 등)
+async function _runSectionCOnly() {
+  const bounds  = map.getBounds();
+  const N = bounds.getNorth(), S = bounds.getSouth();
+  const E = bounds.getEast(),  W = bounds.getWest();
+  const viewKmW = (E - W) * 88;
+  const viewKmH = (N - S) * 111;
+  const ctr     = map.getCenter();
+  const results = [];
+
+  try {
+    const rgResp = await fetch(
+      `https://dapi.kakao.com/v2/local/geo/coord2regioncode.json?x=${ctr.lng}&y=${ctr.lat}`,
+      { headers: { 'Authorization': `KakaoAK ${KAKAO_REST_KEY}` },
+        signal: AbortSignal.timeout(5000) }
+    );
+    if (rgResp.ok) {
+      const rgJson  = await rgResp.json();
+      const reg     = rgJson.documents?.[0];
+      const dong    = (reg?.region_3depth_name || '').replace(/\d+가$/, '');
+      const gu      = reg?.region_2depth_name || '';
+      const searchAreas = [...new Set([dong, gu].filter(Boolean))];
+      // 반경 = 뷰포트 대각선의 절반, 최대 3000m
+      // ※ 상한을 3km로 제한 — Kakao 45결과 내에서 로컬 소규모 카페(콩카세 등)가 밀리지 않도록
+      const rgRadiusM   = Math.min(Math.round(Math.sqrt(
+        Math.pow(viewKmW * 1000, 2) + Math.pow(viewKmH * 1000, 2)) / 2), 3000);
+      const rgLocQ = `x=${ctr.lng}&y=${ctr.lat}&radius=${rgRadiusM}`;
+      const petKwSuffixes = [' 반려견 카페', ' 애견 카페', ' 강아지 카페', ' 반려동물 카페', ' 펫카페', ' 반려견', ' 강아지', ' 애견'];
+      const tasks = [];
+      for (const area of searchAreas) {
+        for (const suffix of petKwSuffixes) {
+          const kw = area + suffix;
+          tasks.push((async () => {
+            for (let page = 1; page <= 3; page++) {
+              try {
+                const resp = await fetch(
+                  `https://dapi.kakao.com/v2/local/search/keyword.json` +
+                  `?query=${encodeURIComponent(kw)}&${rgLocQ}&size=15&page=${page}`,
+                  { headers: { 'Authorization': `KakaoAK ${KAKAO_REST_KEY}` },
+                    signal: AbortSignal.timeout(6000) }
+                );
+                if (resp.status === 429) { _sessionQuotaHit = true; break; }
+                if (!resp.ok) break;
+                const json = await resp.json();
+                if (json.documents?.length) {
+                  json.documents.forEach(d => results.push({ ...d, _fromPetKeyword: true }));
+                }
+                if (json.meta?.is_end !== false) break;
+              } catch(e) { break; }
+            }
+          })());
+        }
+      }
+      await Promise.allSettled(tasks);
+    }
+  } catch(e) { /* 역지오코딩 실패 시 무시 */ }
+  return results;
 }
 
 async function doLiveSearch() {
@@ -4455,14 +4518,24 @@ async function doLiveSearch() {
   }
 
   // ── Firestore 그리드 완료 캐시 확인 (30일 TTL) ────────────────────────────
-  // is_end:true로 완전 탐색된 구역 → 재검색 생략, DB 장소만 노출
+  // is_end:true로 완전 탐색된 구역 → A·B 재검색 생략, DB 장소 즉시 표시 + C섹션만 실행
   const _gridCached = await _checkGridCache(_cacheKey);
   if (_gridCached) {
-    showToast('✅ 이미 완전 탐색된 구역이에요 (최근 30일)');
-    _setLiveFabState(false);
-    filterPlaces();
+    showToast('✅ 저장된 결과 표시 중 — 신규 장소만 추가 탐색 중...');
+    filterPlaces(); // DB 장소 즉시 표시 (사용자가 바로 볼 수 있도록)
+    // C섹션(동네명 기반 키워드 검색)만 실행 — 새로 오픈한 장소 발굴 목적
+    const _cNewResults = await _runSectionCOnly();
+    if (_cNewResults.length > 0) {
+      await renderLiveResults(_cNewResults);
+    } else {
+      _setLiveFabState(false);
+    }
     return;
   }
+
+  // ── 풀 검색 시작 전 DB 장소 즉시 표시 ────────────────────────────────────
+  // 캐시가 없어서 A+B+C 검색을 시작하더라도, 기존 DB 장소는 검색 완료 전에 바로 마커로 보여야 함
+  filterPlaces();
 
   const bounds = map.getBounds();
   const N = bounds.getNorth(), S = bounds.getSouth();
@@ -4624,8 +4697,9 @@ async function doLiveSearch() {
           // 동(洞) + 구(區) 두 레벨 모두 검색 — 구 레벨은 더 넓은 범위 커버
           const searchAreas = [...new Set([dong, gu].filter(Boolean))];
           // 뷰포트 기준 검색 반경 — 위치 바운딩 없으면 전국 결과가 나와서 로컬 장소 누락
+          // 반경 = 뷰포트 대각선의 절반, 최대 3000m (10km 이상이면 콩카세 등 로컬 소규모 가게 누락)
           const rgRadiusM = Math.min(Math.round(Math.sqrt(
-            Math.pow(viewKmW * 1000, 2) + Math.pow(viewKmH * 1000, 2)) / 2 * 1.5), 10000);
+            Math.pow(viewKmW * 1000, 2) + Math.pow(viewKmH * 1000, 2)) / 2), 3000);
           const rgLocQ = `x=${ctr.lng}&y=${ctr.lat}&radius=${rgRadiusM}`;
           // 넓은 키워드(' 반려견')가 태그 없는 로컬 인기 장소를 잡는 핵심 — 좁히지 말 것
           const petKwSuffixes = [' 반려견 카페', ' 애견 카페', ' 강아지 카페', ' 반려동물 카페', ' 펫카페', ' 반려견', ' 강아지', ' 애견'];
@@ -11415,7 +11489,7 @@ function renderAdminPetPolicy() {
             <input type="checkbox" id="src-naver" checked style="width:15px;height:15px;accent-color:#E04E14">
             <span style="font-size:13px;font-weight:700">② 네이버 플레이스 태그 (비공식 API)</span>
           </label>
-          <div style="font-size:10px;color:#999;margin-left:23px">별도 인증키 불필요 · 프록시 경유 · data.go.kr에서 못 찾은 필드를 보완</div>
+          <div style="font-size:10px;color:#999;margin-left:23px">별도 인증키 불필요 · 프록시 경유 · <b style="color:#15803D">네이버 우선</b> — data.go.kr은 네이버에서 못 찾은 필드만 보강</div>
         </div>
       </div>
 
@@ -11494,10 +11568,10 @@ async function runPetPolicyScan() {
         await new Promise(r => setTimeout(r, 400)); // 네이버 rate limit
       }
 
-      const merged = _mergePetFields(p, dgkFields, naverFields);
-      if (merged && Object.keys(merged).length > 0) {
-        _ppResults.push({ place: p, merged, srcDGK: !!dgkFields, srcNaver: !!naverFields });
-        log(`  ✅ 새 정보: ${JSON.stringify(merged)}`);
+      const mergeResult = _mergePetFields(p, dgkFields, naverFields);
+      if (mergeResult) {
+        _ppResults.push({ place: p, merged: mergeResult.fields, confidence: mergeResult.confidence, srcDGK: !!dgkFields, srcNaver: !!naverFields });
+        log(`  ✅ 새 정보: ${JSON.stringify(mergeResult.fields)} (신뢰도: ${JSON.stringify(mergeResult.confidence)})`);
       }
     }
 
@@ -11641,19 +11715,34 @@ function _ppSimilarity(a, b) {
 }
 
 function _mergePetFields(place, dgkFields, naverFields) {
-  // data.go.kr 우선, 빈 필드만 Naver로 보완
-  const combined = { ...naverFields, ...dgkFields }; // dgk가 덮어씀
-  if (!combined || !Object.keys(combined).length) return null;
-
-  // 현재 place에서 실제 null/undefined인 필드만 채움
-  const toUpdate = {};
+  // 우선순위 로직: 네이버 > data.go.kr (보강)
+  //   - 네이버 값 있음 → 네이버 채택 (출처: 'naver')
+  //   - 네이버 없고 data.go.kr 있음 → data.go.kr로 보강 (출처: 'dgk')
   const FIELDS = ['large', 'indoor', 'outdoor', 'small'];
+  const toUpdate = {};
+  const confidence = {}; // 'naver' | 'dgk'
+
   FIELDS.forEach(f => {
-    if (combined[f] !== undefined && (place[f] === null || place[f] === undefined)) {
-      toUpdate[f] = combined[f];
+    const dVal = dgkFields   ? dgkFields[f]   : undefined;
+    const nVal = naverFields ? naverFields[f] : undefined;
+    const hasD = dVal !== undefined && dVal !== null;
+    const hasN = nVal !== undefined && nVal !== null;
+
+    let chosen = undefined;
+    let conf   = null;
+
+    if (hasN)      { chosen = nVal; conf = 'naver'; } // 네이버 우선
+    else if (hasD) { chosen = dVal; conf = 'dgk';   } // 네이버 없을 때만 data.go.kr 보강
+
+    // place에서 아직 null/undefined인 필드에만 기록
+    if (chosen !== undefined && (place[f] === null || place[f] === undefined)) {
+      toUpdate[f] = chosen;
+      confidence[f] = conf;
     }
   });
-  return Object.keys(toUpdate).length ? toUpdate : null;
+
+  if (!Object.keys(toUpdate).length) return null;
+  return { fields: toUpdate, confidence };
 }
 
 function _renderPpResults(resEl) {
@@ -11682,12 +11771,18 @@ function _renderPpResults(resEl) {
             ${r.srcNaver ? `<span style="font-size:10px;padding:2px 7px;border-radius:5px;background:#F0FDF4;color:#15803D;font-weight:700">네이버</span>` : ''}
           </div>
           <div style="display:flex;gap:7px;flex-wrap:wrap;margin-bottom:9px">
-            ${Object.entries(r.merged).map(([k, v]) => `
+            ${Object.entries(r.merged).map(([k, v]) => {
+              const conf = r.confidence ? r.confidence[k] : 'naver';
+              const confBadge = conf === 'naver'
+                ? `<span title="네이버 플레이스 출처" style="font-size:10px;margin-left:3px">🟢</span>`
+                : `<span title="data.go.kr 보강" style="font-size:10px;margin-left:3px">🔵</span>`;
+              return `
               <span style="font-size:12px;padding:3px 11px;border-radius:20px;font-weight:700;
-                background:${v ? '#ECFDF5' : '#FFF1F2'};color:${v ? '#065F46' : '#9F1239'}">
-                ${FIELD_LABEL[k] || k} ${v ? '✅ 가능' : '❌ 불가'}
-              </span>
-            `).join('')}
+                background:${v ? '#ECFDF5' : '#FFF1F2'};color:${v ? '#065F46' : '#9F1239'};
+                border:1.5px solid ${conf === 'confirmed' ? (v ? '#6EE7B7' : '#FECDD3') : '#E5E7EB'}">
+                ${FIELD_LABEL[k] || k} ${v ? '✅ 가능' : '❌ 불가'}${confBadge}
+              </span>`;
+            }).join('')}
           </div>
           <button onclick="ppApplyOne(${i})"
             style="padding:5px 15px;background:#1E3A8A;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">
