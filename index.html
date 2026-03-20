@@ -1038,7 +1038,13 @@
     }
     /* ── 사진 (정사각형 1:1) ── */
     .mem-card-img {
-      width:100%; aspect-ratio:1/1; object-fit:cover; display:block;
+      width:100%; aspect-ratio:4/3; object-fit:cover; display:block;
+    }
+    /* 사진 없는 카드 — 빈 공간 대신 분위기 있는 플레이스홀더 */
+    .mem-card-no-img {
+      width:100%; aspect-ratio:4/3; background:linear-gradient(135deg,#FFF3EE 0%,#F9E8DC 100%);
+      display:flex; align-items:center; justify-content:center;
+      font-size:52px; opacity:0.4;
     }
     /* ── 본문 ── */
     .mem-card-body { padding:10px 14px 14px; }
@@ -1167,7 +1173,7 @@
       box-shadow:0 2px 8px rgba(0,0,0,.09), 0 0 0 1px rgba(0,0,0,.05);
       background: white;
     }
-    .drawer-mem-feed .mem-card-img { aspect-ratio:1/1; object-fit:cover; }
+    .drawer-mem-feed .mem-card-img { aspect-ratio:4/3; object-fit:cover; }
     .drawer-mem-feed .mem-card-info-row { padding:10px 11px 0; }
     .drawer-mem-feed .mem-card-body { padding:6px 12px 12px; }
     /* legacy — 하위호환 */
@@ -1825,8 +1831,8 @@
     <button class="btn-write-mem" onclick="openWriteMemory(null)">✏️ 오늘 기록하기</button>
   </div>
   <div class="mem-subtab-row">
-    <button class="mem-subtab active" id="subtab-mine" onclick="switchMemTab('mine')">♥ 나의 추억</button>
-    <button class="mem-subtab" id="subtab-all" onclick="switchMemTab('all')">🐾 모두의 추억</button>
+    <button class="mem-subtab active" id="subtab-all" onclick="switchMemTab('all')">🐾 모두의 추억</button>
+    <button class="mem-subtab" id="subtab-mine" onclick="switchMemTab('mine')">♥ 나의 추억</button>
   </div>
   <div class="mem-feed" id="mem-feed">
     <div class="mem-loading">기억 꺼내는 중... 🐾</div>
@@ -7292,10 +7298,10 @@ function renderMemoryCard(m, showPlace = true) {
   // ── 날짜 ──
   const dateStr = formatMemDate(m.createdAt);
 
-  // ── 사진 (정사각형) ──
+  // ── 사진 (4:3) ──
   const imgHtml = m.photoURL
-    ? `<img class="mem-card-img" src="${m.photoURL}" loading="lazy" alt="" onerror="this.style.display='none'">`
-    : '';
+    ? `<img class="mem-card-img" src="${m.photoURL}" loading="lazy" alt="" onerror="this.outerHTML='<div class=\\'mem-card-no-img\\'>🐾</div>'">`
+    : `<div class="mem-card-no-img">🐾</div>`;
 
   // ── 본문 ──
   const privNote = (m.isPublic === false && isMyMem)
@@ -7316,11 +7322,11 @@ function renderMemoryCard(m, showPlace = true) {
 }
 
 /* 추억 서브탭 전환 */
-let currentMemTab = 'mine';
+let currentMemTab = 'all';
 function switchMemTab(tab) {
   currentMemTab = tab;
-  document.getElementById('subtab-mine').classList.toggle('active', tab === 'mine');
   document.getElementById('subtab-all').classList.toggle('active', tab === 'all');
+  document.getElementById('subtab-mine').classList.toggle('active', tab === 'mine');
   loadMemoriesFeed();
 }
 
