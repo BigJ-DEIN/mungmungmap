@@ -1276,7 +1276,7 @@
       #feedback-fab-img { width:100px; height:100px; border-width:4px; }
       #feedback-fab-label { font-size:13px; padding:4px 12px; }
       /* 데스크탑: 말풍선 위치 — FAB 왼쪽 */
-      #hongsi-bubble { right:140px; bottom:calc(24px + 44px + 36px); font-size:15px; padding:12px 18px; }
+      #hongsi-bubble { right:148px; bottom:calc(24px + 44px + 30px); font-size:15px; padding:13px 20px; }
       /* 데스크탑: 필터 토글 버튼·드로어 헤더 숨기고 패널 항상 표시 */
       #filter-toggle-btn { display:none; }
       #drawer-header { display:none; }
@@ -1331,22 +1331,22 @@
       padding:2px 7px; box-shadow:0 2px 6px rgba(0,0,0,.15);
       white-space:nowrap;
     }
-    /* ── 홍시 말풍선 (카카오톡 스타일) ── */
+    /* ── 홍시 말풍선 ── */
     #hongsi-bubble {
       position:fixed;
-      right:76px;
-      bottom:calc(var(--tabs-h) + env(safe-area-inset-bottom,0px) + 28px);
+      right:82px;
+      bottom:calc(var(--tabs-h) + env(safe-area-inset-bottom,0px) + 20px);
       z-index:719;
-      background:#FEE500; /* 카카오 노랑 */
-      color:#1A1A1A;
+      background:#E04E14;
+      color:#fff;
       font-size:13px; font-weight:700;
       line-height:1.5;
-      padding:10px 14px;
-      border-radius:18px 18px 4px 18px;
-      box-shadow:0 3px 14px rgba(0,0,0,.18);
+      padding:11px 17px;
+      border-radius:22px 22px 22px 22px;
+      box-shadow:0 4px 18px rgba(224,78,20,.40);
       white-space:nowrap;
       pointer-events:none;
-      opacity:0; transform:scale(0.8) translateX(10px);
+      opacity:0; transform:scale(0.82) translateX(12px);
       transform-origin:right bottom;
       transition:opacity .25s ease, transform .25s ease;
     }
@@ -1354,13 +1354,15 @@
       opacity:1; transform:scale(1) translateX(0);
       pointer-events:auto;
     }
-    /* 말풍선 꼬리 — 오른쪽 하단을 향해 */
+    /* 말풍선 꼬리 — 오른쪽 하단 귀퉁이, FAB 방향 */
     #hongsi-bubble::after {
       content:'';
-      position:absolute; right:-7px; bottom:10px;
-      border:7px solid transparent;
-      border-left-color:#FEE500;
-      border-right:0;
+      position:absolute;
+      right:-9px; bottom:10px;
+      width:0; height:0;
+      border-style:solid;
+      border-width:9px 0 9px 10px;
+      border-color:transparent transparent transparent #E04E14;
     }
     @keyframes bubble-bounce {
       0%,100% { transform:scale(1) translateX(0); }
@@ -3172,12 +3174,10 @@ function showIOSInstallGuide() {
 //  START APP
 // ══════════════════════════════════════════════════════
 /* ── 유저 뱃지 업데이트 — 강아지 사진 > 강아지 이름 첫 글자 > 유저 이름 첫 글자 순서 ── */
-/* ── 홍시 말풍선: 첫 방문/로그인 시 1회 표시 ── */
+/* ── 홍시 말풍선: 로그인/방문 시마다 표시 ── */
 let _bubbleTimer = null;
 
 function showHongsiBubble() {
-  // 이미 본 적 있으면 표시하지 않음
-  if (localStorage.getItem('hongsi_bubble_seen')) return;
   const el = document.getElementById('hongsi-bubble');
   if (!el) return;
   // 앱이 완전히 뜬 후 1.2초 딜레이로 자연스럽게 등장
@@ -3193,7 +3193,6 @@ function dismissHongsiBubble() {
   const el = document.getElementById('hongsi-bubble');
   if (!el) return;
   el.classList.remove('visible');
-  localStorage.setItem('hongsi_bubble_seen', '1');
 }
 
 /* 쿼터 초과 시 홍시 말풍선으로 안내 */
@@ -4900,9 +4899,12 @@ async function autoAddLivePlace(dOverride) {
     const isPetCategory = IMP_CONFIRMED_CATS.some(c => catNameLower.includes(c.toLowerCase()));
     const skipSignalCheck = d._fromPetKeyword === true || isPetCategory;
 
+    let _signalResult = null; // 영업시간 재활용용
+
     if (!skipSignalCheck) {
       const result = await fetchKakaoPagePetSignal(d.place_url, d.id)
         .catch(() => ({ found: false, error: true }));
+      _signalResult = result;
 
       if (result?.found) {
         if (result.petDetails) petDetails = result.petDetails;
@@ -4935,6 +4937,12 @@ async function autoAddLivePlace(dOverride) {
           return false;
         }
       }
+    }
+
+    // skipSignalCheck인 경우 영업시간만 별도로 가져오기
+    if (skipSignalCheck && !_signalResult) {
+      _signalResult = await fetchKakaoPagePetSignal(d.place_url, d.id)
+        .catch(() => null);
     }
 
     // 2) 카테고리·지역 매핑
@@ -4991,7 +4999,7 @@ async function autoAddLivePlace(dOverride) {
       entryFee:   entryFeeFinal,
       stroller:   null,
       note:       '',
-      hours:      [{ d: '영업시간', t: '카카오맵 확인' }],
+      hours:      _signalResult?.hours || [{ d: '영업시간', t: '카카오맵 확인' }],
       active:     true,
       source:     'live_search',
       addedAt:    new Date().toISOString(),
@@ -5729,7 +5737,7 @@ async function addKakaoSearchPlaceToFavorite() {
       cat, emoji: impCatEmoji(cat), area, province,
       petStatus: 'confirmed', large: null, small: null,
       indoor: null, outdoor: null, cage: null, entryFee: null, stroller: null,
-      note: '', hours: [{ d: '영업시간', t: '카카오맵 확인' }],
+      note: '', hours: await fetchKakaoPagePetSignal(d.place_url, d.id).then(r => r?.hours || null).catch(() => null) || [{ d: '영업시간', t: '카카오맵 확인' }],
       active: true, source: 'user_search', addedAt: new Date().toISOString(),
     };
     places.push(place);
@@ -9362,6 +9370,38 @@ async function verifySdkPetKeyword(d) {
   return false;
 }
 
+/* ── 카카오 panel3 open_hours → [{d, t}] 배열로 변환 ── */
+function _parseKakaoOpenHours(openHours) {
+  try {
+    const days = (openHours?.week_from_today?.week_periods || [])
+      .flatMap(p => p.days || []);
+    if (!days.length) return null;
+
+    // 요일 정렬 기준 (월=0 ... 일=6)
+    const ORDER = { '월':0,'화':1,'수':2,'목':3,'금':4,'토':5,'일':6 };
+    const parsed = days.map(day => {
+      const dayName = (day.day_of_the_week_desc || '').replace(/\([^)]+\)/,'').trim();
+      const t = day.on_days?.start_end_time_desc || (day.off_days ? '휴무' : null);
+      return t ? { d: dayName, t, _ord: ORDER[dayName] ?? 7 } : null;
+    }).filter(Boolean);
+
+    // 월~일 순서 정렬
+    parsed.sort((a, b) => a._ord - b._ord);
+
+    // 연속된 같은 시간대 묶기 (월~금 10:30~22:00 등)
+    const result = [];
+    let i = 0;
+    while (i < parsed.length) {
+      let j = i + 1;
+      while (j < parsed.length && parsed[j].t === parsed[i].t && parsed[j]._ord === parsed[j-1]._ord + 1) j++;
+      const label = j - i > 1 ? `${parsed[i].d}~${parsed[j-1].d}` : parsed[i].d;
+      result.push({ d: label, t: parsed[i].t });
+      i = j;
+    }
+    return result.length ? result : null;
+  } catch(e) { return null; }
+}
+
 async function fetchKakaoPagePetSignal(url, kakaoId) {
   const PROXIES = [
     u => `https://mungmungmap-proxy.jaypark.workers.dev/?url=${encodeURIComponent(u)}`,
@@ -9463,18 +9503,21 @@ async function fetchKakaoPagePetSignal(url, kakaoId) {
         }
       }
 
+      // ── 영업시간 파싱 (open_hours 필드) ──────────────────────────────
+      const parsedHours = _parseKakaoOpenHours(data.open_hours);
+
       // ── 1) 시설 아이콘 텍스트 확인 (항목 단위 부정어 체크 포함) ──
       if (hasPetKwWithoutNegation(iconItems)) {
-        return { found: true, strong: true, recentReview: hasRecentPetReview, petDetails };
+        return { found: true, strong: true, recentReview: hasRecentPetReview, petDetails, hours: parsedHours };
       }
 
       // ── 2) 태그 배열 확인 (항목 단위 부정어 체크 포함) ──
       if (hasPetKwWithoutNegation(tagItems)) {
-        return { found: true, strong: true, recentReview: hasRecentPetReview, petDetails };
+        return { found: true, strong: true, recentReview: hasRecentPetReview, petDetails, hours: parsedHours };
       }
 
       // ── 3) 전체 JSON 스캔 없음 ── (false positive 원인이므로 제거 유지)
-      return { found: false, recentReview: false, petDetails };
+      return { found: false, recentReview: false, petDetails, hours: parsedHours };
     } catch (e) {
       if (autoV.running) autoV.proxyFail = (autoV.proxyFail||0)+1;
     }
