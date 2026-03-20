@@ -4415,15 +4415,30 @@ const _liveCache = new Map();
 async function _checkGridCache(cacheKey) {
   if (!firebaseReady || !db) return null;
   try {
-    const doc = await db.collection('liveSearchCache').doc(cacheKey).get();
-    if (!doc.exists) return null;
-    const d = doc.data();
-    if (!d || !d.completedAt) return null;
-    // v 필드가 명시된 경우에만 버전 체크 — v 없는 기존 문서는 호환성 유지 (유효로 처리)
-    if (d.v && d.v < _GRID_CACHE_VERSION) return null;
-    const age = Date.now() - d.completedAt.toMillis();
-    if (age > 30 * 24 * 60 * 60 * 1000) return null; // 30일 만료
-    return d;
+    const parts = cacheKey.split('_');
+    const latPart = parts[0], lngPart = parts[1], zoom = parseInt(parts[2]);
+    // look-down only: 현재 줌과 더 넓은 줌(줌-1, 줌-2) 캐시를 순서대로 시도
+    // 넓은 뷰포트 캐시(줌아웃)는 좁은 뷰포트(줌인)를 커버할 수 있으므로 허용
+    // 반대 방향(더 좁은 캐시로 넓은 뷰포트 커버)은 콩카세 누락 위험 → 사용 안 함
+    const keysToTry = [
+      cacheKey,
+      `${latPart}_${lngPart}_${zoom - 1}`,
+      `${latPart}_${lngPart}_${zoom - 2}`,
+    ];
+    const docs = await Promise.all(
+      keysToTry.map(k => db.collection('liveSearchCache').doc(k).get())
+    );
+    for (const doc of docs) {
+      if (!doc.exists) continue;
+      const d = doc.data();
+      if (!d || !d.completedAt) continue;
+      // v 필드가 명시된 경우에만 버전 체크 — v 없는 기존 문서는 호환성 유지 (유효로 처리)
+      if (d.v && d.v < _GRID_CACHE_VERSION) continue;
+      const age = Date.now() - d.completedAt.toMillis();
+      if (age > 30 * 24 * 60 * 60 * 1000) continue; // 30일 만료
+      return d; // 첫 번째 유효한 캐시 반환 (현재 줌 → 줌-1 → 줌-2 우선순위)
+    }
+    return null;
   } catch(e) { return null; }
 }
 
@@ -4515,6 +4530,7 @@ async function doLiveSearch() {
 
   // ── 캐시 확인: 동일 뷰포트 15분 내 재검색이면 API 호출 없이 바로 표시 ──────
   const _ctr = map.getCenter();
+  // 정확한 줌으로 캐시 키 생성 (WRITE) — 읽기 시에는 _checkGridCache가 줌-1, 줌-2도 시도 (look-down only)
   const _cacheKey = `${Math.round(_ctr.lat*100)}_${Math.round(_ctr.lng*100)}_${map.getZoom()}`;
   const _cached = _liveCache.get(_cacheKey);
   if (_cached && Date.now() - _cached.ts < 5 * 60 * 1000) {
@@ -11340,11 +11356,12 @@ async function renderAdminGridCache() {
       const lngC = parseInt(parts[1]) / 100;
       const zoom = parseInt(parts[2]);
       if (isNaN(latC) || isNaN(lngC) || isNaN(zoom)) return;
-      const age       = now - (d.ts?.toMillis?.() || 0);
-      const remaining = Math.ceil((TTL - age) / (24 * 60 * 60 * 1000));
-      const isExpired = age >= TTL;
+      const ts        = d.completedAt?.toMillis?.() || d.ts?.toMillis?.() || 0; // completedAt 우선 (d.ts는 구버전 폴백)
+      const age       = now - ts;
+      const remaining = ts ? Math.ceil((TTL - age) / (24 * 60 * 60 * 1000)) : 0;
+      const isExpired = !ts || age >= TTL;
       const isOldVer  = (d.v || 1) < _GRID_CACHE_VERSION;
-      entries.push({ key, latC, lngC, zoom, count: d.count || 0, remaining, isExpired, isOldVer });
+      entries.push({ key, latC, lngC, zoom, count: d.resultCount || d.count || 0, remaining, isExpired, isOldVer });
     });
 
     entries.forEach(entry => {
@@ -11607,8 +11624,15 @@ async function runPetPolicyScan() {
 
       // ② 네이버 플레이스 태그
       if (useNaver) {
-        naverFields = await _fetchNaverPetTags(p).catch(() => null);
-        if (naverFields) log(`  🟢 네이버 매칭: ${JSON.stringify(naverFields)}`);
+        const naverResult = await _fetchNaverPetTags(p).catch(e => ({ fields: null, reason: e.message }));
+        naverFields = (naverResult && typeof naverResult === 'object' && naverResult.fields) ? naverResult.fields : null;
+        if (naverFields && Object.keys(naverFields).length) {
+          log(`  🟢 네이버 매칭: ${JSON.stringify(naverFields)}`);
+        } else {
+          const reason = (naverResult && naverResult.reason) || '태그 없음 또는 프록시 차단';
+          log(`  ⚠️ 네이버 없음: ${reason}`);
+          naverFields = null;
+        }
         await new Promise(r => setTimeout(r, 400)); // 네이버 rate limit
       }
 
@@ -11683,17 +11707,30 @@ async function _fetchNaverPetTags(place) {
     u => `https://mungmungmap-proxy.jaypark.workers.dev/?url=${encodeURIComponent(u)}`,
   ];
 
+  let lastReason = '프록시 전부 실패';
+
   for (const proxyFn of PROXIES) {
     try {
       const res = await fetch(proxyFn(searchUrl), { signal: AbortSignal.timeout(8000) });
-      if (!res.ok) continue;
-      const data = await res.json();
+      if (!res.ok) { lastReason = `HTTP ${res.status}`; continue; }
+
+      // Content-Type 확인 — HTML 응답이면 프록시가 에러 페이지를 반환한 것
+      const ct = res.headers.get('content-type') || '';
+      if (ct.includes('text/html')) { lastReason = 'HTML 응답 (프록시 차단)'; continue; }
+
+      let data;
+      try { data = await res.json(); }
+      catch(je) { lastReason = 'JSON 파싱 실패 (HTML 에러페이지)'; continue; }
+
       const list = data?.result?.place?.list || [];
-      if (!list.length) continue;
+      if (!list.length) { lastReason = '검색 결과 없음'; continue; }
 
       const normTarget = _ppNormName(place.name);
       const match = list.find(r => _ppSimilarity(normTarget, _ppNormName(r.name || '')) > 0.65);
-      if (!match) continue;
+      if (!match) {
+        lastReason = `이름 매칭 실패 (최고: ${Math.round(Math.max(...list.map(r=>_ppSimilarity(normTarget,_ppNormName(r.name||''))),0)*100)}%)`;
+        continue;
+      }
 
       // 검색 결과에서 직접 태그 추출 (keywords, tags, bizcategory 등)
       const tagSources = [
@@ -11719,16 +11756,21 @@ async function _fetchNaverPetTags(place) {
               ...(biz?.conveniences || []),
               ...(biz?.tags || []),
             ].join(' ').toLowerCase();
-            return _parseNaverTagStr(tagStr + ' ' + extra);
+            const parsed = _parseNaverTagStr(tagStr + ' ' + extra);
+            if (parsed) return { fields: parsed, reason: 'ok' };
+            lastReason = '태그 없음 (반려동물 키워드 미발견)';
+            return { fields: null, reason: lastReason };
           }
         } catch(e2) { /* 상세 실패 시 검색결과만 사용 */ }
       }
 
-      const result = _parseNaverTagStr(tagStr);
-      if (result) return result;
-    } catch(e) { continue; }
+      const parsed = _parseNaverTagStr(tagStr);
+      if (parsed) return { fields: parsed, reason: 'ok' };
+      lastReason = '태그 없음 (반려동물 키워드 미발견)';
+      return { fields: null, reason: lastReason };
+    } catch(e) { lastReason = `fetch 오류: ${e.message}`; continue; }
   }
-  return null;
+  return { fields: null, reason: lastReason };
 }
 
 function _parseNaverTagStr(tagStr) {
