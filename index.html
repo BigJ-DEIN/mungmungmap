@@ -11411,14 +11411,33 @@ async function agcSelectGrid(entry, gb) {
     const backBtn = `<button onclick="renderAdminGridCache()" style="background:none;border:none;color:#E04E14;font-size:13px;cursor:pointer;padding:0 0 8px;font-weight:700;display:block;font-family:inherit">← 뒤로</button>`;
 
     if (!places.length) {
-      sidebar.innerHTML = `<div style="padding:12px">${backBtn}<div style="font-size:12px;color:#999;">이 범위에 등록된 장소가 없어요<br><span style="font-size:10px">${info}</span></div></div>`;
+      const emptyRefreshBtn = `
+        <button onclick="agcRefreshGrid(${entry.latC}, ${entry.lngC}, ${entry.zoom}, '${entry.key}')"
+          style="width:100%;padding:9px;background:#1E3A8A;color:#fff;border:none;border-radius:10px;
+                 font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;margin-top:10px;
+                 display:flex;align-items:center;justify-content:center;gap:6px;">
+          🔄 이 그리드 갱신
+        </button>`;
+      sidebar.innerHTML = `<div style="padding:12px">${backBtn}
+        <div style="font-size:12px;color:#999;">이 범위에 등록된 장소가 없어요<br><span style="font-size:10px">${info}</span></div>
+        ${emptyRefreshBtn}
+      </div>`;
       return;
     }
+
+    const refreshBtn = `
+      <button onclick="agcRefreshGrid(${entry.latC}, ${entry.lngC}, ${entry.zoom}, '${entry.key}')"
+        style="width:100%;padding:9px;background:#1E3A8A;color:#fff;border:none;border-radius:10px;
+               font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;margin-bottom:12px;
+               display:flex;align-items:center;justify-content:center;gap:6px;">
+        🔄 이 그리드 갱신
+      </button>`;
 
     sidebar.innerHTML = `
       <div style="padding:12px 12px 0">${backBtn}
         <div style="font-size:13px;font-weight:700;color:#333;margin-bottom:2px;">${places.length}개 장소</div>
         <div style="font-size:11px;color:#888;margin-bottom:10px;">${info}</div>
+        ${refreshBtn}
       </div>
       <div style="padding:0 8px 16px">
         ${places.map(p => `
@@ -11436,6 +11455,25 @@ async function agcSelectGrid(entry, gb) {
   } catch(e) {
     sidebar.innerHTML = `<div style="padding:12px;font-size:13px;color:#e33;">오류: ${e.message}</div>`;
   }
+}
+
+async function agcRefreshGrid(latC, lngC, zoom, cacheKey) {
+  // ① Firestore 캐시 삭제 → 다음 doLiveSearch에서 풀 검색 수행되도록
+  try {
+    await db.collection('liveSearchCache').doc(cacheKey).delete();
+  } catch(e) { console.warn('[agcRefreshGrid] 캐시 삭제 실패:', e); }
+
+  // ② 관리자 패널 닫고 메인 지도로 복귀
+  closeAdminPanel();
+
+  // ③ 메인 지도를 해당 그리드 중심으로 이동
+  await new Promise(r => setTimeout(r, 300)); // 패널 닫힘 대기
+  if (map) map.setView([latC, lngC], zoom, { animate: false });
+
+  // ④ 홍시야 찾아줘 실행 (A+B+C 풀 검색)
+  await new Promise(r => setTimeout(r, 400)); // 지도 이동 대기
+  showToast('🔄 그리드 갱신 시작...');
+  toggleLiveSearch();
 }
 
 function agcViewPlace(fsId) {
