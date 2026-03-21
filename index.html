@@ -4778,19 +4778,18 @@ async function doLiveSearch() {
         }
       } catch(e) { /* 역지오코딩 실패 시 무시 */ }
 
-      // ── 10개씩 청크로 나눠 순차 실행 (300ms 간격) ────────────────────────────
-      // tasks[]는 아직 실행 안 된 함수 배열. 한 번에 10개만 동시 발사 후 완료 대기.
-      // CHUNK=69는 69개가 동시 발사되어 Kakao burst rate limit(초당 10건 전후) 초과 → 여전히 429.
-      // CHUNK=10 + 300ms 딜레이: zoom15(142개) ≈ 15청크×1.5s ≈ 22s / zoom16(240개) ≈ 24청크×1.5s ≈ 36s
-      // 429 발생 시 _liveSig.aborted=true → 이후 청크 skip, 앞 청크 결과는 유저에게 전달
-      const CHUNK = 10;
-      for (let i = 0; i < tasks.length; i += CHUNK) {
-        if (_liveSig.aborted) break; // 앞 청크에서 429 → 이후 청크 실행 안 함
-        await Promise.allSettled(tasks.slice(i, i + CHUNK).map(fn => fn()));
-        if (i + CHUNK < tasks.length && !_liveSig.aborted) {
-          await new Promise(r => setTimeout(r, 300)); // 청크 간 300ms 대기 — burst 방지
-        }
-      }
+      // ── 태스크마다 시작 시점을 100ms씩 분산 (stagger) ───────────────────────
+      // tasks[]는 아직 실행 안 된 함수 배열.
+      // CHUNK 방식은 N개를 동시에 발사 → burst 발생. stagger는 1개씩 100ms 간격으로 시작.
+      // zoom15(142개): 총 14.2s, 최대 10 req/s — Kakao burst limit 안전권 유지
+      // zoom16(240개): 총 24s, 동일 rate — 429 없이 모든 타일 처리 가능
+      // 429 발생 시 _liveSig.aborted=true → 이후 태스크 skip, 앞 결과는 유저에게 전달
+      const STAGGER_MS = 100;
+      const staggeredTasks = tasks.map((fn, idx) =>
+        new Promise(r => setTimeout(r, idx * STAGGER_MS))
+          .then(() => { if (!_liveSig.aborted) return fn(); })
+      );
+      await Promise.allSettled(staggeredTasks);
     } catch(e) {}
     restDone = true;
     checkAllDone();
