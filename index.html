@@ -1338,6 +1338,29 @@
       padding:2px 7px; box-shadow:0 2px 6px rgba(0,0,0,.15);
       white-space:nowrap;
     }
+
+    /* ── 두근두근 로딩 애니메이션 ── */
+    @keyframes fabHeartbeat {
+      0%   { transform: scale(1);    }
+      30%  { transform: scale(1.13); }
+      50%  { transform: scale(1);    }
+      70%  { transform: scale(1.07); }
+      100% { transform: scale(1);    }
+    }
+    @keyframes labelPulse {
+      0%   { opacity: 1;    }
+      50%  { opacity: 0.4;  }
+      100% { opacity: 1;    }
+    }
+    #feedback-fab.searching #feedback-fab-img {
+      animation: fabHeartbeat 1.1s ease-in-out infinite;
+      border-color: #E04E14;
+    }
+    #feedback-fab.searching #feedback-fab-label {
+      animation: labelPulse 1.1s ease-in-out infinite;
+      color: #E04E14;
+    }
+
     /* ── 홍시 말풍선 ── */
     #hongsi-bubble {
       position:fixed; right:82px;
@@ -4391,10 +4414,12 @@ let _liveAllEnded    = true;  // 모든 REST 호출이 is_end:true로 끝나야 
 let _liveAbortCtrl   = null;  // 현재 검색 세션 AbortController — 429 감지 시 전체 중단용
 
 function _setLiveFabState(loading) {
+  const fab   = document.getElementById('feedback-fab');
   const label = document.getElementById('feedback-fab-label');
   const img   = document.getElementById('feedback-fab-img');
   if (label) label.textContent = loading ? '찾는 중...' : '홍시야 찾아줘!';
-  if (img)   img.style.opacity = loading ? '0.5' : '';
+  if (img)   img.style.opacity = '';           // 애니메이션이 시각 피드백을 대체 — opacity 고정 제거
+  if (fab)   fab.classList.toggle('searching', loading); // 두근두근 애니메이션 on/off
   _liveSearchRunning = loading;
 }
 
