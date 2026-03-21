@@ -3331,46 +3331,59 @@ async function loadViewportPlaces() {
   _loadedTiles.add(areaKey);
 
   try {
-    const snap = await db.collection('places')
-      .where('lat', '>=', latMin)
-      .where('lat', '<=', latMax)
-      .limit(100)
-      .get();
-
     const existingIds = new Set(places.map(p => p.id));
     const newBatch = [];
 
-    snap.docs.forEach(doc => {
-      try {
-        const p = { ...doc.data(), firestoreId: doc.id };
-        if (p.active === false) return;
-        // auto_pipeline_cat 미확인은 제외
-        if (p.source === 'auto_pipeline_cat') {
-          const st = p.petStatus;
-          if (st !== 'confirmed' && st !== 'verified') return;
-        }
-        // 경도 클라이언트 필터
-        if (p.lng == null || p.lng < lngMin || p.lng > lngMax) return;
-        if (existingIds.has(p.id)) {
-          // ★ Fix D: 이미 로드된 장소라도 Firestore에 manuallyEdited 필드가 있으면 필드 병합
-          // 이를 통해 반려견 정책 수동 편집이 세션 간에 유지됨
-          if (p.manuallyEdited === true) {
-            const existing = places.find(x => x.id == p.id);
-            if (existing && !existing.manuallyEdited) {
-              const POLICY_FIELDS = ['large','small','indoor','outdoor','cage','entryFee','stroller','note','hours'];
-              POLICY_FIELDS.forEach(f => { if (p[f] !== undefined) existing[f] = p[f]; });
-              existing.manuallyEdited = true;
-              existing.firestoreId = p.firestoreId; // 최신 firestoreId로 갱신
-            }
+    // ── 페이지네이션으로 최대 500개 로딩 (LIMIT 100 × 5페이지) ────────────────
+    // 기존 LIMIT 100 단일 쿼리는 서울처럼 밀도가 높은 지역에서
+    // 위도 대역 내 처음 100개만 반환 → 뷰포트 안의 장소가 대량 누락되는 버그 수정
+    let lastDoc = null;
+    for (let page = 0; page < 5; page++) {
+      let q = db.collection('places')
+        .where('lat', '>=', latMin)
+        .where('lat', '<=', latMax)
+        .orderBy('lat')
+        .limit(100);
+      if (lastDoc) q = q.startAfter(lastDoc);
+
+      const snap = await q.get();
+      if (snap.empty) break;
+
+      snap.docs.forEach(doc => {
+        try {
+          const p = { ...doc.data(), firestoreId: doc.id };
+          if (p.active === false) return;
+          // auto_pipeline_cat 미확인은 제외
+          if (p.source === 'auto_pipeline_cat') {
+            const st = p.petStatus;
+            if (st !== 'confirmed' && st !== 'verified') return;
           }
-          return;
-        }
-        existingIds.add(p.id);
-        places.push(p);
-        newBatch.push(p);
-        if (typeof p.id === 'number') updateGlobalMaxId(p.id); // ★ Fix H
-      } catch(docErr) { console.warn('[loadViewportPlaces] doc 오류:', docErr); }
-    });
+          // 경도 클라이언트 필터
+          if (p.lng == null || p.lng < lngMin || p.lng > lngMax) return;
+          if (existingIds.has(p.id)) {
+            // ★ Fix D: 이미 로드된 장소라도 Firestore에 manuallyEdited 필드가 있으면 필드 병합
+            // 이를 통해 반려견 정책 수동 편집이 세션 간에 유지됨
+            if (p.manuallyEdited === true) {
+              const existing = places.find(x => x.id == p.id);
+              if (existing && !existing.manuallyEdited) {
+                const POLICY_FIELDS = ['large','small','indoor','outdoor','cage','entryFee','stroller','note','hours'];
+                POLICY_FIELDS.forEach(f => { if (p[f] !== undefined) existing[f] = p[f]; });
+                existing.manuallyEdited = true;
+                existing.firestoreId = p.firestoreId; // 최신 firestoreId로 갱신
+              }
+            }
+            return;
+          }
+          existingIds.add(p.id);
+          places.push(p);
+          newBatch.push(p);
+          if (typeof p.id === 'number') updateGlobalMaxId(p.id); // ★ Fix H
+        } catch(docErr) { console.warn('[loadViewportPlaces] doc 오류:', docErr); }
+      });
+
+      lastDoc = snap.docs[snap.docs.length - 1];
+      if (snap.docs.length < 100) break; // 마지막 페이지 — 더 이상 없음
+    }
 
     if (newBatch.length > 0 && clusterGroup) {
       newBatch.forEach(p => {
@@ -4524,8 +4537,14 @@ async function doLiveSearch() {
   _liveAllEnded    = true;  // 낙관적 초기화 → REST 루프에서 반증 시 false
 
   // ── DB 장소 먼저 로딩 — 뷰포트 내 기등록 장소를 places에 추가 ─────────────
-  // filterPlaces() 호출 전에 필수: places가 비어있으면 기존 DB 마커가 즉시 표시 안 됨
-  // _loadedTiles 캐시로 중복 로딩 방지 (이미 로딩된 뷰포트는 Firestore 재쿼리 없음)
+  // 사용자가 명시적으로 "홍시야 찾아줘"를 실행할 때는 현재 뷰포트 타일 캐시를 초기화
+  // → _loadedTiles가 살아있으면 loadViewportPlaces()가 즉시 return해버려 새 장소가 누락됨
+  {
+    const _b = map.getBounds().pad(0.05);
+    const _ak = [_b.getSouth(), _b.getNorth(), _b.getWest(), _b.getEast()]
+      .map(v => (Math.round(v / 0.05) * 0.05).toFixed(2)).join('|');
+    _loadedTiles.delete(_ak); // 현재 뷰포트만 선택적 무효화 (다른 타일은 유지)
+  }
   await loadViewportPlaces();
 
   // ── 캐시 확인: 동일 뷰포트 15분 내 재검색이면 API 호출 없이 바로 표시 ──────
