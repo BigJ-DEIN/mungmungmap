@@ -8050,6 +8050,8 @@ function openAdminPanel() {
   loadAdminTab('dashboard');
   // 전국 파이프라인 미완료 지역 있으면 재개 배너 표시
   setTimeout(() => nwCheckAutoStart(), 800);
+  // ì ê· ì¥ì í ì ì¡ ìë ì¤ìº (ë¯¸íì¸ ì¥ìë§, ë°±ê·¸ë¼ì´ë)
+  setTimeout(() => _autoScanNewPlaces(), 2000);
 }
 function closeAdminPanel() {
   document.getElementById('admin-panel').style.display = 'none';
@@ -11795,55 +11797,161 @@ function agcViewPlace(fsId) {
 // ══════════════════════════════════════════════════════
 let _ppResults = [];
 
+// ââ í« ì ì± ì¤ìº â ë¤ì´ë² ë¸ë¡ê·¸ íì§ í¬í¼ ââââââââââââââââââââââââââââââââââ
+function _detectBlogLarge(items) {
+  const text = (items||[]).map(i => ((i.title||'') + ' ' + (i.description||'')).replace(/<[^>]+>/g,'')).join(' ').toLowerCase();
+  const posKw = ['ëíê²¬ ê°ë¥','ëíê²¬ ok','ëíê²¬ë ê°ë¥','ëíê²¬ íì©','ëíê²¬íì©','ëíê²¬ìì¥ ê°ë¥','ëíê²¬ë ìì¥'];
+  const negKw = ['ìíê²¬ë§','ìíê²¬ì´í','ìíê²¬ë§ ê°ë¥','ëíê²¬ ë¶ê°','ëíê²¬ë¶ê°','ëíê²¬ìì¥ë¶ê°','ëíê²¬ ìë¨','ëíê²¬ì ì','ëíê²¬ì ë¶'];
+  const pos = posKw.some(k => text.includes(k));
+  const neg = negKw.some(k => text.includes(k));
+  return pos ? true : (neg ? false : null);
+}
+
+function _detectBlogOutdoor(items) {
+  const text = (items||[]).map(i => ((i.title||'') + ' ' + (i.description||'')).replace(/<[^>]+>/g,'')).join(' ').toLowerCase();
+  const kws = ['íë¼ì¤','ì¼ì¸ì','ì¼ì¸ íì´ë¸','ë£¨íí','ì¼ì¸ìë¦¬','ì¼ì¸ ê³µê°','ì¼ì¸ì¢ì'];
+  return kws.some(k => text.includes(k)) ? true : null;
+}
+
+async function _fetchNaverBlogPetInfo(place, clientId, clientSecret) {
+  const PROXY = 'https://mungmungmap-proxy.jaypark.workers.dev/';
+  const headers = { 'X-Naver-Client-Id': clientId, 'X-Naver-Client-Secret': clientSecret };
+  const fields = {};
+
+  // â  ëíê²¬ ì¬ë¶
+  const q1 = encodeURIComponent(`${place.name} ëíê²¬`);
+  try {
+    const r1 = await fetch(`${PROXY}?url=${encodeURIComponent('https://openapi.naver.com/v1/search/blog.json?query='+q1+'&display=10&sort=sim')}`, { headers, signal: AbortSignal.timeout(8000) });
+    if (r1.ok) { const d1 = await r1.json(); const v = _detectBlogLarge(d1.items||[]); if (v !== null) fields.large = v; }
+  } catch(e) {}
+  await new Promise(r => setTimeout(r, 200));
+
+  // â¡ íë¼ì¤ / ì¼ì¸
+  const q2 = encodeURIComponent(`${place.name} íë¼ì¤`);
+  try {
+    const r2 = await fetch(`${PROXY}?url=${encodeURIComponent('https://openapi.naver.com/v1/search/blog.json?query='+q2+'&display=10&sort=sim')}`, { headers, signal: AbortSignal.timeout(8000) });
+    if (r2.ok) { const d2 = await r2.json(); const v = _detectBlogOutdoor(d2.items||[]); if (v !== null) fields.outdoor = v; }
+  } catch(e) {}
+
+  return Object.keys(fields).length ? fields : null;
+}
+
+let _ppMiList = []; // ì¤ìº ìë£ but ì ë³´ ë¯¸ë°ê²¬ ëª©ë¡
+
+// ê´ë¦¬ì ë¡ê·¸ì¸ ì ë¯¸ì¡°ì¬ ì¥ì ìë ì¤ìº (ì¡°ì©í ë°±ê·¸ë¼ì´ë ëª¨ë)
+async function _autoScanNewPlaces() {
+  if (!firebaseReady || !db) return;
+  const clientId     = localStorage.getItem('pp_naver_id')     || '';
+  const clientSecret = localStorage.getItem('pp_naver_secret') || '';
+  if (!clientId || !clientSecret) return; // ì¸ì¦í¤ ìì¼ë©´ í¨ì¤
+
+  // places ë°°ì´ìì policyChecked ìë ì¥ìë§
+  const unchecked = (places || []).filter(p => !p.isClosed && !p.policyChecked);
+  if (!unchecked.length) return;
+
+  console.log(`[AutoScan] ë¯¸ì¡°ì¬ ì¥ì ${unchecked.length}ê° ìë ì¤ìº ìì`);
+  let updated = 0;
+
+  for (const p of unchecked) {
+    try {
+      const blogFields = await _fetchNaverBlogPetInfo(p, clientId, clientSecret);
+      const dgkFields  = null; // ìë ëª¨ëë ë¸ë¡ê·¸ ì ì©
+      const merged     = _mergePetFields(p, dgkFields, blogFields);
+
+      const updateData = { policyChecked: Date.now() };
+      if (merged) Object.assign(updateData, merged);
+
+      await db.collection('places').doc(p.firestoreId || p.fsId).update(updateData);
+      if (merged) {
+        Object.assign(p, updateData); // ë¡ì»¬ ë°ì
+        updated++;
+      } else {
+        p.policyChecked = updateData.policyChecked;
+      }
+      await new Promise(r => setTimeout(r, 450)); // ë ì´í¸ ë¦¬ë°
+    } catch(e) { console.warn('[AutoScan]', p.name, e.message); }
+  }
+
+  if (updated > 0) {
+    showToast(`ð¾ ìë ì¤ìº ìë£ â ${updated}ê° ì¥ì ì ë³´ ë³´ê°`);
+    invalidatePlacesCache?.();
+  }
+  console.log(`[AutoScan] ìë£. ìë°ì´í¸: ${updated}ê°`);
+}
+
 function renderAdminPetPolicy() {
   const content = document.getElementById('admin-content');
   content.innerHTML = `
     <div style="padding:4px 0 16px">
       <div style="font-size:14px;color:#555;margin-bottom:16px;line-height:1.7">
-        등록된 장소의 <b>대형견 가능</b> · <b>실내 가능</b> · <b>테라스 유무</b> 정보를<br>
-        외부 데이터 소스에서 자동으로 찾아 보강합니다.
+        ë±ë¡ë ì¥ìì <b>ëíê²¬ ê°ë¥</b> Â· <b>ì¤ë´ ê°ë¥</b> Â· <b>íë¼ì¤ ì ë¬´</b> ì ë³´ë¥¼<br>
+        ì¸ë¶ ë°ì´í° ìì¤ìì ìëì¼ë¡ ì°¾ì ë³´ê°í©ëë¤.
       </div>
 
-      <!-- 소스 설정 -->
+      <!-- ìì¤ ì¤ì  -->
       <div style="background:#F8FAFF;border-radius:12px;padding:14px 16px;margin-bottom:14px;border:1px solid #DBEAFE">
-        <div style="font-size:13px;font-weight:700;color:#1E3A8A;margin-bottom:12px">📡 데이터 소스 설정</div>
+        <div style="font-size:13px;font-weight:700;color:#1E3A8A;margin-bottom:12px">ð¡ ë°ì´í° ìì¤ ì¤ì </div>
 
         <div style="margin-bottom:14px">
           <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-bottom:6px">
             <input type="checkbox" id="src-datagokr" checked style="width:15px;height:15px;accent-color:#E04E14">
-            <span style="font-size:13px;font-weight:700">① 한국관광공사 반려동물 동반 관광정보 API</span>
+            <span style="font-size:13px;font-weight:700">â  íêµ­ê´ê´ê³µì¬ ë°ë ¤ëë¬¼ ëë° ê´ê´ì ë³´ API</span>
           </label>
           <div style="margin-left:23px">
-            <input type="text" id="datagokr-key" placeholder="공공데이터포털 서비스키 (디코딩된 원문키)"
+            <input type="text" id="datagokr-key" placeholder="ê³µê³µë°ì´í°í¬í¸ ìë¹ì¤í¤ (ëì½ë©ë ìë¬¸í¤)"
               style="width:100%;padding:8px 10px;border:1px solid #DDD;border-radius:8px;font-size:12px;font-family:inherit;box-sizing:border-box;margin-bottom:4px">
             <div style="font-size:10px;color:#999">
-              data.go.kr → <b>한국관광공사_반려동물 동반 가능 관광정보 서비스</b> 활용신청 → 일반 인증키(디코딩)
+              data.go.kr â <b>íêµ­ê´ê´ê³µì¬_ë°ë ¤ëë¬¼ ëë° ê°ë¥ ê´ê´ì ë³´ ìë¹ì¤</b> íì©ì ì²­ â ì¼ë° ì¸ì¦í¤(ëì½ë©)
             </div>
           </div>
         </div>
 
-        <div>
+        <div style="margin-bottom:14px">
           <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-bottom:4px">
             <input type="checkbox" id="src-naver" checked style="width:15px;height:15px;accent-color:#E04E14">
-            <span style="font-size:13px;font-weight:700">② 네이버 플레이스 태그 (비공식 API)</span>
+            <span style="font-size:13px;font-weight:700">â¡ ë¤ì´ë² íë ì´ì¤ íê·¸ (ë¹ê³µì API)</span>
           </label>
-          <div style="font-size:10px;color:#999;margin-left:23px">별도 인증키 불필요 · 프록시 경유 · <b style="color:#15803D">네이버 우선</b> — data.go.kr은 네이버에서 못 찾은 필드만 보강</div>
+          <div style="font-size:10px;color:#999;margin-left:23px">ë³ë ì¸ì¦í¤ ë¶íì Â· íë¡ì ê²½ì  Â· data.go.krìì ëª» ì°¾ì íëë¥¼ ë³´ì</div>
+        </div>
+
+        <div>
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-bottom:6px">
+            <input type="checkbox" id="src-naver-blog" checked style="width:15px;height:15px;accent-color:#E04E14">
+            <span style="font-size:13px;font-weight:700">â¢ ë¤ì´ë² ë¸ë¡ê·¸ ê²ì API</span>
+          </label>
+          <div style="margin-left:23px">
+            <div style="display:flex;gap:8px;margin-bottom:4px">
+              <input type="text" id="naver-blog-id" placeholder="Client ID"
+                style="flex:1;padding:7px 10px;border:1px solid #DDD;border-radius:8px;font-size:12px;font-family:inherit;box-sizing:border-box-sizing:border-box"
+                oninput="localStorage.setItem('pp_naver_id',this.value)">
+              <input type="text" id="naver-blog-secret" placeholder="Client Secret"
+                style="flex:1;padding:7px 10px;border:1px solid #DDD;border-radius:8px;font-size:12px;font-family:inherit;box-sizing:border-box"
+                oninput="localStorage.setItem('pp_naver_secret',this.value)">
+            </div>
+            <div style="font-size:10px;color:#999">
+              developers.naver.com â ì íë¦¬ì¼ì´ì ë±ë¡ â ê²ì API ì¬ì© ì¤ì  â Client ID / Secret
+            </div>
+          </div>
         </div>
       </div>
 
-      <!-- 필터 + 실행 버튼 -->
+      <!-- íí° + ì¤í ë²í¼ -->
       <div style="display:flex;gap:14px;margin-bottom:14px;align-items:center;flex-wrap:wrap">
         <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer">
           <input type="checkbox" id="filter-missing" checked style="accent-color:#E04E14">
-          미입력(null) 항목만 대상
+          ë¯¸ìë ¥(null) í­ëª©ë§ ëì
         </label>
         <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer">
           <input type="checkbox" id="filter-active" checked style="accent-color:#E04E14">
-          운영중 장소만
+          ì´ìì¤ ì¥ìë§
+        </label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer">
+          <input type="checkbox" id="filter-recheck" style="accent-color:#5B6CB8">
+          ê¸°ì¡´ ì¥ì ì¬íì¸íê¸°
         </label>
         <button onclick="runPetPolicyScan()"
           style="margin-left:auto;padding:9px 24px;background:#E04E14;color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">
-          🔍 스캔 시작
+          ð ì¤ìº ìì
         </button>
       </div>
 
@@ -11851,25 +11959,39 @@ function renderAdminPetPolicy() {
       <div id="pp-results"></div>
     </div>
   `;
+  // localStorageìì ì ì¥ë Naver í¤ ë³µì
+  const savedId     = localStorage.getItem('pp_naver_id')     || '';
+  const savedSecret = localStorage.getItem('pp_naver_secret') || '';
+  if (savedId)     { const el = document.getElementById('naver-blog-id');     if (el) el.value = savedId; }
+  if (savedSecret) { const el = document.getElementById('naver-blog-secret'); if (el) el.value = savedSecret; }
 }
 
 async function runPetPolicyScan() {
-  if (!firebaseReady || !db) { showToast('Firebase 연결 필요'); return; }
+  if (!firebaseReady || !db) { showToast('Firebase ì°ê²° íì'); return; }
 
   const useDGK        = document.getElementById('src-datagokr')?.checked;
   const useNaver      = document.getElementById('src-naver')?.checked;
+  const useNaverBlog  = document.getElementById('src-naver-blog')?.checked;
   const dgkKey        = (document.getElementById('datagokr-key')?.value || '').trim();
+  const nbClientId    = (document.getElementById('naver-blog-id')?.value || '').trim();
+  const nbClientSec   = (document.getElementById('naver-blog-secret')?.value || '').trim();
   const filterMissing = document.getElementById('filter-missing')?.checked;
   const filterActive  = document.getElementById('filter-active')?.checked;
+  const recheck       = document.getElementById('filter-recheck')?.checked;
 
-  if (useDGK && !dgkKey) { showToast('data.go.kr 서비스키를 입력해주세요'); return; }
-  if (!useDGK && !useNaver) { showToast('데이터 소스를 하나 이상 선택해주세요'); return; }
+  if (useDGK && !dgkKey) { showToast('data.go.kr ìë¹ì¤í¤ë¥¼ ìë ¥í´ì£¼ì¸ì'); return; }
+  if (useNaverBlog && (!nbClientId || !nbClientSec)) { showToast('ë¤ì´ë² ë¸ë¡ê·¸ API Client ID/Secretì ìë ¥í´ì£¼ì¸ì'); return; }
+  if (!useDGK && !useNaver && !useNaverBlog) { showToast('ë°ì´í° ìì¤ë¥¼ íë ì´ì ì íí´ì£¼ì¸ì'); return; }
+
+  // localStorage ì ì¥
+  if (nbClientId)  localStorage.setItem('pp_naver_id',     nbClientId);
+  if (nbClientSec) localStorage.setItem('pp_naver_secret', nbClientSec);
 
   const logEl = document.getElementById('pp-log');
   const resEl = document.getElementById('pp-results');
   logEl.style.display = 'block';
   logEl.textContent = '';
-  resEl.innerHTML = `<div style="text-align:center;padding:20px;color:#999;font-size:13px">⏳ 장소 로딩 중...</div>`;
+  resEl.innerHTML = `<div style="text-align:center;padding:20px;color:#999;font-size:13px">â³ ì¥ì ë¡ë© ì¤...</div>`;
 
   function log(msg) { logEl.textContent += msg + '\n'; logEl.scrollTop = logEl.scrollHeight; }
 
@@ -11877,55 +11999,68 @@ async function runPetPolicyScan() {
     const snap = await db.collection('places').get();
     let targets = snap.docs.map(d => ({ fsId: d.id, ...d.data() }));
     if (filterActive)  targets = targets.filter(p => !p.isClosed);
+    // ì¬íì¸ ì²´í¬ ì ëì¼ë©´ ì´ë¯¸ ì¡°ì¬ë ì¥ì ê±´ëë
+    if (!recheck) targets = targets.filter(p => !p.policyChecked);
     if (filterMissing) targets = targets.filter(p =>
       p.large === null || p.large === undefined ||
       p.indoor === null || p.indoor === undefined ||
       p.outdoor === null || p.outdoor === undefined
     );
 
-    log(`총 ${targets.length}개 장소 대상 스캔 시작`);
+    log(`ì´ ${targets.length}ê° ì¥ì ëì ì¤ìº ìì${recheck ? ' (ì¬íì¸ í¬í¨)' : ' (ì ê·ë§)'}`);
     _ppResults = [];
+    _ppMiList  = [];
 
     for (let i = 0; i < targets.length; i++) {
       const p = targets[i];
       log(`[${i+1}/${targets.length}] ${p.name}...`);
 
-      let dgkFields = null;
+      let dgkFields   = null;
       let naverFields = null;
+      let blogFields  = null;
 
-      // ① data.go.kr 관광정보 API
+      // â  data.go.kr ê´ê´ì ë³´ API
       if (useDGK && dgkKey && p.lat && p.lng) {
         dgkFields = await _fetchDGKPetInfo(p, dgkKey).catch(() => null);
-        if (dgkFields) log(`  📍 data.go.kr 매칭: ${JSON.stringify(dgkFields)}`);
+        if (dgkFields) log(`  ð data.go.kr ë§¤ì¹­: ${JSON.stringify(dgkFields)}`);
       }
 
-      // ② 네이버 플레이스 태그
+      // â¡ ë¤ì´ë² íë ì´ì¤ íê·¸
       if (useNaver) {
-        const naverResult = await _fetchNaverPetTags(p).catch(e => ({ fields: null, reason: e.message }));
-        naverFields = (naverResult && typeof naverResult === 'object' && naverResult.fields) ? naverResult.fields : null;
-        if (naverFields && Object.keys(naverFields).length) {
-          log(`  🟢 네이버 매칭: ${JSON.stringify(naverFields)}`);
-        } else {
-          const reason = (naverResult && naverResult.reason) || '태그 없음 또는 프록시 차단';
-          log(`  ⚠️ 네이버 없음: ${reason}`);
-          naverFields = null;
-        }
-        await new Promise(r => setTimeout(r, 400)); // 네이버 rate limit
+        naverFields = await _fetchNaverPetTags(p).catch(() => null);
+        if (naverFields) log(`  ð¢ ë¤ì´ë² íë ì´ì¤ ë§¤ì¹­: ${JSON.stringify(naverFields)}`);
+        await new Promise(r => setTimeout(r, 400));
       }
 
-      const mergeResult = _mergePetFields(p, dgkFields, naverFields);
-      if (mergeResult) {
-        _ppResults.push({ place: p, merged: mergeResult.fields, confidence: mergeResult.confidence, srcDGK: !!dgkFields, srcNaver: !!naverFields });
-        log(`  ✅ 새 정보: ${JSON.stringify(mergeResult.fields)} (신뢰도: ${JSON.stringify(mergeResult.confidence)})`);
+      // â¢ ë¤ì´ë² ë¸ë¡ê·¸ ê²ì API
+      if (useNaverBlog) {
+        blogFields = await _fetchNaverBlogPetInfo(p, nbClientId, nbClientSec).catch(() => null);
+        if (blogFields) log(`  ð ë¸ë¡ê·¸ ê²ì ë§¤ì¹­: ${JSON.stringify(blogFields)}`);
+      }
+
+      const merged = _mergePetFields(p, dgkFields || naverFields, blogFields);
+      const checkedAt = Date.now();
+
+      if (merged && Object.keys(merged).length > 0) {
+        _ppResults.push({ place: p, merged, checkedAt, srcDGK: !!dgkFields, srcNaver: !!naverFields, srcBlog: !!blogFields });
+        log(`  â ì ì ë³´: ${JSON.stringify(merged)}`);
+      } else {
+        // ì¡°ì¬ë íì§ë§ ì ë³´ ìì â policyChecked ê¸°ë¡ + ë¯¸íì¸ ëª©ë¡
+        try {
+          await db.collection('places').doc(p.fsId).update({ policyChecked: checkedAt });
+          p.policyChecked = checkedAt;
+        } catch(e) { /* ë¬´ì */ }
+        _ppMiList.push(p);
+        log(`  â¹ï¸ ì ë³´ ìì (ë¯¸íì¸ ì²ë¦¬)`);
       }
     }
 
-    log(`\n완료 — ${_ppResults.length}개 장소에서 새 정보 발견`);
+    log(`\nìë£ â ë°ê²¬: ${_ppResults.length}ê° / ë¯¸íì¸: ${_ppMiList.length}ê°`);
     _renderPpResults(resEl);
 
   } catch(e) {
-    log('❌ 오류: ' + e.message);
-    resEl.innerHTML = `<div style="color:#e33;font-size:13px;padding:8px">오류: ${e.message}</div>`;
+    log('â ì¤ë¥: ' + e.message);
+    resEl.innerHTML = `<div style="color:#e33;font-size:13px;padding:8px">ì¤ë¥: ${e.message}</div>`;
   }
 }
 
@@ -12109,19 +12244,14 @@ function _mergePetFields(place, dgkFields, naverFields) {
 }
 
 function _renderPpResults(resEl) {
-  if (!_ppResults.length) {
-    resEl.innerHTML = `<div style="text-align:center;padding:24px;color:#999;font-size:13px">새로 발견된 정보가 없어요</div>`;
-    return;
-  }
+  const FIELD_LABEL = { large: 'ëíê²¬', indoor: 'ì¤ë´', outdoor: 'íë¼ì¤', small: 'ìíê²¬' };
 
-  const FIELD_LABEL = { large: '대형견', indoor: '실내', outdoor: '테라스', small: '소형견' };
-
-  resEl.innerHTML = `
+  const foundHtml = _ppResults.length ? `
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-      <span style="font-size:14px;font-weight:700;color:#333">${_ppResults.length}개 장소에서 새 정보 발견</span>
+      <span style="font-size:14px;font-weight:700;color:#333">${_ppResults.length}ê° ì¥ììì ì ì ë³´ ë°ê²¬</span>
       <button onclick="ppApplyAll()"
         style="padding:8px 20px;background:#E04E14;color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">
-        전체 일괄 적용
+        ì ì²´ ì¼ê´ ì ì©
       </button>
     </div>
     <div id="pp-result-list">
@@ -12130,40 +12260,55 @@ function _renderPpResults(resEl) {
           <div style="display:flex;align-items:center;gap:8px;margin-bottom:7px;flex-wrap:wrap">
             <span style="font-size:13px;font-weight:700;color:#111">${r.place.name}</span>
             <span style="font-size:11px;color:#888">${r.place.area||''}</span>
-            ${r.srcDGK ? `<span style="font-size:10px;padding:2px 7px;border-radius:5px;background:#EFF6FF;color:#1D4ED8;font-weight:700">data.go.kr</span>` : ''}
-            ${r.srcNaver ? `<span style="font-size:10px;padding:2px 7px;border-radius:5px;background:#F0FDF4;color:#15803D;font-weight:700">네이버</span>` : ''}
+            ${r.srcDGK    ? `<span style="font-size:10px;padding:2px 7px;border-radius:5px;background:#EFF6FF;color:#1D4ED8;font-weight:700">data.go.kr</span>` : ''}
+            ${r.srcNaver  ? `<span style="font-size:10px;padding:2px 7px;border-radius:5px;background:#F0FDF4;color:#15803D;font-weight:700">ë¤ì´ë²</span>` : ''}
+            ${r.srcBlog   ? `<span style="font-size:10px;padding:2px 7px;border-radius:5px;background:#FFF7ED;color:#C2410C;font-weight:700">ë¸ë¡ê·¸</span>` : ''}
           </div>
           <div style="display:flex;gap:7px;flex-wrap:wrap;margin-bottom:9px">
-            ${Object.entries(r.merged).map(([k, v]) => {
-              const conf = r.confidence ? r.confidence[k] : 'naver';
-              const confBadge = conf === 'naver'
-                ? `<span title="네이버 플레이스 출처" style="font-size:10px;margin-left:3px">🟢</span>`
-                : `<span title="data.go.kr 보강" style="font-size:10px;margin-left:3px">🔵</span>`;
-              return `
+            ${Object.entries(r.merged).map(([k, v]) => `
               <span style="font-size:12px;padding:3px 11px;border-radius:20px;font-weight:700;
-                background:${v ? '#ECFDF5' : '#FFF1F2'};color:${v ? '#065F46' : '#9F1239'};
-                border:1.5px solid ${conf === 'confirmed' ? (v ? '#6EE7B7' : '#FECDD3') : '#E5E7EB'}">
-                ${FIELD_LABEL[k] || k} ${v ? '✅ 가능' : '❌ 불가'}${confBadge}
-              </span>`;
-            }).join('')}
+                background:${v ? '#ECFDF5' : '#FFF1F2'};color:${v ? '#065F46' : '#9F1239'}">
+                ${FIELD_LABEL[k] || k} ${v ? 'â ê°ë¥' : 'â ë¶ê°'}
+              </span>
+            `).join('')}
           </div>
           <button onclick="ppApplyOne(${i})"
             style="padding:5px 15px;background:#1E3A8A;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">
-            이 장소 적용
+            ì´ ì¥ì ì ì©
           </button>
         </div>
       `).join('')}
     </div>
-  `;
+  ` : `<div style="text-align:center;padding:24px;color:#999;font-size:13px">ìë¡ ë°ê²¬ë ì ë³´ê° ìì´ì</div>`;
+
+  const miHtml = _ppMiList && _ppMiList.length ? `
+    <div style="margin-top:20px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+        <span style="font-size:13px;font-weight:700;color:#666">ð ë¯¸íì¸ â ${_ppMiList.length}ê° (ì¡°ì¬íì¼ë ì ë³´ ìì)</span>
+      </div>
+      <div style="background:#FAFAFA;border-radius:10px;padding:10px 12px;border:1px solid #E5E7EB">
+        ${_ppMiList.map(p => `
+          <div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid #F0F0F0">
+            <span style="font-size:12px;color:#555;font-weight:600">${p.name}</span>
+            <span style="font-size:11px;color:#AAA">${p.area||''}</span>
+            <span style="font-size:10px;padding:1px 6px;border-radius:4px;background:#F3F4F6;color:#9CA3AF;font-weight:700;margin-left:auto">ë¯¸íì¸</span>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  ` : '';
+
+  resEl.innerHTML = foundHtml + miHtml;
 }
 
 async function ppApplyOne(idx) {
   const r = _ppResults[idx];
   if (!r) return;
   try {
-    await db.collection('places').doc(r.place.fsId).update(r.merged);
+    const updateData = { ...r.merged, policyChecked: r.checkedAt || Date.now() };
+    await db.collection('places').doc(r.place.fsId).update(updateData);
     const local = places.find(p => p.id === r.place.id);
-    if (local) Object.assign(local, r.merged);
+    if (local) Object.assign(local, updateData);
     invalidatePlacesCache();
     const el = document.getElementById(`pp-item-${idx}`);
     if (el) el.style.cssText = 'background:#F0FFF4;border-radius:12px;padding:12px 14px;margin-bottom:8px;border:1.5px solid #A7F3D0;opacity:0.6';
