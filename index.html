@@ -4448,6 +4448,7 @@ function initKakaoSearch() {
 let _liveSearchRunning = false;
 let _sessionQuotaHit = false; // REST 429 감지 시 true → 캐시 저장 금지
 let _liveAllEnded    = true;  // 모든 REST 호출이 is_end:true로 끝나야 true
+let _liveAbortCtrl   = null;  // 현재 검색 세션 AbortController — 중복 검색 시 이전 검색 즉시 중단
 
 function _setLiveFabState(loading) {
   const label = document.getElementById('feedback-fab-label');
@@ -4517,6 +4518,11 @@ async function doLiveSearch() {
   _sessionQuotaHit = false; // 새 검색마다 초기화
   _liveAllEnded    = true;  // 낙관적 초기화 → REST 루프에서 반증 시 false
 
+  // ── 이전 검색이 아직 실행 중이면 즉시 중단 후 새 검색 시작 ─────────────────
+  if (_liveAbortCtrl) { try { _liveAbortCtrl.abort(); } catch(_) {} }
+  _liveAbortCtrl = new AbortController();
+  const _liveSig = _liveAbortCtrl.signal;
+
   // ── 뷰포트 DB 장소 로드를 캐시 확인과 병렬 시작 ───────────────────────────
   // force=true: 홍시야 찾아줘 호출마다 최신 DB 반영 (_loadedTiles 캐시 무시)
   // cleanup이 장소를 추가/삭제했을 수 있으므로 항상 새로 조회
@@ -4559,6 +4565,10 @@ async function doLiveSearch() {
       return;
     }
   }
+
+  // ── 풀 검색 시작 전 DB 장소 즉시 표시 ────────────────────────────────────
+  // A+B+C 검색이 끝나기 전에도 기존 DB 장소는 마커로 바로 보여야 함
+  filterPlaces();
 
   const bounds = map.getBounds();
   const N = bounds.getNorth(), S = bounds.getSouth();
@@ -4643,7 +4653,7 @@ async function doLiveSearch() {
   // B) 키워드 검색: SDK keywordSearch가 시설 태그 기반 장소를 못 잡을 경우 보완
   ;(async () => {
     try {
-      const tasks = [];
+      const tasks = []; // ← 함수만 저장 (push 즉시 실행 안 함) — 아래 stagger로 순차 발사
 
       for (const pt of gridPoints) {
         const locQ = `x=${pt.lng}&y=${pt.lat}&radius=${Math.round(cellRadiusM)}&size=15`;
@@ -4652,16 +4662,17 @@ async function doLiveSearch() {
         // page 최대 45 = Kakao API 허용 최대치 / 성수동같은 고밀도 지역 누락 방지
         // is_end:true 감지 시 자동 조기 종료 → 실제 요청 수는 밀도에 비례
         for (const code of catCodes) {
-          tasks.push((async () => {
+          tasks.push(async () => {   // ← 함수만 저장, 아직 실행 안 함
             for (let page = 1; page <= 45; page++) {
+              if (_liveSig.aborted) break;
               try {
                 const resp = await fetch(
                   `https://dapi.kakao.com/v2/local/search/category.json` +
                   `?category_group_code=${code}&${locQ}&page=${page}`,
                   { headers: { 'Authorization': `KakaoAK ${KAKAO_REST_KEY}` },
-                    signal: AbortSignal.timeout(6000) }
+                    signal: _liveSig }
                 );
-                if (resp.status === 429) { _sessionQuotaHit = true; break; } // 쿼터 초과 → 캐시 저장 금지
+                if (resp.status === 429) { _sessionQuotaHit = true; _liveAbortCtrl.abort(); break; }
                 if (!resp.ok) break;
                 const json = await resp.json();
                 if (json.documents?.length) {
@@ -4672,23 +4683,24 @@ async function doLiveSearch() {
                 if (page === 45) _liveAllEnded = false; // 45p에서도 is_end:false → 미완료
               } catch(e) { break; }
             }
-          })());
+          });
         }
 
         // B) REST 키워드 검색 (반려동물 시설 태그) — is_end 까지 완전 수집
         // 태그 없는 로컬 장소(콩카세 등)를 잡으려면 넓은 키워드 필요 — 좁히지 말 것
         const restKeywords = ['반려견동반', '애견동반', '반려동물동반', '반려견 카페', '애견카페', '펫카페', '강아지카페', '도그카페', '반려견 식당', '반려동물 동반'];
         for (const kw of restKeywords) {
-          tasks.push((async () => {
+          tasks.push(async () => {   // ← 함수만 저장
             for (let page = 1; page <= 3; page++) {
+              if (_liveSig.aborted) break;
               try {
                 const resp = await fetch(
                   `https://dapi.kakao.com/v2/local/search/keyword.json` +
                   `?query=${encodeURIComponent(kw)}&${locQ}&page=${page}`,
                   { headers: { 'Authorization': `KakaoAK ${KAKAO_REST_KEY}` },
-                    signal: AbortSignal.timeout(6000) }
+                    signal: _liveSig }
                 );
-                if (resp.status === 429) { _sessionQuotaHit = true; break; } // 쿼터 초과
+                if (resp.status === 429) { _sessionQuotaHit = true; _liveAbortCtrl.abort(); break; }
                 if (!resp.ok) break;
                 const json = await resp.json();
                 if (json.documents?.length) {
@@ -4699,7 +4711,7 @@ async function doLiveSearch() {
                 if (json.meta?.is_end !== false) break;
               } catch(e) { break; }
             }
-          })());
+          });
         }
       }
 
@@ -4711,7 +4723,7 @@ async function doLiveSearch() {
         const rgResp = await fetch(
           `https://dapi.kakao.com/v2/local/geo/coord2regioncode.json?x=${ctr.lng}&y=${ctr.lat}`,
           { headers: { 'Authorization': `KakaoAK ${KAKAO_REST_KEY}` },
-            signal: AbortSignal.timeout(5000) }
+            signal: _liveSig }
         );
         if (rgResp.ok) {
           const rgJson = await rgResp.json();
@@ -4729,17 +4741,18 @@ async function doLiveSearch() {
           for (const area of searchAreas) {
             for (const suffix of petKwSuffixes) {
               const kw = area + suffix;
-              tasks.push((async () => {
+              tasks.push(async () => {   // ← 함수만 저장
                 for (let page = 1; page <= 3; page++) {
+                  if (_liveSig.aborted) break;
                   try {
                     // 위치 반경 바운딩: 현재 뷰포트 중심 기준 → 지금 화면의 로컬 장소 우선
                     const resp = await fetch(
                       `https://dapi.kakao.com/v2/local/search/keyword.json` +
                       `?query=${encodeURIComponent(kw)}&${rgLocQ}&size=15&page=${page}`,
                       { headers: { 'Authorization': `KakaoAK ${KAKAO_REST_KEY}` },
-                        signal: AbortSignal.timeout(6000) }
+                        signal: _liveSig }
                     );
-                    if (resp.status === 429) { _sessionQuotaHit = true; break; } // 쿼터 초과
+                    if (resp.status === 429) { _sessionQuotaHit = true; _liveAbortCtrl.abort(); break; }
                     if (!resp.ok) break;
                     const json = await resp.json();
                     if (json.documents?.length) {
@@ -4751,13 +4764,23 @@ async function doLiveSearch() {
                     if (json.meta?.is_end !== false) break;
                   } catch(e) { break; }
                 }
-              })());
+              });
             }
           }
         }
       } catch(e) { /* 역지오코딩 실패 시 무시 */ }
 
-      await Promise.allSettled(tasks);
+      // ── 태스크마다 시작 시점을 100ms씩 분산 (stagger) ───────────────────────
+      // tasks[]는 아직 실행 안 된 함수 배열.
+      // 모든 태스크를 동시에 발사하면 카카오 burst rate limit(429) 유발
+      // 100ms 간격으로 순차 시작 → 초당 최대 10 req/s 유지
+      // 429 발생 시 _liveAbortCtrl.abort() → 이후 태스크 skip, 앞 결과는 유저에게 전달
+      const STAGGER_MS = 100;
+      const staggeredTasks = tasks.map((fn, idx) =>
+        new Promise(r => setTimeout(r, idx * STAGGER_MS))
+          .then(() => { if (!_liveSig.aborted) return fn(); })
+      );
+      await Promise.allSettled(staggeredTasks);
     } catch(e) {}
     restDone = true;
     checkAllDone();
@@ -5213,8 +5236,8 @@ async function cleanupInvalidLivePlaces() {
                 .catch(e => console.warn('cleanup 교정 실패:', p.name, e));
             }
             corrected++;
-            // ★ 현재 열린 드로어가 이 장소인 경우 → 드로어 콘텐츠 즉시 갱신
-            if (activePlace?.id === p.id) openPlace(p);
+            // ★ 현재 열린 드로어가 이 장소인 경우 → 드로어 콘텐츠 즉시 갱신 (조회 로그 제외)
+            if (activePlace?.id === p.id) openPlace(p, { skipLog: true });
           }
         }
       } catch(e) {
@@ -6158,7 +6181,7 @@ function selectPlace(p) {
 // ══════════════════════════════════════════════════════
 //  OPEN PLACE + DRAWER
 // ══════════════════════════════════════════════════════
-function openPlace(p) {
+function openPlace(p, { skipLog = false } = {}) {
   if (!p) return;
   // 드로어 열기 전 선택 상태 강제 갱신 (이미 선택됐어도 다시 적용)
   if (activePlace && activePlace.id !== p.id) setMarkerActive(activePlace.id, false);
@@ -6169,8 +6192,8 @@ function openPlace(p) {
     map.setView([p.lat, p.lng], map.getZoom(), { animate: true, duration: 0.5 });
   }
 
-  // Log view
-  if (firebaseReady && currentUser) {
+  // Log view — skipLog=true 시 생략 (cleanup 내 드로어 갱신 등 내부 호출)
+  if (!skipLog && firebaseReady && currentUser) {
     db.collection('placeViews').add({
       userId: currentUser.uid,
       userEmail: currentUser.email,
@@ -6361,6 +6384,37 @@ function closeDrawer() {
       // ↑ 위로 스와이프: 접힌 상태면 펼치기
       if (!_drawerExpanded) toggleDrawerExpand();
     }
+  }, { passive: true });
+})();
+
+// ── 추억 패널 스와이프 닫기 ────────────────────────────────────────────────
+(function _initMemPanelSwipe() {
+  const _mp = document.getElementById('memories-panel');
+  if (!_mp) return;
+  // 스크롤 가능한 피드 영역 (내부 스크롤과 스와이프 제스처 구분)
+  const _feed = document.getElementById('mem-feed');
+  let _swipeStartY = 0, _swipeActive = false;
+
+  _mp.addEventListener('touchstart', e => {
+    _swipeStartY = e.touches[0].clientY;
+    _swipeActive = true;
+  }, { passive: true });
+
+  _mp.addEventListener('touchmove', e => {
+    if (!_swipeActive) return;
+    const dy = e.touches[0].clientY - _swipeStartY;
+    // 피드 내부가 스크롤 상단이 아닌 상태에서 아래로 끌면 → 스크롤 우선
+    if (dy > 0 && _feed && _feed.scrollTop > 0) { _swipeActive = false; return; }
+    // 방향 확정 시 기본 스크롤 차단 (패널 자체 이동 유도)
+    if (Math.abs(dy) > 8) e.preventDefault();
+  }, { passive: false });
+
+  _mp.addEventListener('touchend', e => {
+    if (!_swipeActive) return;
+    _swipeActive = false;
+    const dy = e.changedTouches[0].clientY - _swipeStartY;
+    // ↓ 60px 이상 아래로 스와이프 → 패널 닫기 (지도 탭으로)
+    if (dy > 60) setMobileTab('map');
   }, { passive: true });
 })();
 
@@ -11570,11 +11624,12 @@ async function renderAdminGridCache() {
       const lngC = parseInt(parts[1]) / 100;
       const zoom = parseInt(parts[2]);
       if (isNaN(latC) || isNaN(lngC) || isNaN(zoom)) return;
-      const age       = now - (d.ts?.toMillis?.() || 0);
-      const remaining = Math.ceil((TTL - age) / (24 * 60 * 60 * 1000));
-      const isExpired = age >= TTL;
+      const ts        = d.completedAt?.toMillis?.() || d.ts?.toMillis?.() || 0;
+      const age       = now - ts;
+      const remaining = ts ? Math.ceil((TTL - age) / (24 * 60 * 60 * 1000)) : 0;
+      const isExpired = !ts || age >= TTL;
       const isOldVer  = (d.v || 1) < _GRID_CACHE_VERSION;
-      entries.push({ key, latC, lngC, zoom, count: d.count || 0, remaining, isExpired, isOldVer });
+      entries.push({ key, latC, lngC, zoom, count: d.resultCount || d.count || 0, remaining, isExpired, isOldVer });
     });
 
     entries.forEach(entry => {
@@ -11646,8 +11701,26 @@ async function agcSelectGrid(entry, gb) {
 
     const backBtn = `<button onclick="renderAdminGridCache()" style="background:none;border:none;color:#E04E14;font-size:13px;cursor:pointer;padding:0 0 8px;font-weight:700;display:block;font-family:inherit">← 뒤로</button>`;
 
+    const refreshBtn = `
+      <button onclick="agcRefreshGrid(${entry.latC}, ${entry.lngC}, ${entry.zoom}, '${entry.key}')"
+        style="width:100%;padding:9px;background:#1E3A8A;color:#fff;border:none;border-radius:10px;
+               font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;margin-bottom:12px;
+               display:flex;align-items:center;justify-content:center;gap:6px;">
+        🔄 이 그리드 재검색
+      </button>`;
+
     if (!places.length) {
-      sidebar.innerHTML = `<div style="padding:12px">${backBtn}<div style="font-size:12px;color:#999;">이 범위에 등록된 장소가 없어요<br><span style="font-size:10px">${info}</span></div></div>`;
+      const emptyRefreshBtn = `
+        <button onclick="agcRefreshGrid(${entry.latC}, ${entry.lngC}, ${entry.zoom}, '${entry.key}')"
+          style="width:100%;padding:9px;background:#1E3A8A;color:#fff;border:none;border-radius:10px;
+                 font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;margin-top:10px;
+                 display:flex;align-items:center;justify-content:center;gap:6px;">
+          🔄 이 그리드 재검색
+        </button>`;
+      sidebar.innerHTML = `<div style="padding:12px">${backBtn}
+        <div style="font-size:12px;color:#999;">이 범위에 등록된 장소가 없어요<br><span style="font-size:10px">${info}</span></div>
+        ${emptyRefreshBtn}
+      </div>`;
       return;
     }
 
@@ -11655,6 +11728,7 @@ async function agcSelectGrid(entry, gb) {
       <div style="padding:12px 12px 0">${backBtn}
         <div style="font-size:13px;font-weight:700;color:#333;margin-bottom:2px;">${places.length}개 장소</div>
         <div style="font-size:11px;color:#888;margin-bottom:10px;">${info}</div>
+        ${refreshBtn}
       </div>
       <div style="padding:0 8px 16px">
         ${places.map(p => `
@@ -11685,6 +11759,25 @@ function agcViewPlace(fsId) {
     const cached = allResults.find(r => r.id === p.id);
     openPlace(cached || p);
   }).catch(e => showToast('오류: ' + e.message));
+}
+
+async function agcRefreshGrid(latC, lngC, zoom, cacheKey) {
+  // ① Firestore 캐시 삭제 → 다음 doLiveSearch에서 풀 검색 수행되도록
+  try {
+    await db.collection('liveSearchCache').doc(cacheKey).delete();
+  } catch(e) { console.warn('[agcRefreshGrid] 캐시 삭제 실패:', e); }
+
+  // ② 관리자 패널 닫고 메인 지도로 복귀
+  closeAdminPanel();
+
+  // ③ 메인 지도를 해당 그리드 중심으로 이동
+  await new Promise(r => setTimeout(r, 300)); // 패널 닫힘 대기
+  if (map) map.setView([latC, lngC], zoom, { animate: false });
+
+  // ④ 홍시야 찾아줘 실행 (A+B+C 풀 검색)
+  await new Promise(r => setTimeout(r, 400)); // 지도 이동 대기
+  showToast('🔄 그리드 재검색 시작...');
+  toggleLiveSearch();
 }
 
 // ══════════════════════════════════════════════════════
