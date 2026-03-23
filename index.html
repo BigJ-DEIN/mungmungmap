@@ -5148,7 +5148,7 @@ async function autoAddLivePlace(dOverride) {
       province:  province,
       petStatus:  petStatus,
       large:      largeFinal,
-      small:      petDetails.small !== null ? petDetails.small : true, // A+B+C 통과 = 소형견 기본 가능
+      small:      null,
       indoor:     indoorFinal,
       outdoor:    outdoorFinal,
       cage:       cageFinal,
@@ -10231,9 +10231,13 @@ async function batchFillPetDetails() {
           if (sig.includes('대형견') && !sig.includes('대형견 불가') && !sig.includes('대형견불가'))
             updateData.large = true;
         }
-        // small: Firebase 저장 = A+B+C 통과 = 소형견 기본 가능
+        // small (fetchKakaoPagePetSignal과 동일 로직)
         if (d.small === null || d.small === undefined) {
-          updateData.small = true;
+          if (sig.includes('소형견')) updateData.small = true;
+          else if (sig.includes('반려동물 동반') || sig.includes('반려견 동반') ||
+                   sig.includes('반려동물 가능') || sig.includes('반려견 가능') ||
+                   sig.includes('반려동물동반') || sig.includes('반려견동반'))
+            updateData.small = true;
         }
         // indoor
         if (d.indoor === null || d.indoor === undefined) {
@@ -11838,15 +11842,10 @@ function renderAdminPetPolicy() {
       </div>
 
       <!-- 실행 버튼 -->
-      <div style="display:flex;gap:10px;margin-bottom:14px;align-items:center;flex-wrap:wrap">
+      <div style="display:flex;gap:10px;margin-bottom:14px;align-items:center">
         <button onclick="runPetPolicyScan()"
           style="padding:10px 28px;background:#E04E14;color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">
           🔍 스캔 시작
-        </button>
-        <button onclick="ppSetSmallAll()"
-          style="padding:10px 20px;background:#1E3A8A;color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit"
-          title="Firebase 저장 장소 = A+B+C 통과 = 소형견 기본 가능. 수동 설정 보호.">
-          🐩 소형견 일괄 적용
         </button>
       </div>
 
@@ -12073,7 +12072,7 @@ function _ppAutoAnalyze(localTags, snippets) {
 
   // 테라스 – 블로그에서도 엄격하게 (명확한 표현만)
   if (result.outdoor === null) {
-    const strictPosKws = ['테라스 있', '테라스 자리', '테라스 좌석', '테라스석', '테라스 자리에', '야외석', '야외좌석', '야외 좌석', '루프탑', '테라스 공간', '매장 테라스', '카페 테라스'];
+    const strictPosKws = ['테라스 있', '테라스 자리', '테라스 좌석', '테라스에서', '야외석', '야외좌석', '야외 좌석', '루프탑', '테라스 공간'];
     const strictNegKws = ['테라스 없', '야외 없음', '야외석 없', '실내만', '야외 불가', '테라스는 없'];
     const hasPos = strictPosKws.some(k => allText.includes(k));
     const hasNeg = strictNegKws.some(k => allText.includes(k));
@@ -12325,12 +12324,6 @@ async function ppApplyOne(idx) {
     if (!newAutoFields.includes(field)) newAutoFields.push(field);
   }
 
-  // 소형견: Firebase 저장 = A+B+C 통과 = 소형견 기본 가능 (수동 설정은 보호)
-  if (!manual.includes('small') && (p.small === null || p.small === undefined)) {
-    updateData.small = true;
-    if (!newAutoFields.includes('small')) newAutoFields.push('small');
-  }
-
   updateData.petAutoFields = newAutoFields;
 
   try {
@@ -12372,42 +12365,6 @@ async function ppApplyAll() {
     if (_ppResults[i]) await ppApplyOne(i);
   }
   showToast('✅ 전체 적용 완료');
-}
-
-// Firebase 저장 장소 전체 소형견 일괄 적용 (small=null → true, 수동 설정 보호)
-async function ppSetSmallAll() {
-  if (!firebaseReady || !db) { showToast('Firebase 연결 필요'); return; }
-  const targets = places.filter(p =>
-    p.firestoreId &&
-    (p.small === null || p.small === undefined) &&
-    !(p.petManualFields || []).includes('small')
-  );
-  if (!targets.length) { showToast('소형견 미확인 장소가 없어요'); return; }
-  if (!confirm(`소형견 정보가 없는 장소 ${targets.length}개에 "소형견 가능"을 적용할까요?\n(수동 설정된 장소는 건드리지 않음)`)) return;
-
-  let done = 0;
-  const BATCH_SIZE = 400;
-  let batch = db.batch();
-  let batchCount = 0;
-
-  for (const p of targets) {
-    const ref = db.collection('places').doc(p.firestoreId);
-    const prevAuto = Array.isArray(p.petAutoFields) ? p.petAutoFields : [];
-    const newAuto = prevAuto.includes('small') ? prevAuto : [...prevAuto, 'small'];
-    batch.update(ref, { small: true, petAutoFields: newAuto });
-    p.small = true;
-    p.petAutoFields = newAuto;
-    batchCount++;
-    done++;
-    if (batchCount >= BATCH_SIZE) {
-      await batch.commit();
-      batch = db.batch();
-      batchCount = 0;
-    }
-  }
-  if (batchCount > 0) await batch.commit();
-  invalidatePlacesCache();
-  showToast(`✅ 소형견 가능 ${done}개 장소 적용 완료`);
 }
 
 async function ppMarkAllScanned() {
