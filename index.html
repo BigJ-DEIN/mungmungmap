@@ -5193,11 +5193,10 @@ async function autoAddLivePlace(dOverride) {
     if (firebaseReady && db) {
       const ref = db.collection('places').doc();
       newPlace.firestoreId = ref.id;
-      // Firestore는 undefined 값을 거부 → 저장 전 모든 필드 undefined→null 변환
-      const fsData = Object.fromEntries(
-        Object.entries(newPlace).map(([k, v]) => [k, v === undefined ? null : v])
-      );
-      await ref.set(fsData).catch(e => console.warn('Firestore 저장 실패:', d.place_name, e));
+      // Firestore는 undefined 값을 거부 (동기 throw) → JSON replacer로 모든 depth undefined→null 변환
+      const fsData = JSON.parse(JSON.stringify(newPlace, (_, v) => v === undefined ? null : v));
+      try { await ref.set(fsData); }
+      catch(e) { console.warn('Firestore 저장 실패:', d.place_name, e); }
     }
 
     // 6) 하늘색 임시 마커 제거 → 정식 컬러 마커로 교체
