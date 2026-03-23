@@ -9757,10 +9757,18 @@ async function verifySdkPetKeyword(d) {
 }
 
 function _parseKakaoOpenHours(openHours) {
+  if (!openHours) return null;
   try {
-    const days = (openHours?.week_from_today?.week_periods || [])
-      .flatMap(p => p.days || []);
-    if (!days.length) return null;
+    // ── days 배열 추출: 카카오 panel3 응답 구조가 장소마다 다름 ──────────────
+    // 우선순위대로 시도: week_from_today.week_periods → open_day_list → periods
+    const daySources = [
+      (openHours?.week_from_today?.week_periods || []).flatMap(p => p.days || []),
+      (openHours?.open_day_list               || []).flatMap(p => p.days || []),
+      (openHours?.periods                     || []).flatMap(p => p.days || []),
+    ];
+    const days = daySources.find(d => d.length > 0);
+    if (!days || !days.length) return null;
+
     const ORDER = { '월':0,'화':1,'수':2,'목':3,'금':4,'토':5,'일':6 };
     const parsed = days.map(day => {
       const dayName = (day.day_of_the_week_desc || '').replace(/\([^)]+\)/,'').trim();
@@ -9828,6 +9836,11 @@ async function fetchKakaoPagePetSignal(url, kakaoId) {
 
       // ── 영업시간 파싱 ──
       const parsedHours = _parseKakaoOpenHours(data?.open_hours);
+      // 디버그: hours 파싱 실패 시 open_hours 구조를 콘솔에 출력 → 어떤 경로가 맞는지 확인
+      if (!parsedHours && data?.open_hours) {
+        console.log('[hours debug] id:', id, '| open_hours keys:', Object.keys(data.open_hours),
+          '| raw:', JSON.stringify(data.open_hours).slice(0, 300));
+      }
 
       // ── blog 데이터 _ratingCache에 선캐싱 → fetchKakaoRating 중복 API 호출 방지 ──
       // autoAddLivePlace에서 fetchKakaoPagePetSignal 직후 fetchKakaoRating를 호출하므로,
