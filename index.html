@@ -5148,7 +5148,7 @@ async function autoAddLivePlace(dOverride) {
       province:  province,
       petStatus:  petStatus,
       large:      largeFinal,
-      small:      null,
+      small:      petDetails.small !== null ? petDetails.small : true, // A+B+C 통과 = 소형견 기본 가능
       indoor:     indoorFinal,
       outdoor:    outdoorFinal,
       cage:       cageFinal,
@@ -10231,13 +10231,9 @@ async function batchFillPetDetails() {
           if (sig.includes('대형견') && !sig.includes('대형견 불가') && !sig.includes('대형견불가'))
             updateData.large = true;
         }
-        // small (fetchKakaoPagePetSignal과 동일 로직)
+        // small: Firebase 저장 = A+B+C 통과 = 소형견 기본 가능
         if (d.small === null || d.small === undefined) {
-          if (sig.includes('소형견')) updateData.small = true;
-          else if (sig.includes('반려동물 동반') || sig.includes('반려견 동반') ||
-                   sig.includes('반려동물 가능') || sig.includes('반려견 가능') ||
-                   sig.includes('반려동물동반') || sig.includes('반려견동반'))
-            updateData.small = true;
+          updateData.small = true;
         }
         // indoor
         if (d.indoor === null || d.indoor === undefined) {
