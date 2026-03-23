@@ -6298,6 +6298,11 @@ function closeDrawer(force, keepMarker) {
     activePlace = null;
   }
   filterPlaces();
+  // filterPlaces() 내부에서 upgradeToGreenHeartMarker() 등이 마커 DOM을 교체할 수 있음.
+  // keepMarker=true 시 교체된 새 마커에도 tooltip을 재적용해야 말풍선이 유지됨.
+  if (keepMarker && _activeTooltipId) {
+    setTimeout(() => setMarkerActive(_activeTooltipId, true), 50);
+  }
 }
 
 // ── 추억 카드 장소 태그 클릭 → 해당 마커로 이동 + 드로어 열기 ──────────────────
