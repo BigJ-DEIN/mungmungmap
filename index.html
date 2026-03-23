@@ -12011,17 +12011,23 @@ function _ppParseLocal(text) {
   const f = {};
   // 대형견
   if (t.includes('대형견')) {
-    f.large = !(t.includes('대형견 불가') || t.includes('대형견불가') || t.includes('대형견 안됨') || t.includes('대형견 입장 불가'));
+    const negLarge = ['대형견 불가','대형견불가','대형견 안됨','대형견 입장 불가','대형견은 안','대형견 불가능','소형견만','소형견 만'];
+    f.large = !negLarge.some(k => t.includes(k));
   }
   // 테라스 – 엄격: 명확한 단어만
-  if (['테라스','루프탑','야외석','야외좌석','야외 좌석'].some(k => t.includes(k))) f.outdoor = true;
+  const posOutdoor = ['테라스','루프탑','야외석','야외좌석','야외 좌석'];
+  const negOutdoor = ['테라스 없','야외 없음','야외석 없','실내만','야외 불가','테라스는 없'];
+  if (posOutdoor.some(k => t.includes(k)) && !negOutdoor.some(k => t.includes(k))) f.outdoor = true;
+  else if (negOutdoor.some(k => t.includes(k)) && !posOutdoor.some(k => t.includes(k))) f.outdoor = false;
   if (t.includes('실내')) f.indoor = true;
   return Object.keys(f).length ? f : null;
 }
 
 // 네이버 블로그 검색 API
 async function _ppNaverBlog(place, cid, cs) {
-  const queries  = [`${place.name} 대형견`, `${place.name} 테라스`];
+  const area = (place.area || '').trim();
+  const loc  = area ? ` ${area}` : '';
+  const queries = [`${place.name}${loc} 대형견`, `${place.name}${loc} 테라스`];
   const snippets = [];
 
   for (const q of queries) {
@@ -12060,14 +12066,18 @@ function _ppAutoAnalyze(localTags, snippets) {
 
   if (result.large === null) {
     const posCount = (allText.match(/대형견/g) || []).length;
-    const negCount = (allText.match(/대형견 불가|대형견불가|대형견 안됨/g) || []).length;
+    const negCount = (allText.match(/대형견 불가|대형견불가|대형견 안됨|대형견은 안|대형견 불가능|소형견만|소형견 만|소형견만 가능/g) || []).length;
     if (posCount > 0) result.large = negCount === 0;
   }
 
   // 테라스 – 블로그에서도 엄격하게 (명확한 표현만)
   if (result.outdoor === null) {
-    const strictKws = ['테라스 있', '테라스 자리', '테라스 좌석', '테라스에서', '야외석', '야외좌석', '야외 좌석', '루프탑', '테라스 공간'];
-    if (strictKws.some(k => allText.includes(k))) result.outdoor = true;
+    const strictPosKws = ['테라스 있', '테라스 자리', '테라스 좌석', '테라스에서', '야외석', '야외좌석', '야외 좌석', '루프탑', '테라스 공간'];
+    const strictNegKws = ['테라스 없', '야외 없음', '야외석 없', '실내만', '야외 불가', '테라스는 없'];
+    const hasPos = strictPosKws.some(k => allText.includes(k));
+    const hasNeg = strictNegKws.some(k => allText.includes(k));
+    if (hasPos && !hasNeg) result.outdoor = true;
+    else if (hasNeg && !hasPos) result.outdoor = false;
   }
 
   return result;
