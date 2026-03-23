@@ -4866,21 +4866,21 @@ async function renderLiveResults(rawData) {
   const skipMsg = skipped > 0 ? ` · 미확인 ${skipped}개 제외` : '';
   showToast(`✅ ${registered}개 등록 완료${skipMsg}`);
 
-  // ── 기존 live_search 장소 자동 제거 + 교정 ──────────────────────────────
-  const { removed, corrected } = await cleanupInvalidLivePlaces();
-  const cleanParts = [];
-  if (removed > 0)   cleanParts.push(`오등록 ${removed}개 제거`);
-  if (corrected > 0) cleanParts.push(`${corrected}개 정보 교정`);
-  if (cleanParts.length > 0) showToast(`🔄 ${cleanParts.join(' · ')}`);
+  // ── 자동교정 + 펫정보 보강 (모두 백그라운드 — 사용자는 등록 완료 즉시 결과 확인) ──
+  const _cleanupPromise = cleanupInvalidLivePlaces();
+  _cleanupPromise.then(({ removed, corrected }) => {
+    const cleanParts = [];
+    if (removed > 0)   cleanParts.push(`오등록 ${removed}개 제거`);
+    if (corrected > 0) cleanParts.push(`${corrected}개 정보 교정`);
+    if (cleanParts.length > 0) showToast(`🔄 ${cleanParts.join(' · ')}`);
 
-  // ── 신규 장소 펫 정보 보강 (백그라운드 — 사용자 대기 없음) ────────────────
-  // 자동교정 완료 후, 이번에 새로 등록된 장소에 한해 Naver 블로그로 대형견·테라스 정보 보강
-  if (_newlyRegisteredIds.size > 0) {
-    const _newPlaces = places.filter(p => p && p.kakaoId && _newlyRegisteredIds.has(String(p.kakaoId)));
-    if (_newPlaces.length > 0) _enrichNewPlacesWithNaverBlog(_newPlaces); // await 없이 백그라운드
-  }
+    // cleanup 완료 후 신규 장소 Naver 보강 실행
+    if (_newlyRegisteredIds.size > 0) {
+      const _newPlaces = places.filter(p => p && p.kakaoId && _newlyRegisteredIds.has(String(p.kakaoId)));
+      if (_newPlaces.length > 0) _enrichNewPlacesWithNaverBlog(_newPlaces);
+    }
+  }).catch(() => {});
 }
-
 function flyToLive(lat, lng, idx) {
   if (!map.getBounds().contains([lat, lng])) {
     map.setView([lat, lng], map.getZoom(), { animate: true, duration: 0.5 });
@@ -5098,7 +5098,6 @@ async function autoAddLivePlace(dOverride) {
 async function cleanupInvalidLivePlaces() {
   const bounds = map.getBounds();
 
-  // 현재 뷰포트 내, source='live_search', kakaoId 있는 장소만 대상
   const toCheck = places.filter(p =>
     p && p.source === 'live_search' && (p.kakaoUrl || p.kakaoId) &&
     p.lat != null && p.lng != null &&
@@ -5107,61 +5106,67 @@ async function cleanupInvalidLivePlaces() {
 
   if (toCheck.length === 0) return { removed: 0, corrected: 0 };
 
-  let removed = 0, corrected = 0;
-  for (let i = 0; i < toCheck.length; i++) {
-    const p = toCheck[i];
-    const fabLabel2 = document.getElementById('feedback-fab-label');
-    if (fabLabel2) fabLabel2.textContent = `재확인 ${i+1}/${toCheck.length}...`;
-    try {
-      const result = await fetchKakaoPagePetSignal(p.kakaoUrl, p.kakaoId)
-        .catch(() => null);
+  let removed = 0, corrected = 0, done = 0;
 
-      // 오류(프록시 전체 실패) → 건너뜀. 명확한 결과가 있을 때만 처리
-      if (!result || result.error) continue;
+  // ── 3-worker 병렬 처리 (_proxyQueue.maxConcurrent:8 내 3개 동시) ──────────
+  const CONCURRENT = 3;
+  const _queue = toCheck.slice();
 
-      if (result.found === false) {
-        // ── 제거 ──────────────────────────────────────────────────────────
-        const idx = places.indexOf(p);
-        if (idx > -1) places.splice(idx, 1);
-        if (markers[p.id]) {
-          (clusterGroup || map).removeLayer(markers[p.id].marker || markers[p.id]);
-          delete markers[p.id];
-        }
-        if (firebaseReady && db && p.firestoreId) {
-          db.collection('places').doc(p.firestoreId).delete()
-            .catch(e => console.warn('cleanup 삭제 실패:', p.name, e));
-        }
-        removed++;
+  async function _worker() {
+    while (_queue.length > 0) {
+      const p = _queue.shift();
+      if (!p) break;
+      done++;
+      const fabLabel2 = document.getElementById('feedback-fab-label');
+      if (fabLabel2) fabLabel2.textContent = `재확인 ${done}/${toCheck.length}...`;
 
-      } else if (result.found === true && !p.manuallyEdited) {
-        // ── 교정 (manuallyEdited 플래그 없는 경우만) ─────────────────────
-        // 수동으로 수정한 장소는 건드리지 않음
-        const pd = result.petDetails || {};
-        const newLarge   = pd.large   !== undefined ? pd.large   : null;
-        const newSmall   = pd.small   !== undefined ? pd.small   : null;
-        const newIndoor  = pd.indoor  !== undefined ? pd.indoor  : null;
-        const newOutdoor = pd.outdoor !== undefined ? pd.outdoor : null;
+      try {
+        const result = await fetchKakaoPagePetSignal(p.kakaoUrl, p.kakaoId)
+          .catch(() => null);
 
-        const changed = p.large !== newLarge || p.small !== newSmall ||
-                        p.indoor !== newIndoor || p.outdoor !== newOutdoor;
-        if (changed) {
-          p.large   = newLarge;
-          p.small   = newSmall;
-          p.indoor  = newIndoor;
-          p.outdoor = newOutdoor;
-          if (firebaseReady && db && p.firestoreId) {
-            db.collection('places').doc(p.firestoreId)
-              .update({ large: newLarge, small: newSmall, indoor: newIndoor, outdoor: newOutdoor })
-              .catch(e => console.warn('cleanup 교정 실패:', p.name, e));
+        if (!result || result.error) continue;
+
+        if (result.found === false) {
+          const idx = places.indexOf(p);
+          if (idx > -1) places.splice(idx, 1);
+          if (markers[p.id]) {
+            (clusterGroup || map).removeLayer(markers[p.id].marker || markers[p.id]);
+            delete markers[p.id];
           }
-          corrected++;
+          if (firebaseReady && db && p.firestoreId) {
+            db.collection('places').doc(p.firestoreId).delete()
+              .catch(e => console.warn('cleanup 삭제 실패:', p.name, e));
+          }
+          removed++;
+
+        } else if (result.found === true && !p.manuallyEdited) {
+          const pd = result.petDetails || {};
+          const newLarge   = pd.large   !== undefined ? pd.large   : null;
+          const newSmall   = pd.small   !== undefined ? pd.small   : null;
+          const newIndoor  = pd.indoor  !== undefined ? pd.indoor  : null;
+          const newOutdoor = pd.outdoor !== undefined ? pd.outdoor : null;
+
+          const changed = p.large !== newLarge || p.small !== newSmall ||
+                          p.indoor !== newIndoor || p.outdoor !== newOutdoor;
+          if (changed) {
+            p.large = newLarge; p.small = newSmall;
+            p.indoor = newIndoor; p.outdoor = newOutdoor;
+            if (firebaseReady && db && p.firestoreId) {
+              db.collection('places').doc(p.firestoreId)
+                .update({ large: newLarge, small: newSmall, indoor: newIndoor, outdoor: newOutdoor })
+                .catch(e => console.warn('cleanup 교정 실패:', p.name, e));
+            }
+            corrected++;
+          }
         }
+      } catch(e) {
+        console.warn('cleanupInvalidLivePlaces 오류:', p.name, e);
       }
-    } catch(e) {
-      console.warn('cleanupInvalidLivePlaces 오류:', p.name, e);
+      // 딜레이 없음 — _proxyQueue가 동시성 직접 제어
     }
-    await new Promise(r => setTimeout(r, 100));
   }
+
+  await Promise.all(Array.from({ length: CONCURRENT }, _worker));
 
   if (removed > 0 || corrected > 0) filterPlaces();
   return { removed, corrected };
