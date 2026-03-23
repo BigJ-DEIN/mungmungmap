@@ -3781,7 +3781,11 @@ function initMap() {
   });
 
   // 마커는 loadViewportPlaces() 에서 추가 (initApp에서 호출됨)
-  map.on('click',   () => { if (activePlace) closeDrawer(); });
+  map.on('click',   () => {
+    if (activePlace) closeDrawer();
+    // 스와이프 닫기 후 남아있던 말풍선 — 빈 지도 탭 시 정리
+    if (_activeTooltipId) { setMarkerActive(_activeTooltipId, false); _activeTooltipId = null; }
+  });
   map.on('zoomend', updateAllMarkerSizes);
   // 자동 뷰포트 로딩 제거 — '홍시야 찾아줘' 버튼으로 수동 로딩
   // map.on('moveend', _scheduleVpLoad);
@@ -6109,6 +6113,11 @@ function openPlace(p) {
   if (!p) return;
   // 드로어 열기 전 선택 상태 강제 갱신 (이미 선택됐어도 다시 적용)
   if (activePlace && activePlace.id !== p.id) setMarkerActive(activePlace.id, false);
+  // 스와이프 닫기 후 남아있던 tooltip-only 마커도 정리 (다른 장소 열 때)
+  if (_activeTooltipId && _activeTooltipId !== p.id) {
+    setMarkerActive(_activeTooltipId, false);
+    _activeTooltipId = null;
+  }
   activePlace = p;
   setMarkerActive(p.id, true);
   // 뷰포트 안에 있으면 지도 고정, 밖에 있을 때만 이동 (현재 줌 유지)
@@ -6243,6 +6252,7 @@ function openPlace(p) {
 let _drawerOpenAt = 0;
 let _drawerExpanded = false;
 let currentDrawerMemTab = 'all'; // 기본: 모두의 추억
+let _activeTooltipId = null;    // 드로어 닫힌 후에도 말풍선만 살려둔 마커 ID
 
 function switchDrawerMemTab(tab) {
   currentDrawerMemTab = tab;
@@ -6258,9 +6268,10 @@ function toggleDrawerExpand() {
   if (btn) btn.textContent = _drawerExpanded ? '⬇' : '⬆';
 }
 
-function closeDrawer(force) {
+function closeDrawer(force, keepMarker) {
   // 방금 열린 직후 마커 탭 이벤트가 map.click으로도 전파돼 즉시 닫히는 현상 방지 (300ms 쿨다운)
-  // force=true 시 쿨다운 무시 (스와이프·탭 전환 등)
+  // force=true  : 쿨다운 무시 (스와이프·탭 전환 등)
+  // keepMarker  : true 시 말풍선/마커 하이라이트 유지 (스와이프 닫기 전용)
   if (!force && Date.now() - _drawerOpenAt < 300) return;
   document.getElementById('detail-drawer').classList.remove('open');
   document.getElementById('drawer-overlay').classList.remove('active');
@@ -6271,7 +6282,21 @@ function closeDrawer(force) {
     const btn = document.getElementById('btn-drawer-expand');
     if (btn) btn.textContent = '⬆';
   }
-  if (activePlace) { setMarkerActive(activePlace.id, false); activePlace = null; }
+  if (activePlace) {
+    if (keepMarker) {
+      // 말풍선·하이라이트 유지 — 드로어 UI만 닫음
+      // 이전에 살아있던 다른 tooltip 마커는 정리
+      if (_activeTooltipId && _activeTooltipId !== activePlace.id) {
+        setMarkerActive(_activeTooltipId, false);
+      }
+      _activeTooltipId = activePlace.id;
+    } else {
+      // 기존 tooltip-only 마커도 함께 정리
+      if (_activeTooltipId) { setMarkerActive(_activeTooltipId, false); _activeTooltipId = null; }
+      setMarkerActive(activePlace.id, false);
+    }
+    activePlace = null;
+  }
   filterPlaces();
 }
 
@@ -7155,7 +7180,10 @@ function exitMapPickMode() {
 
   // 지도 클릭 핸들러 복원
   map.off('click');
-  map.on('click', () => { if (activePlace) closeDrawer(); });
+  map.on('click', () => {
+    if (activePlace) closeDrawer();
+    if (_activeTooltipId) { setMarkerActive(_activeTooltipId, false); _activeTooltipId = null; }
+  });
 
   // 모달 복원 — 맵픽 모드에서 빠져나올 때만 재오픈
   // (closeModal이 exitMapPickMode를 호출하는 경우엔 재오픈 방지)
@@ -11394,9 +11422,48 @@ document.addEventListener('DOMContentLoaded', () => {
       const deltaY = e.changedTouches[0].clientY - startY;
       if (isDraggingDown && deltaY > 80) {
         drawer.style.transform = ''; // 인라인 transform 초기화 후 CSS 닫힘 애니메이션
-        closeDrawer(true);           // 쿨다운 무시하고 강제 닫기
+        closeDrawer(true, true);     // force=true, keepMarker=true — 말풍선 유지
       } else {
         drawer.style.transform = ''; // 스냅백
+      }
+      isDraggingDown = false;
+    }, { passive: true });
+  })();
+
+  // ── 추억 패널 스와이프 다운 → 닫기 ─────────────────────────────────────────
+  // #memories-panel 은 모바일에서 bottom-sheet 형태.
+  // 상단(핸들 포함)을 아래로 80px 이상 끌면 map 탭으로 전환하며 닫힘.
+  // 내부 피드(#mem-feed)가 스크롤 중(scrollTop > 0)이면 일반 스크롤로 동작.
+  (function initMemPanelSwipe() {
+    const panel = document.getElementById('memories-panel');
+    const feed  = document.getElementById('mem-feed');
+    if (!panel) return;
+    let startY = 0, isDraggingDown = false;
+
+    panel.addEventListener('touchstart', e => {
+      startY = e.touches[0].clientY;
+      isDraggingDown = false;
+      panel.style.transition = 'none';
+    }, { passive: true });
+
+    panel.addEventListener('touchmove', e => {
+      if (!panel.classList.contains('mobile-open')) return;
+      const deltaY = e.touches[0].clientY - startY;
+      const feedScrollTop = feed ? feed.scrollTop : 0;
+      if (deltaY <= 0 || feedScrollTop > 0) { isDraggingDown = false; return; }
+      isDraggingDown = true;
+      e.preventDefault();
+      panel.style.transform = `translateY(${(deltaY * 0.55).toFixed(1)}px)`;
+    }, { passive: false });
+
+    panel.addEventListener('touchend', e => {
+      panel.style.transition = ''; // CSS transition 복원
+      const deltaY = e.changedTouches[0].clientY - startY;
+      if (isDraggingDown && deltaY > 80) {
+        panel.style.transform = '';
+        setMobileTab('map');         // 추억 패널 닫고 지도 탭으로
+      } else {
+        panel.style.transform = ''; // 스냅백
       }
       isDraggingDown = false;
     }, { passive: true });
