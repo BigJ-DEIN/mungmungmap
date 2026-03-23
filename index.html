@@ -4171,6 +4171,7 @@ function getTypeLabel(p) {
 
 // ── 카카오 별점 캐시 & 로더 ──────────────────────────────────────────────────
 const _ratingCache = new Map(); // kakaoId → { blog, review, score }
+const _panel3Cache = new Map(); // kakaoId → raw panel3 JSON (공유 캐시 — 중복 API 호출 방지)
 
 // 블로그 수 → 1~10 인기 점수 (1이 최고, 10이 최저)
 // 실제 DB 분포 기반 ×2 등비 구간 — 중간값(~28개)이 6점
@@ -4193,14 +4194,25 @@ async function fetchKakaoRating(kakaoId) {
   if (!kakaoId) return null;
   if (_ratingCache.has(kakaoId)) return _ratingCache.get(kakaoId);
 
-  // 1) Firestore 캐시 확인 (30일 TTL)
+  // 1-a) _panel3Cache 확인 — fetchKakaoPagePetSignal이 이미 가져온 경우 API 재호출 불필요
+  if (_panel3Cache.has(kakaoId)) {
+    const cached = _panel3Cache.get(kakaoId);
+    const blog   = cached?.blog_review?.review_count || 0;
+    const review = cached?.kakaomap_review?.score_set?.review_count || 0;
+    const score  = calcPopScore(blog);
+    const r = { blog, review, score };
+    _ratingCache.set(kakaoId, r);
+    return r;
+  }
+
+  // 1-b) Firestore 캐시 확인 (30일 TTL)
   if (firebaseReady && db) {
     try {
       const doc = await db.collection('place_ratings').doc(String(kakaoId)).get();
       if (doc.exists) {
         const d = doc.data();
         if (d.ts && Date.now() - d.ts < 30 * 24 * 60 * 60 * 1000) {
-          const r = { blog: d.blog || 0, review: d.review || 0, score: calcPopScore(d.blog || 0) }; // 항상 최신 기준으로 재계산
+          const r = { blog: d.blog || 0, review: d.review || 0, score: calcPopScore(d.blog || 0) };
           _ratingCache.set(kakaoId, r);
           return r;
         }
@@ -4208,17 +4220,20 @@ async function fetchKakaoRating(kakaoId) {
     } catch(e) {}
   }
 
-  // 2) panel3 API 호출 (프록시 경유)
+  // 2) panel3 API 호출 (프록시 경유) — _proxyQueue 통해 동시 호출 수 제한
   try {
     const url = `https://place-api.map.kakao.com/places/panel3/${kakaoId}`;
-    const res = await fetch(
+    await _proxyQueue.acquire();
+    let res;
+    try { res = await fetch(
       `https://mungmungmap-proxy.jaypark.workers.dev/?url=${encodeURIComponent(url)}`,
       { signal: AbortSignal.timeout(5000) }
-    );
+    ); } finally { _proxyQueue.release(); }
     if (!res.ok) return null;
     const data = await res.json();
-    const blog   = data?.blog_review?.review_count || 0;          // 블로그 리뷰 수
-    const review = data?.kakaomap_review?.score_set?.review_count || 0; // 카카오맵 후기 수
+    _panel3Cache.set(kakaoId, data); // 공유 캐시에 저장
+    const blog   = data?.blog_review?.review_count || 0;
+    const review = data?.kakaomap_review?.score_set?.review_count || 0;
     const score  = calcPopScore(blog);
     const r = { blog, review, score };
     _ratingCache.set(kakaoId, r);
@@ -6465,13 +6480,20 @@ async function _kwLoadPanel3(p, ct) {
   const panelArea = ct.querySelector('#kw-panel3-area');
   if (!panelArea) return;
   try {
-    const url = `https://place-api.map.kakao.com/places/panel3/${p.kakaoId}`;
-    const res = await fetch(
-      `https://mungmungmap-proxy.jaypark.workers.dev/?url=${encodeURIComponent(url)}`,
-      { signal: AbortSignal.timeout(8000) }
-    );
-    if (!res.ok) { panelArea.innerHTML = ''; return; }
-    const data = await res.json();
+    // ★ _panel3Cache 먼저 확인 — 홍시야 찾아줘 수집 중 이미 가져온 데이터 재사용
+    let data = _panel3Cache.get(p.kakaoId) || null;
+    if (!data) {
+      const url = `https://place-api.map.kakao.com/places/panel3/${p.kakaoId}`;
+      await _proxyQueue.acquire();
+      let res;
+      try { res = await fetch(
+        `https://mungmungmap-proxy.jaypark.workers.dev/?url=${encodeURIComponent(url)}`,
+        { signal: AbortSignal.timeout(8000) }
+      ); } finally { _proxyQueue.release(); }
+      if (!res.ok) { panelArea.innerHTML = ''; return; }
+      data = await res.json();
+      _panel3Cache.set(p.kakaoId, data); // 향후 재사용을 위해 캐시
+    }
 
     const esc   = s => (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
     const icons = (data?.place_add_info?.ai_mate?.store_facility_icons || []).map(i => i?.text).filter(Boolean);
@@ -9715,6 +9737,7 @@ async function fetchKakaoPagePetSignal(url, kakaoId) {
         continue;
       }
       if (autoV.running) autoV.proxyOk = (autoV.proxyOk||0)+1;
+      if (id) _panel3Cache.set(id, data); // ★ 공유 캐시 저장 — fetchKakaoRating/_kwLoadPanel3 재호출 방지
 
       // ── 영업시간 파싱 ──
       const parsedHours = _parseKakaoOpenHours(data?.open_hours);
