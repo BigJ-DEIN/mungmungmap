@@ -258,6 +258,9 @@
     .filter-chip.fee-chip.active { background:#D4A017; border-color:#D4A017; color:white; }
     .filter-chip.nofee-chip { border-color:#2E7D32; color:#2E7D32; }
     .filter-chip.nofee-chip.active { background:#2E7D32; border-color:#2E7D32; color:white; }
+    .filter-chip.grade-chip { min-width:1.9rem; padding:4px 6px; text-align:center; font-weight:700; }
+    .filter-chip.grade-chip.active { background:#5B6CB8; border-color:#5B6CB8; color:white; }
+    .filter-chip.grade-chip:hover { border-color:#5B6CB8; color:#5B6CB8; }
 
     /* ── PLACE LIST ── */
     #place-list { flex:1; overflow-y:auto; padding:6px; -webkit-overflow-scrolling:touch;
@@ -1668,6 +1671,28 @@
           </div>
         </div>
 
+        <!-- ── 등급 row ── -->
+        <div class="frow" id="frow-grade">
+          <div class="frow-hdr" onclick="toggleFrow('grade')">
+            <span class="frow-lbl">등급</span>
+            <span class="frow-sum" id="frow-grade-sum">전체</span>
+            <span class="frow-arr">▼</span>
+          </div>
+          <div class="frow-body" id="frow-grade-body">
+            <button class="filter-chip active" data-grade="all" onclick="setGradeAll(this)">전체</button>
+            <button class="filter-chip grade-chip" data-grade="1"  onclick="toggleGradeChip(this,1)">1</button>
+            <button class="filter-chip grade-chip" data-grade="2"  onclick="toggleGradeChip(this,2)">2</button>
+            <button class="filter-chip grade-chip" data-grade="3"  onclick="toggleGradeChip(this,3)">3</button>
+            <button class="filter-chip grade-chip" data-grade="4"  onclick="toggleGradeChip(this,4)">4</button>
+            <button class="filter-chip grade-chip" data-grade="5"  onclick="toggleGradeChip(this,5)">5</button>
+            <button class="filter-chip grade-chip" data-grade="6"  onclick="toggleGradeChip(this,6)">6</button>
+            <button class="filter-chip grade-chip" data-grade="7"  onclick="toggleGradeChip(this,7)">7</button>
+            <button class="filter-chip grade-chip" data-grade="8"  onclick="toggleGradeChip(this,8)">8</button>
+            <button class="filter-chip grade-chip" data-grade="9"  onclick="toggleGradeChip(this,9)">9</button>
+            <button class="filter-chip grade-chip" data-grade="10" onclick="toggleGradeChip(this,10)">10</button>
+          </div>
+        </div>
+
         <!-- ── 종류 row ── -->
         <div class="frow" id="frow-cat">
           <div class="frow-hdr" onclick="toggleFrow('cat')">
@@ -2285,7 +2310,7 @@ let _appStarted   = false;  // startApp 이중호출 방지
 let _doAuthInProgress = false; // doAuth 실행 중 onAuthStateChanged 가드
 let clusterGroup  = null;
 let markers       = {};
-let activeFilters = { area:'all', largeDog:false, indoor:false, outdoor:false, noCage:false, hasFee:false, noFee:false, catType:'all' };
+let activeFilters = { area:'all', largeDog:false, indoor:false, outdoor:false, noCage:false, hasFee:false, noFee:false, catType:'all', grades: new Set() };
 let viewportSync  = true;   // 지도 범위 연동 모드 (기본: 켜짐)
 let activePlace   = null;
 let searchText    = '';
@@ -5351,7 +5376,8 @@ function updateFilterBadge() {
     (activeFilters.hasFee   ? 1 : 0) +
     (activeFilters.noFee    ? 1 : 0) +
     (activeFilters.catType && activeFilters.catType !== 'all' ? 1 : 0) +
-    (activeFilters.area    && activeFilters.area    !== 'all' ? 1 : 0);
+    (activeFilters.area    && activeFilters.area    !== 'all' ? 1 : 0) +
+    (activeFilters.grades.size > 0 ? 1 : 0);
   if (count > 0) {
     badge.textContent = count + '개 적용';
     badge.style.display = 'inline-block';
@@ -5375,7 +5401,7 @@ let _frowsInited = false;
 function _initFrowsOpen() {
   if (_frowsInited) return;
   _frowsInited = true;
-  ['cond','cat','area'].forEach(id => {
+  ['cond','grade','cat','area'].forEach(id => {
     const el = document.getElementById('frow-' + id);
     if (el) el.classList.add('open');
   });
@@ -5394,6 +5420,17 @@ function updateFrowSummaries() {
   if (activeFilters.noFee)    condLabels.push('입장료 없음');
   const condSum = document.getElementById('frow-cond-sum');
   if (condSum) condSum.textContent = condLabels.join(' · ');
+
+  // 등급 요약
+  const gradeSum = document.getElementById('frow-grade-sum');
+  if (gradeSum) {
+    if (activeFilters.grades.size === 0) {
+      gradeSum.textContent = '전체';
+    } else {
+      const sorted = [...activeFilters.grades].sort((a,b) => a-b);
+      gradeSum.textContent = sorted.join('·') + '등급';
+    }
+  }
 
   // 종류 요약
   const catMap = { all:'전체', cafe:'카페', petcafe:'애견카페', restaurant:'식당',
@@ -5416,6 +5453,30 @@ function toggleFilter(btn, type) {
   if (type==='케이지불필요') activeFilters.noCage   = on;
   if (type==='입장료있음')  { activeFilters.hasFee = on; if (on) { activeFilters.noFee=false; document.querySelector('[data-cond="입장료없음"]')?.classList.remove('active'); } }
   if (type==='입장료없음')  { activeFilters.noFee  = on; if (on) { activeFilters.hasFee=false; document.querySelector('[data-cond="입장료있음"]')?.classList.remove('active'); } }
+  filterPlaces();
+  updateFrowSummaries();
+  if (isMobile()) setMobileTab('list');
+}
+
+function toggleGradeChip(btn, grade) {
+  btn.classList.toggle('active');
+  const allBtn = document.querySelector('[data-grade="all"]');
+  if (btn.classList.contains('active')) {
+    activeFilters.grades.add(grade);
+    if (allBtn) allBtn.classList.remove('active');
+  } else {
+    activeFilters.grades.delete(grade);
+    if (activeFilters.grades.size === 0 && allBtn) allBtn.classList.add('active');
+  }
+  filterPlaces();
+  updateFrowSummaries();
+  if (isMobile()) setMobileTab('list');
+}
+
+function setGradeAll(btn) {
+  activeFilters.grades.clear();
+  document.querySelectorAll('[data-grade]').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
   filterPlaces();
   updateFrowSummaries();
   if (isMobile()) setMobileTab('list');
@@ -5455,6 +5516,10 @@ function getFiltered(ignoreViewport = false, ignoreSearch = false) {
     if (activeFilters.hasFee  && !p.entryFee) return false;
     if (activeFilters.noFee   && p.entryFee)  return false;
     if (activeFilters.catType !== 'all' && getCatKey(p) !== activeFilters.catType) return false;
+    if (activeFilters.grades.size > 0) {
+      const g = p.blogScore || 0;
+      if (!activeFilters.grades.has(g)) return false;
+    }
     if (!ignoreSearch && searchText) {
       const q = searchText.toLowerCase();
       return (p.name||'').toLowerCase().includes(q) || (p.addr||'').toLowerCase().includes(q) ||
