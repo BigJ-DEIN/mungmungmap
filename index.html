@@ -4489,11 +4489,16 @@ async function doLiveSearch() {
   _sessionQuotaHit = false; // 새 검색마다 초기화
   _liveAllEnded    = true;  // 낙관적 초기화 → REST 루프에서 반증 시 false
 
+  // ── 뷰포트 DB 장소 로드를 캐시 확인과 병렬 시작 ───────────────────────────
+  // Firestore 캐시 히트(~300ms) 동안 loadViewportPlaces도 동시에 실행 → 응답 빠름
+  const _vpLoadPromise = loadViewportPlaces();
+
   // ── 캐시 확인: 동일 뷰포트 15분 내 재검색이면 API 호출 없이 바로 표시 ──────
   const _ctr = map.getCenter();
   const _cacheKey = `${Math.round(_ctr.lat*100)}_${Math.round(_ctr.lng*100)}_${map.getZoom()}`;
   const _cached = _liveCache.get(_cacheKey);
   if (_cached && Date.now() - _cached.ts < 5 * 60 * 1000) {
+    await _vpLoadPromise; // 병렬 로드 완료 대기
     showToast('📦 캐시된 결과로 표시합니다');
     renderLiveResults(_cached.data);
     return;
@@ -4503,6 +4508,7 @@ async function doLiveSearch() {
   // is_end:true로 완전 탐색된 구역 → 재검색 생략, DB 장소만 노출
   const _gridCached = await _checkGridCache(_cacheKey);
   if (_gridCached) {
+    await _vpLoadPromise; // 이미 대부분 완료됐을 병렬 로드 마저 완료
     showToast('✅ 이미 완전 탐색된 구역이에요 (최근 30일)');
     _setLiveFabState(false);
     filterPlaces();
@@ -4806,6 +4812,7 @@ async function renderLiveResults(rawData) {
   let registered = 0;
   let skipped    = 0;
   let processed  = 0;
+  const _newlyRegisteredIds = new Set(); // 이번 검색에서 신규 등록된 kakaoId
 
   // ── 병렬 처리 (최대 PARALLEL 개 동시 검증) ──────────────────────────────
   // 프록시 큐(maxConcurrent:8)와 Kakao SDK 부하를 고려해 6으로 설정
@@ -4829,7 +4836,7 @@ async function renderLiveResults(rawData) {
     const p = (async () => {
       try {
         const added = await autoAddLivePlace(d);
-        if (added) registered++;
+        if (added) { registered++; if (d.id) _newlyRegisteredIds.add(String(d.id)); }
         else       skipped++;
       } catch(e) {
         console.warn('autoAddLivePlace 실패:', d.place_name, e);
@@ -4865,6 +4872,13 @@ async function renderLiveResults(rawData) {
   if (removed > 0)   cleanParts.push(`오등록 ${removed}개 제거`);
   if (corrected > 0) cleanParts.push(`${corrected}개 정보 교정`);
   if (cleanParts.length > 0) showToast(`🔄 ${cleanParts.join(' · ')}`);
+
+  // ── 신규 장소 펫 정보 보강 (백그라운드 — 사용자 대기 없음) ────────────────
+  // 자동교정 완료 후, 이번에 새로 등록된 장소에 한해 Naver 블로그로 대형견·테라스 정보 보강
+  if (_newlyRegisteredIds.size > 0) {
+    const _newPlaces = places.filter(p => p && p.kakaoId && _newlyRegisteredIds.has(String(p.kakaoId)));
+    if (_newPlaces.length > 0) _enrichNewPlacesWithNaverBlog(_newPlaces); // await 없이 백그라운드
+  }
 }
 
 function flyToLive(lat, lng, idx) {
@@ -5151,6 +5165,57 @@ async function cleanupInvalidLivePlaces() {
 
   if (removed > 0 || corrected > 0) filterPlaces();
   return { removed, corrected };
+}
+
+
+// ── 신규 등록 장소 Naver 블로그 펫 정보 보강 ──────────────────────────────────
+// 홍시야 찾아줘 자동교정 완료 후 백그라운드로 실행 — 대형견·테라스 정보만 추가 조사
+async function _enrichNewPlacesWithNaverBlog(newPlaces) {
+  const clientId     = localStorage.getItem('pp_naver_id')     || 'HvAmW3tVBhNLouraO9Oe';
+  const clientSecret = localStorage.getItem('pp_naver_secret') || 'r3O4wgjDo0';
+  if (!clientId || !clientSecret || !newPlaces || !newPlaces.length) return;
+
+  console.log(`[NaverEnrich] 신규 ${newPlaces.length}개 장소 펫 정보 보강 시작`);
+  let enriched = 0;
+
+  for (const place of newPlaces) {
+    try {
+      // 이미 large/outdoor 값이 있는 장소는 건너뜀 (카카오 page-api에서 이미 채워진 경우)
+      if (place.large !== null && place.large !== undefined &&
+          place.outdoor !== null && place.outdoor !== undefined) continue;
+
+      const blogFields = await _fetchNaverBlogPetInfo(place, clientId, clientSecret);
+      if (!blogFields || !Object.keys(blogFields).length) continue;
+
+      // 기존 값 덮어쓰지 않음 — null/undefined 인 필드만 업데이트
+      const update = {};
+      if ((place.large   === null || place.large   === undefined) && blogFields.large   !== undefined) update.large   = blogFields.large;
+      if ((place.outdoor === null || place.outdoor === undefined) && blogFields.outdoor !== undefined) update.outdoor = blogFields.outdoor;
+      if (!Object.keys(update).length) continue;
+
+      // 로컬 메모리 반영
+      const target = places.find(x => x.id === place.id);
+      if (target) Object.assign(target, update);
+
+      // Firestore 업데이트
+      const fsId = place.firestoreId || place.fsId;
+      if (firebaseReady && db && fsId) {
+        db.collection('places').doc(fsId).update(update)
+          .catch(e => console.warn('[NaverEnrich] Firestore 업데이트 실패:', place.name, e));
+      }
+      enriched++;
+      console.log(`[NaverEnrich] ${place.name} →`, update);
+    } catch(e) {
+      console.warn('[NaverEnrich]', place.name, e.message);
+    }
+    await new Promise(r => setTimeout(r, 300)); // 네이버 API 레이트리밋 방지
+  }
+
+  if (enriched > 0) {
+    filterPlaces(); // 업데이트된 정보로 목록 새로고침
+    showToast(`🐾 ${enriched}개 장소 펫 정보 보강 완료 (대형견·테라스)`);
+    console.log(`[NaverEnrich] 완료: ${enriched}/${newPlaces.length}개 보강`);
+  }
 }
 
 function clearLiveSearch() {
