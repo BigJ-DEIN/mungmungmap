@@ -5190,10 +5190,20 @@ async function cleanupInvalidLivePlaces() {
           // ★ null(미확인)로 기존 데이터를 덮어쓰지 않음 — true/false 확정값만 반영
           // pd 필드가 null이면 "정보 없음"이지 "아님"이 아니므로 기존 값을 보존
           const update = {};
-          if (pd.large   === true || pd.large   === false) { if (p.large   !== pd.large)   update.large   = pd.large;   }
-          if (pd.small   === true || pd.small   === false) { if (p.small   !== pd.small)   update.small   = pd.small;   }
-          if (pd.indoor  === true || pd.indoor  === false) { if (p.indoor  !== pd.indoor)  update.indoor  = pd.indoor;  }
-          if (pd.outdoor === true || pd.outdoor === false) { if (p.outdoor !== pd.outdoor) update.outdoor = pd.outdoor; }
+          if (pd.large    === true || pd.large    === false) { if (p.large    !== pd.large)    update.large    = pd.large;    }
+          if (pd.small    === true || pd.small    === false) { if (p.small    !== pd.small)    update.small    = pd.small;    }
+          if (pd.indoor   === true || pd.indoor   === false) { if (p.indoor   !== pd.indoor)   update.indoor   = pd.indoor;   }
+          if (pd.outdoor  === true || pd.outdoor  === false) { if (p.outdoor  !== pd.outdoor)  update.outdoor  = pd.outdoor;  }
+          if (pd.cage     === true || pd.cage     === false) { if (p.cage     !== pd.cage)     update.cage     = pd.cage;     }
+          if (pd.entryFee === true || pd.entryFee === false) { if (p.entryFee !== pd.entryFee) update.entryFee = pd.entryFee; }
+
+          // ★ 영업시간 업데이트 — 현재 플레이스홀더인 경우에만 실제 데이터로 교체
+          // "카카오맵 확인" 플레이스홀더 감지: hours 없음 또는 단일항목 t='카카오맵 확인'
+          const _hoursIsPlaceholder = !p.hours ||
+            (Array.isArray(p.hours) && p.hours.length === 1 && p.hours[0]?.t === '카카오맵 확인');
+          if (result.hours && result.hours.length > 0 && _hoursIsPlaceholder) {
+            update.hours = result.hours;
+          }
 
           if (Object.keys(update).length > 0) {
             Object.assign(p, update);
@@ -5203,6 +5213,8 @@ async function cleanupInvalidLivePlaces() {
                 .catch(e => console.warn('cleanup 교정 실패:', p.name, e));
             }
             corrected++;
+            // ★ 현재 열린 드로어가 이 장소인 경우 → 드로어 콘텐츠 즉시 갱신
+            if (activePlace?.id === p.id) openPlace(p);
           }
         }
       } catch(e) {
@@ -6314,6 +6326,43 @@ function closeDrawer() {
   if (activePlace) { setMarkerActive(activePlace.id, false); activePlace = null; }
   filterPlaces();
 }
+
+// ── Detail Drawer 스와이프 제스처 ─────────────────────────────────────────────
+// 위로 스와이프 → expand, 아래로 스와이프 → collapse/close
+// 드로어 내부 스크롤과 충돌 방지: scrollTop > 0이면 아래 스와이프 무시
+(function _initDrawerSwipe() {
+  const _dr = document.getElementById('detail-drawer');
+  if (!_dr) return;
+  let _swipeStartY = 0, _swipeActive = false;
+
+  _dr.addEventListener('touchstart', e => {
+    _swipeStartY = e.touches[0].clientY;
+    _swipeActive = true;
+  }, { passive: true });
+
+  _dr.addEventListener('touchmove', e => {
+    if (!_swipeActive) return;
+    const dy = e.touches[0].clientY - _swipeStartY;
+    // 아래 스와이프 중 드로어 내부가 스크롤 상단이 아니면 스크롤 우선
+    if (dy > 0 && _dr.scrollTop > 0) { _swipeActive = false; return; }
+    // 제스처가 확정된 방향이면 기본 스크롤 차단
+    if (Math.abs(dy) > 8) e.preventDefault();
+  }, { passive: false });
+
+  _dr.addEventListener('touchend', e => {
+    if (!_swipeActive) return;
+    _swipeActive = false;
+    const dy = e.changedTouches[0].clientY - _swipeStartY;
+    if (dy > 60) {
+      // ↓ 아래로 스와이프: 펼쳐진 상태면 접기, 기본 상태면 닫기
+      if (_drawerExpanded) toggleDrawerExpand();
+      else closeDrawer();
+    } else if (dy < -60) {
+      // ↑ 위로 스와이프: 접힌 상태면 펼치기
+      if (!_drawerExpanded) toggleDrawerExpand();
+    }
+  }, { passive: true });
+})();
 
 // ══════════════════════════════════════════════════════
 //  ACTIONS
