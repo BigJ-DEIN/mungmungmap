@@ -5107,11 +5107,11 @@ async function autoAddLivePlace(dOverride) {
 
     // 3) large/indoor/outdoor/cage/entryFee 필드 결정
     // 명시적 태그가 있을 때만 값을 설정 — 근거 없는 추론은 null(미확인)로 유지
-    const largeFinal    = petDetails.large    !== null ? petDetails.large    : null;
-    const indoorFinal   = petDetails.indoor   !== null ? petDetails.indoor   : null;
-    const outdoorFinal  = petDetails.outdoor  !== null ? petDetails.outdoor  : null;
-    const cageFinal     = petDetails.cage     !== null ? petDetails.cage     : null;
-    const entryFeeFinal = petDetails.entryFee !== null ? petDetails.entryFee : null;
+    const largeFinal    = petDetails.large    ?? null;  // undefined도 null로 처리
+    const indoorFinal   = petDetails.indoor   ?? null;
+    const outdoorFinal  = petDetails.outdoor  ?? null;
+    const cageFinal     = petDetails.cage     ?? null;  // undefined도 null로 처리 (Firestore 거부 방지)
+    const entryFeeFinal = petDetails.entryFee ?? null;  // undefined도 null로 처리 (Firestore 거부 방지)
 
     // skipSignalCheck인 경우 영업시간만 별도로 가져오기
     if (skipSignalCheck && !_signalResult) {
@@ -5152,7 +5152,8 @@ async function autoAddLivePlace(dOverride) {
       province:  province,
       petStatus:  petStatus,
       large:      largeFinal,
-      small:      petDetails.small !== null ? petDetails.small : true, // A+B+C 통과 = 소형견 기본 가능
+      small:      petDetails.small ?? true, // A+B+C 통과 = 소형견 기본 가능 (undefined도 true로)
+
       indoor:     indoorFinal,
       outdoor:    outdoorFinal,
       cage:       cageFinal,
@@ -5177,7 +5178,11 @@ async function autoAddLivePlace(dOverride) {
     if (firebaseReady && db) {
       const ref = db.collection('places').doc();
       newPlace.firestoreId = ref.id;
-      await ref.set(newPlace).catch(e => console.warn('Firestore 저장 실패:', d.place_name, e));
+      // Firestore는 undefined 값을 거부 → 저장 전 모든 필드 undefined→null 변환
+      const fsData = Object.fromEntries(
+        Object.entries(newPlace).map(([k, v]) => [k, v === undefined ? null : v])
+      );
+      await ref.set(fsData).catch(e => console.warn('Firestore 저장 실패:', d.place_name, e));
     }
 
     // 6) 하늘색 임시 마커 제거 → 정식 컬러 마커로 교체
