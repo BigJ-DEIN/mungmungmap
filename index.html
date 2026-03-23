@@ -3459,6 +3459,18 @@ async function loadViewportPlaces(force = false) {
       });
       places.sort((a, b) => (a.id || 0) - (b.id || 0));
       filterPlaces();
+
+      // ── Firestore 로드 후 live_search 장소 중 미완성 데이터 있으면 백그라운드 교정 ──
+      // doLiveSearch 없이 앱을 열었을 때도 tag/hours 플레이스홀더 자동 교정
+      const _needsCleanup = newBatch.some(p =>
+        p.source === 'live_search' && (
+          p.large    == null || p.indoor == null ||
+          !p.hours   || (Array.isArray(p.hours) && p.hours.length === 1 && p.hours[0]?.t === '카카오맵 확인')
+        )
+      );
+      if (_needsCleanup) {
+        setTimeout(() => { if (typeof cleanupInvalidLivePlaces === 'function') cleanupInvalidLivePlaces().catch(()=>{}); }, 2000);
+      }
     }
   } catch(e) { console.warn('[loadViewportPlaces] 쿼리 실패:', e); }
 }
@@ -4238,20 +4250,24 @@ async function fetchKakaoRating(kakaoId) {
     } catch(e) {}
   }
 
-  // 2) panel3 API 호출 (프록시 경유)
+  // 2) panel3 API 호출 (프록시 경유) — _proxyQueue로 동시성 제한
+  await _proxyQueue.acquire();
+  let res;
   try {
     const url = `https://place-api.map.kakao.com/places/panel3/${kakaoId}`;
-    const res = await fetch(
+    res = await fetch(
       `https://mungmungmap-proxy.jaypark.workers.dev/?url=${encodeURIComponent(url)}`,
       { signal: AbortSignal.timeout(5000) }
     );
-    if (!res.ok) return null;
+  } finally { _proxyQueue.release(); }
+  try {
+    if (!res || !res.ok) return null;
     const data = await res.json();
     const blog   = data?.blog_review?.review_count || 0;          // 블로그 리뷰 수
     const review = data?.kakaomap_review?.score_set?.review_count || 0; // 카카오맵 후기 수
     const score  = calcPopScore(blog);
     const r = { blog, review, score };
-    _ratingCache.set(kakaoId, r);
+    _ratingCache.set(String(kakaoId), r);
     // 블로그 있는 경우만 Firestore에 저장 (백그라운드)
     if (firebaseReady && db && blog > 0) {
       db.collection('place_ratings').doc(String(kakaoId))
@@ -5014,7 +5030,7 @@ async function autoAddLivePlace(dOverride) {
     }
 
     // 1) place-api로 반려동물 신호 확인
-    let petDetails = { large: null, small: null, indoor: null, outdoor: null };
+    let petDetails = { large: null, small: null, indoor: null, outdoor: null, cage: null, entryFee: null };
     let petStatus = 'confirmed';
 
     // ── 사전 통과 조건 (place-api 호출 생략) ──────────────────────────────
@@ -5076,9 +5092,11 @@ async function autoAddLivePlace(dOverride) {
     const cageFinal     = petDetails.cage     !== null ? petDetails.cage     : null;
     const entryFeeFinal = petDetails.entryFee !== null ? petDetails.entryFee : null;
 
-    // skipSignalCheck인 경우 영업시간만 별도로 가져오기
+    // skipSignalCheck인 경우 영업시간 + petDetails 별도로 가져오기
+    // (펫카페·애견동반 카테고리도 cage/entryFee/large/indoor 등 Kakao 시설 아이콘 반영)
     if (skipSignalCheck && !_signalResult) {
       _signalResult = await fetchKakaoPagePetSignal(d.place_url, d.id).catch(() => null);
+      if (_signalResult?.petDetails) petDetails = _signalResult.petDetails;
     }
 
     // 3-b) 블로그 점수 조회 (panel3 캐시 재활용 — 별도 API 호출 없음)
@@ -9810,6 +9828,18 @@ async function fetchKakaoPagePetSignal(url, kakaoId) {
 
       // ── 영업시간 파싱 ──
       const parsedHours = _parseKakaoOpenHours(data?.open_hours);
+
+      // ── blog 데이터 _ratingCache에 선캐싱 → fetchKakaoRating 중복 API 호출 방지 ──
+      // autoAddLivePlace에서 fetchKakaoPagePetSignal 직후 fetchKakaoRating를 호출하므로,
+      // 여기서 미리 캐싱해두면 fetchKakaoRating은 네트워크 호출 없이 캐시 히트로 처리됨
+      if (id && typeof _ratingCache !== 'undefined') {
+        const _blogCount = data?.blog_review?.review_count || 0;
+        _ratingCache.set(String(id), {
+          blog:   _blogCount,
+          review: data?.kakaomap_review?.score_set?.review_count || 0,
+          score:  (typeof calcPopScore === 'function') ? calcPopScore(_blogCount) : 0
+        });
+      }
 
       const addInfo = data?.place_add_info;
       const fullStr = JSON.stringify(data);
