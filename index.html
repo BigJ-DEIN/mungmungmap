@@ -4563,10 +4563,11 @@ async function doLiveSearch() {
   let allResults = [];
   let sdkDone = false, restDone = false;
 
-  function checkAllDone() {
+  async function checkAllDone() {
     if (sdkDone && restDone) {
       _liveCache.set(_cacheKey, { data: allResults, ts: Date.now() });
       _writeGridCache(_cacheKey, allResults.length); // 30일 Firestore 캐시 저장 (조건부)
+      await _vpLoadPromise; // 뷰포트 DB 로드 완료 대기 — 이미 완료된 경우 즉시 통과
       renderLiveResults(allResults);
     }
   }
@@ -5181,6 +5182,7 @@ async function _enrichNewPlacesWithNaverBlog(newPlaces) {
   if (!clientId || !clientSecret || !newPlaces || !newPlaces.length) return;
 
   console.log(`[NaverEnrich] 신규 ${newPlaces.length}개 장소 펫 정보 보강 시작`);
+  showToast(`🔍 신규 ${newPlaces.length}개 장소 대형견·테라스 정보 조사 중...`);
   let enriched = 0;
 
   for (const place of newPlaces) {
