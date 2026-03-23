@@ -6499,6 +6499,19 @@ async function savePlaceField(p, updateObj) {
   const stripUndefined = obj => Object.fromEntries(
     Object.entries(obj).filter(([, v]) => v !== undefined)
   );
+  // 펫 관련 필드 수동 편집 시 petManualFields에 추가, petAutoFields에서 제거
+  const PET_POLICY_FIELDS = ['large', 'outdoor', 'indoor', 'small', 'stroller', 'cage'];
+  const editedPetFields = Object.keys(updateObj).filter(k => PET_POLICY_FIELDS.includes(k));
+  if (editedPetFields.length) {
+    const curManual = Array.isArray(p.petManualFields) ? p.petManualFields : [];
+    const curAuto   = Array.isArray(p.petAutoFields)   ? p.petAutoFields   : [];
+    const newManual = [...new Set([...curManual, ...editedPetFields])];
+    const newAuto   = curAuto.filter(f => !editedPetFields.includes(f));
+    updateObj.petManualFields = newManual;
+    if (newAuto.length !== curAuto.length) updateObj.petAutoFields = newAuto;
+    p.petManualFields = newManual;
+    p.petAutoFields   = newAuto;
+  }
   // firestoreId 없으면 신규 문서 생성
   if (!p.firestoreId) {
     const ref = db.collection('places').doc();
@@ -11899,8 +11912,21 @@ async function runPetPolicyScan() {
 
     log(`총 ${targets.length}개 장소 스캔 시작 (재확인: ${filterRescan ? 'ON' : 'OFF'})`);
     _ppResults = [];
+    window._ppNoInfoPlaces = []; // 스니펫 없는 장소 목록
+    let _ppNoInfoCount = 0;
+    window._ppStopScan = false; // 중단 플래그
+
+    // 중단 버튼 UI 추가
+    resEl.innerHTML = `<div style="padding:8px 0">
+      <button onclick="window._ppStopScan=true;this.disabled=true;this.textContent='⏹ 중단 요청됨'"
+        style="padding:7px 16px;background:#EF4444;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">
+        ⏹ 스캔 중단
+      </button>
+    </div>`;
 
     for (let i = 0; i < targets.length; i++) {
+      if (window._ppStopScan) { log(`\n⏹ 중단됨 (${i}/${targets.length})`); break; }
+
       const p = targets[i];
       log(`[${i+1}/${targets.length}] ${p.name} (${p.area || '-'})`);
 
@@ -11917,19 +11943,27 @@ async function runPetPolicyScan() {
       // 자동 분석
       const autoAnalysis = _ppAutoAnalyze(localResult.tags, blogResult.snippets || []);
 
-      _ppResults.push({
-        place:        p,
-        localTags:    localResult.tags,
-        snippets:     blogResult.snippets || [],
-        autoAnalysis,                           // { large: true/false/null, outdoor: true/false/null }
-        manualFields: p.petManualFields || [],  // 수동 입력 필드 (절대 건드리지 않음)
-        rescanMode:   filterRescan,
-        chosen:       {}                        // 관리자가 UI에서 직접 선택한 값
-      });
+      // 정보 발견된 경우만 결과 패널에 추가 (렌더링 성능)
+      const hasData = autoAnalysis.large !== null || autoAnalysis.outdoor !== null
+                   || (blogResult.snippets?.length > 0);
+      if (hasData) {
+        _ppResults.push({
+          place:        p,
+          localTags:    localResult.tags,
+          snippets:     blogResult.snippets || [],
+          autoAnalysis,
+          manualFields: p.petManualFields || [],
+          rescanMode:   filterRescan,
+          chosen:       {}
+        });
+      } else {
+        _ppNoInfoCount++;
+        window._ppNoInfoPlaces.push(p);
+      }
     }
 
-    log(`\n완료 — ${_ppResults.length}개 장소 조사`);
-    _renderPpResults(resEl);
+    log(`\n완료 — 정보 발견 ${_ppResults.length}개 / 스니펫 없음 ${_ppNoInfoCount}개`);
+    _renderPpResults(resEl, _ppNoInfoCount);
 
   } catch(e) {
     log('❌ 오류: ' + e.message);
@@ -12052,14 +12086,32 @@ function _ppSim(a, b) {
 }
 
 // 결과 렌더링
-function _renderPpResults(resEl) {
-  if (!_ppResults.length) {
+function _renderPpResults(resEl, noInfoCount) {
+  noInfoCount = noInfoCount || 0;
+  if (!_ppResults.length && !noInfoCount) {
     resEl.innerHTML = `<div style="text-align:center;padding:24px;color:#999;font-size:13px">스캔할 장소가 없어요</div>`;
     return;
   }
+
+  // 페이지네이션 상태
+  window._ppPage = 0;
+  const PAGE_SIZE = 25;
+
+  const noInfoBanner = noInfoCount > 0 ? `
+    <div style="background:#F9FAFB;border-radius:10px;padding:10px 14px;margin-bottom:10px;border:1px solid #E5E7EB;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <span style="font-size:13px;color:#6B7280">📭 스니펫 없음: <b>${noInfoCount}개</b> 장소 (블로그 검색 결과 없음)</span>
+      <button onclick="ppMarkNoInfoAll()"
+        style="padding:5px 12px;background:#6B7280;color:#fff;border:none;border-radius:7px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit">
+        전체 미확인 표시
+      </button>
+    </div>` : '';
+
   resEl.innerHTML = `
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px">
-      <span style="font-size:14px;font-weight:700;color:#333">${_ppResults.length}개 장소 조사 완료</span>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px">
+      <span style="font-size:14px;font-weight:700;color:#333">
+        스니펫 발견 ${_ppResults.length}개
+        ${noInfoCount ? `<span style="font-size:12px;color:#9CA3AF;font-weight:400"> / 없음 ${noInfoCount}개</span>` : ''}
+      </span>
       <div style="display:flex;gap:8px">
         <button onclick="ppApplyAll()"
           style="padding:8px 18px;background:#E04E14;color:#fff;border:none;border-radius:10px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">
@@ -12067,14 +12119,60 @@ function _renderPpResults(resEl) {
         </button>
         <button onclick="ppMarkAllScanned()"
           style="padding:8px 14px;background:#6B7280;color:#fff;border:none;border-radius:10px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">
-          전체 '스캔완료' 표시
+          전체 미확인 표시
         </button>
       </div>
     </div>
+    ${noInfoBanner}
     <div id="pp-result-list">
-      ${_ppResults.map((r, i) => r ? _ppResultCard(r, i) : '').join('')}
+      ${_ppResults.slice(0, PAGE_SIZE).map((r, i) => r ? _ppResultCard(r, i) : '').join('')}
     </div>
+    ${_ppResults.length > PAGE_SIZE ? `
+    <div id="pp-load-more" style="text-align:center;margin-top:12px">
+      <button onclick="ppLoadMore()"
+        style="padding:9px 28px;background:#F3F4F6;color:#374151;border:1px solid #E5E7EB;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">
+        더 보기 (${_ppResults.length - PAGE_SIZE}개 남음)
+      </button>
+    </div>` : ''}
   `;
+}
+
+function ppLoadMore() {
+  const PAGE_SIZE = 25;
+  window._ppPage = (window._ppPage || 0) + 1;
+  const start = (window._ppPage) * PAGE_SIZE;
+  const end   = start + PAGE_SIZE;
+  const list  = document.getElementById('pp-result-list');
+  if (!list) return;
+  const frag = _ppResults.slice(start, end).map((r, localIdx) =>
+    r ? _ppResultCard(r, start + localIdx) : ''
+  ).join('');
+  list.insertAdjacentHTML('beforeend', frag);
+  const remaining = _ppResults.length - end;
+  const btn = document.getElementById('pp-load-more');
+  if (btn) {
+    if (remaining > 0) btn.innerHTML = `<button onclick="ppLoadMore()"
+      style="padding:9px 28px;background:#F3F4F6;color:#374151;border:1px solid #E5E7EB;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">
+      더 보기 (${remaining}개 남음)</button>`;
+    else btn.remove();
+  }
+}
+
+// 스니펫 없는 장소 전체 미확인 처리 (DB 반영은 ppMarkAllScanned가 담당)
+// noInfo 장소들은 _ppResults 외부에 있으므로 별도 처리 필요
+window._ppNoInfoPlaces = [];  // runPetPolicyScan에서 채움
+async function ppMarkNoInfoAll() {
+  const targets = window._ppNoInfoPlaces || [];
+  if (!targets.length) { showToast('미확인 처리할 장소 없음'); return; }
+  if (!confirm(`${targets.length}개 장소를 미확인으로 표시할까요?`)) return;
+  let done = 0;
+  for (const p of targets) {
+    try {
+      await db.collection('places').doc(p.fsId).update({ petScanned: true, petScanAt: new Date() });
+      done++;
+    } catch(e) { /* skip */ }
+  }
+  showToast(`✅ ${done}개 미확인 처리 완료`);
 }
 
 function _ppResultCard(r, i) {
