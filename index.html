@@ -754,9 +754,9 @@
     #admin-content { flex:1; overflow-y:auto; padding:16px; -webkit-overflow-scrolling:touch; }
     /* 그리드 캐시 뷰 Leaflet 툴팁 */
     .leaflet-tooltip.agc-label {
-      background:rgba(0,0,0,.82); color:#fff; border:none; border-radius:7px;
-      font-size:12px; font-weight:800; padding:4px 9px; white-space:nowrap;
-      box-shadow:0 2px 6px rgba(0,0,0,.35); pointer-events:none; letter-spacing:-.2px;
+      background:rgba(0,0,0,.72); color:#fff; border:none; border-radius:6px;
+      font-size:10px; font-weight:700; padding:3px 7px; white-space:nowrap;
+      box-shadow:none; pointer-events:none;
     }
     .leaflet-tooltip.agc-label::before { display:none; }
 
@@ -1033,13 +1033,6 @@
       white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
     }
     .mc-place-area { font-size:11px; color:#BBBBBB; margin-top:1px; }
-    /* 장소 태그 — 클릭 가능 버전 */
-    .mem-card-place-sec.mc-place-link { cursor:pointer; }
-    .mem-card-place-sec.mc-place-link:active { opacity:0.65; }
-    .mem-card-place-sec.mc-place-link .mc-place-name {
-      text-decoration: underline 1.5px dotted #E04E14;
-      text-underline-offset: 2px;
-    }
     /* 메뉴 버튼 */
     .mem-card-menu { display:flex; gap:4px; flex-shrink:0; }
     .mem-card-menu-btn {
@@ -1068,6 +1061,26 @@
     .mem-card-body { padding:10px 14px 14px; }
     .mem-text { font-size:14px; color:#1A1A1A; line-height:1.65; }
     .mem-private-label { font-size:11px; color:#CCC; margin-top:6px; display:flex; align-items:center; gap:3px; }
+    /* ── 좋아요 바 (인스타그램 스타일) ── */
+    .mem-like-bar {
+      display:flex; align-items:center; gap:6px;
+      padding:9px 13px 11px; border-top:1px solid #F3F3F3;
+    }
+    .mem-like-btn {
+      background:none; border:none; cursor:pointer; padding:0;
+      font-size:21px; line-height:1; display:flex; align-items:center;
+      transition:transform .12s; -webkit-tap-highlight-color:transparent;
+      filter:grayscale(1) opacity(.35);
+    }
+    .mem-like-btn.liked { filter:none; animation:likepop .22s ease; }
+    .mem-like-btn:active { transform:scale(.8); }
+    @keyframes likepop {
+      0%   { transform:scale(1); }
+      50%  { transform:scale(1.4); }
+      100% { transform:scale(1); }
+    }
+    .mem-like-count { font-size:13px; font-weight:800; color:#1A1A1A; }
+    .mem-like-label { font-size:13px; color:#8E8E8E; }
     .mem-place-tag { display:inline-block; font-size:11px; font-weight:700; color:#E04E14; margin-bottom:5px; }
     .mem-meta { font-size:11px; color:#C0C0C0; margin-top:7px; display:flex; gap:8px; }
     .mem-empty { text-align:center; padding:48px 20px; color:#CCC; font-size:13px; line-height:1.7; }
@@ -1348,29 +1361,6 @@
       padding:2px 7px; box-shadow:0 2px 6px rgba(0,0,0,.15);
       white-space:nowrap;
     }
-
-    /* ── 두근두근 로딩 애니메이션 ── */
-    @keyframes fabHeartbeat {
-      0%   { transform: scale(1);    }
-      30%  { transform: scale(1.13); }
-      50%  { transform: scale(1);    }
-      70%  { transform: scale(1.07); }
-      100% { transform: scale(1);    }
-    }
-    @keyframes labelPulse {
-      0%   { opacity: 1;    }
-      50%  { opacity: 0.4;  }
-      100% { opacity: 1;    }
-    }
-    #feedback-fab.searching #feedback-fab-img {
-      animation: fabHeartbeat 1.1s ease-in-out infinite;
-      border-color: #E04E14;
-    }
-    #feedback-fab.searching #feedback-fab-label {
-      animation: labelPulse 1.1s ease-in-out infinite;
-      color: #E04E14;
-    }
-
     /* ── 홍시 말풍선 ── */
     #hongsi-bubble {
       position:fixed; right:82px;
@@ -3253,7 +3243,7 @@ function showQuotaBubble() {
   if (!el) return;
   clearTimeout(_bubbleTimer);
   clearTimeout(_quotaBubbleTimer);
-  el.textContent = '잠깐 쉬는 중... 잠시 후 다시 눌러봐요 🐾';
+  el.textContent = '자는 중... 밤 12시 이후에 다시 놀아요.';
   el.classList.add('visible');
   _quotaBubbleTimer = setTimeout(() => {
     el.classList.remove('visible');
@@ -3386,59 +3376,46 @@ async function loadViewportPlaces() {
   _loadedTiles.add(areaKey);
 
   try {
+    const snap = await db.collection('places')
+      .where('lat', '>=', latMin)
+      .where('lat', '<=', latMax)
+      .limit(100)
+      .get();
+
     const existingIds = new Set(places.map(p => p.id));
     const newBatch = [];
 
-    // ── 페이지네이션으로 최대 500개 로딩 (LIMIT 100 × 5페이지) ────────────────
-    // 기존 LIMIT 100 단일 쿼리는 서울처럼 밀도가 높은 지역에서
-    // 위도 대역 내 처음 100개만 반환 → 뷰포트 안의 장소가 대량 누락되는 버그 수정
-    let lastDoc = null;
-    for (let page = 0; page < 5; page++) {
-      let q = db.collection('places')
-        .where('lat', '>=', latMin)
-        .where('lat', '<=', latMax)
-        .orderBy('lat')
-        .limit(100);
-      if (lastDoc) q = q.startAfter(lastDoc);
-
-      const snap = await q.get();
-      if (snap.empty) break;
-
-      snap.docs.forEach(doc => {
-        try {
-          const p = { ...doc.data(), firestoreId: doc.id };
-          if (p.active === false) return;
-          // auto_pipeline_cat 미확인은 제외
-          if (p.source === 'auto_pipeline_cat') {
-            const st = p.petStatus;
-            if (st !== 'confirmed' && st !== 'verified') return;
-          }
-          // 경도 클라이언트 필터
-          if (p.lng == null || p.lng < lngMin || p.lng > lngMax) return;
-          if (existingIds.has(p.id)) {
-            // ★ Fix D: 이미 로드된 장소라도 Firestore에 manuallyEdited 필드가 있으면 필드 병합
-            // 이를 통해 반려견 정책 수동 편집이 세션 간에 유지됨
-            if (p.manuallyEdited === true) {
-              const existing = places.find(x => x.id == p.id);
-              if (existing && !existing.manuallyEdited) {
-                const POLICY_FIELDS = ['large','small','indoor','outdoor','cage','entryFee','stroller','note','hours'];
-                POLICY_FIELDS.forEach(f => { if (p[f] !== undefined) existing[f] = p[f]; });
-                existing.manuallyEdited = true;
-                existing.firestoreId = p.firestoreId; // 최신 firestoreId로 갱신
-              }
+    snap.docs.forEach(doc => {
+      try {
+        const p = { ...doc.data(), firestoreId: doc.id };
+        if (p.active === false) return;
+        // auto_pipeline_cat 미확인은 제외
+        if (p.source === 'auto_pipeline_cat') {
+          const st = p.petStatus;
+          if (st !== 'confirmed' && st !== 'verified') return;
+        }
+        // 경도 클라이언트 필터
+        if (p.lng == null || p.lng < lngMin || p.lng > lngMax) return;
+        if (existingIds.has(p.id)) {
+          // ★ Fix D: 이미 로드된 장소라도 Firestore에 manuallyEdited 필드가 있으면 필드 병합
+          // 이를 통해 반려견 정책 수동 편집이 세션 간에 유지됨
+          if (p.manuallyEdited === true) {
+            const existing = places.find(x => x.id == p.id);
+            if (existing && !existing.manuallyEdited) {
+              const POLICY_FIELDS = ['large','small','indoor','outdoor','cage','entryFee','stroller','note','hours'];
+              POLICY_FIELDS.forEach(f => { if (p[f] !== undefined) existing[f] = p[f]; });
+              existing.manuallyEdited = true;
+              existing.firestoreId = p.firestoreId; // 최신 firestoreId로 갱신
             }
-            return;
           }
-          existingIds.add(p.id);
-          places.push(p);
-          newBatch.push(p);
-          if (typeof p.id === 'number') updateGlobalMaxId(p.id); // ★ Fix H
-        } catch(docErr) { console.warn('[loadViewportPlaces] doc 오류:', docErr); }
-      });
-
-      lastDoc = snap.docs[snap.docs.length - 1];
-      if (snap.docs.length < 100) break; // 마지막 페이지 — 더 이상 없음
-    }
+          return;
+        }
+        existingIds.add(p.id);
+        places.push(p);
+        newBatch.push(p);
+        if (typeof p.id === 'number') updateGlobalMaxId(p.id); // ★ Fix H
+      } catch(docErr) { console.warn('[loadViewportPlaces] doc 오류:', docErr); }
+    });
 
     if (newBatch.length > 0 && clusterGroup) {
       newBatch.forEach(p => {
@@ -3806,11 +3783,7 @@ function initMap() {
   });
 
   // 마커는 loadViewportPlaces() 에서 추가 (initApp에서 호출됨)
-  map.on('click',   () => {
-    if (activePlace) closeDrawer();
-    // 스와이프 닫기 후 남아있던 말풍선 — 빈 지도 탭 시 정리
-    if (_activeTooltipId) { setMarkerActive(_activeTooltipId, false); _activeTooltipId = null; }
-  });
+  map.on('click',   () => { if (activePlace) closeDrawer(); });
   map.on('zoomend', updateAllMarkerSizes);
   // 자동 뷰포트 로딩 제거 — '홍시야 찾아줘' 버튼으로 수동 로딩
   // map.on('moveend', _scheduleVpLoad);
@@ -4447,15 +4420,12 @@ function initKakaoSearch() {
 let _liveSearchRunning = false;
 let _sessionQuotaHit = false; // REST 429 감지 시 true → 캐시 저장 금지
 let _liveAllEnded    = true;  // 모든 REST 호출이 is_end:true로 끝나야 true
-let _liveAbortCtrl   = null;  // 현재 검색 세션 AbortController — 429 감지 시 전체 중단용
 
 function _setLiveFabState(loading) {
-  const fab   = document.getElementById('feedback-fab');
   const label = document.getElementById('feedback-fab-label');
   const img   = document.getElementById('feedback-fab-img');
   if (label) label.textContent = loading ? '찾는 중...' : '홍시야 찾아줘!';
-  if (img)   img.style.opacity = '';           // 애니메이션이 시각 피드백을 대체 — opacity 고정 제거
-  if (fab)   fab.classList.toggle('searching', loading); // 두근두근 애니메이션 on/off
+  if (img)   img.style.opacity = loading ? '0.5' : '';
   _liveSearchRunning = loading;
 }
 
@@ -4490,30 +4460,13 @@ const _liveCache = new Map();
 async function _checkGridCache(cacheKey) {
   if (!firebaseReady || !db) return null;
   try {
-    const parts = cacheKey.split('_');
-    const latPart = parts[0], lngPart = parts[1], zoom = parseInt(parts[2]);
-    // look-down only: 현재 줌과 더 넓은 줌(줌-1, 줌-2) 캐시를 순서대로 시도
-    // 넓은 뷰포트 캐시(줌아웃)는 좁은 뷰포트(줌인)를 커버할 수 있으므로 허용
-    // 반대 방향(더 좁은 캐시로 넓은 뷰포트 커버)은 콩카세 누락 위험 → 사용 안 함
-    const keysToTry = [
-      cacheKey,
-      `${latPart}_${lngPart}_${zoom - 1}`,
-      `${latPart}_${lngPart}_${zoom - 2}`,
-    ];
-    const docs = await Promise.all(
-      keysToTry.map(k => db.collection('liveSearchCache').doc(k).get())
-    );
-    for (const doc of docs) {
-      if (!doc.exists) continue;
-      const d = doc.data();
-      if (!d || !d.completedAt) continue;
-      // v 필드가 명시된 경우에만 버전 체크 — v 없는 기존 문서는 호환성 유지 (유효로 처리)
-      if (d.v && d.v < _GRID_CACHE_VERSION) continue;
-      const age = Date.now() - d.completedAt.toMillis();
-      if (age > 30 * 24 * 60 * 60 * 1000) continue; // 30일 만료
-      return d; // 첫 번째 유효한 캐시 반환 (현재 줌 → 줌-1 → 줌-2 우선순위)
-    }
-    return null;
+    const doc = await db.collection('liveSearchCache').doc(cacheKey).get();
+    if (!doc.exists) return null;
+    const d = doc.data();
+    if (!d || !d.completedAt) return null;
+    const age = Date.now() - d.completedAt.toMillis();
+    if (age > 30 * 24 * 60 * 60 * 1000) return null; // 30일 만료
+    return d;
   } catch(e) { return null; }
 }
 
@@ -4524,7 +4477,6 @@ async function _writeGridCache(cacheKey, resultCount) {
   try {
     await db.collection('liveSearchCache').doc(cacheKey).set({
       completedAt: firebase.firestore.FieldValue.serverTimestamp(),
-      v: _GRID_CACHE_VERSION, // 버전 기록 — 구버전 캐시 무효화에 사용
       resultCount,
       zoom: map.getZoom(),
     });
@@ -4532,90 +4484,13 @@ async function _writeGridCache(cacheKey, resultCount) {
   } catch(e) { console.warn('[_writeGridCache]', e); }
 }
 
-// ── 섹션 C 단독 실행 함수 ─────────────────────────────────────────────────────
-// 그리드 캐시 히트 시에만 호출 — A·B 없이 동네명 기반 키워드 검색만 수행
-// 목적: 캐시 유효 기간(30일) 내에 새로 오픈한 미등록 장소 발굴 (콩카세 등)
-async function _runSectionCOnly() {
-  const bounds  = map.getBounds();
-  const N = bounds.getNorth(), S = bounds.getSouth();
-  const E = bounds.getEast(),  W = bounds.getWest();
-  const viewKmW = (E - W) * 88;
-  const viewKmH = (N - S) * 111;
-  const ctr     = map.getCenter();
-  const results = [];
-
-  try {
-    const rgResp = await fetch(
-      `https://dapi.kakao.com/v2/local/geo/coord2regioncode.json?x=${ctr.lng}&y=${ctr.lat}`,
-      { headers: { 'Authorization': `KakaoAK ${KAKAO_REST_KEY}` },
-        signal: AbortSignal.timeout(5000) }
-    );
-    if (rgResp.ok) {
-      const rgJson  = await rgResp.json();
-      const reg     = rgJson.documents?.[0];
-      const dong    = (reg?.region_3depth_name || '').replace(/\d+가$/, '');
-      const gu      = reg?.region_2depth_name || '';
-      const searchAreas = [...new Set([dong, gu].filter(Boolean))];
-      // 반경 = 뷰포트 대각선의 절반, 최대 3000m
-      // ※ 상한을 3km로 제한 — Kakao 45결과 내에서 로컬 소규모 카페(콩카세 등)가 밀리지 않도록
-      const rgRadiusM   = Math.min(Math.round(Math.sqrt(
-        Math.pow(viewKmW * 1000, 2) + Math.pow(viewKmH * 1000, 2)) / 2), 3000);
-      const rgLocQ = `x=${ctr.lng}&y=${ctr.lat}&radius=${rgRadiusM}`;
-      const petKwSuffixes = [' 반려견 카페', ' 애견 카페', ' 강아지 카페', ' 반려동물 카페', ' 펫카페', ' 반려견', ' 강아지', ' 애견'];
-      const tasks = [];
-      for (const area of searchAreas) {
-        for (const suffix of petKwSuffixes) {
-          const kw = area + suffix;
-          tasks.push((async () => {
-            for (let page = 1; page <= 3; page++) {
-              try {
-                const resp = await fetch(
-                  `https://dapi.kakao.com/v2/local/search/keyword.json` +
-                  `?query=${encodeURIComponent(kw)}&${rgLocQ}&size=15&page=${page}`,
-                  { headers: { 'Authorization': `KakaoAK ${KAKAO_REST_KEY}` },
-                    signal: AbortSignal.timeout(6000) }
-                );
-                if (resp.status === 429) { _sessionQuotaHit = true; break; }
-                if (!resp.ok) break;
-                const json = await resp.json();
-                if (json.documents?.length) {
-                  json.documents.forEach(d => results.push({ ...d, _fromPetKeyword: true }));
-                }
-                if (json.meta?.is_end !== false) break;
-              } catch(e) { break; }
-            }
-          })());
-        }
-      }
-      await Promise.allSettled(tasks);
-    }
-  } catch(e) { /* 역지오코딩 실패 시 무시 */ }
-  return results;
-}
-
 async function doLiveSearch() {
   _setLiveFabState(true);
   _sessionQuotaHit = false; // 새 검색마다 초기화
   _liveAllEnded    = true;  // 낙관적 초기화 → REST 루프에서 반증 시 false
-  // 이전 검색이 아직 실행 중이면 즉시 중단 후 새 검색 시작
-  if (_liveAbortCtrl) { try { _liveAbortCtrl.abort(); } catch(_) {} }
-  _liveAbortCtrl = new AbortController();
-  const _liveSig = _liveAbortCtrl.signal; // 모든 REST fetch에 공유 — 429 시 abort.abort() 호출
-
-  // ── DB 장소 먼저 로딩 — 뷰포트 내 기등록 장소를 places에 추가 ─────────────
-  // 사용자가 명시적으로 "홍시야 찾아줘"를 실행할 때는 현재 뷰포트 타일 캐시를 초기화
-  // → _loadedTiles가 살아있으면 loadViewportPlaces()가 즉시 return해버려 새 장소가 누락됨
-  {
-    const _b = map.getBounds().pad(0.05);
-    const _ak = [_b.getSouth(), _b.getNorth(), _b.getWest(), _b.getEast()]
-      .map(v => (Math.round(v / 0.05) * 0.05).toFixed(2)).join('|');
-    _loadedTiles.delete(_ak); // 현재 뷰포트만 선택적 무효화 (다른 타일은 유지)
-  }
-  await loadViewportPlaces();
 
   // ── 캐시 확인: 동일 뷰포트 15분 내 재검색이면 API 호출 없이 바로 표시 ──────
   const _ctr = map.getCenter();
-  // 정확한 줌으로 캐시 키 생성 (WRITE) — 읽기 시에는 _checkGridCache가 줌-1, 줌-2도 시도 (look-down only)
   const _cacheKey = `${Math.round(_ctr.lat*100)}_${Math.round(_ctr.lng*100)}_${map.getZoom()}`;
   const _cached = _liveCache.get(_cacheKey);
   if (_cached && Date.now() - _cached.ts < 5 * 60 * 1000) {
@@ -4625,24 +4500,14 @@ async function doLiveSearch() {
   }
 
   // ── Firestore 그리드 완료 캐시 확인 (30일 TTL) ────────────────────────────
-  // is_end:true로 완전 탐색된 구역 → A·B 재검색 생략, DB 장소 즉시 표시 + C섹션만 실행
+  // is_end:true로 완전 탐색된 구역 → 재검색 생략, DB 장소만 노출
   const _gridCached = await _checkGridCache(_cacheKey);
   if (_gridCached) {
-    showToast('✅ 저장된 결과 표시 중 — 신규 장소만 추가 탐색 중...');
-    filterPlaces(); // DB 장소 즉시 표시 (사용자가 바로 볼 수 있도록)
-    // C섹션(동네명 기반 키워드 검색)만 실행 — 새로 오픈한 장소 발굴 목적
-    const _cNewResults = await _runSectionCOnly();
-    if (_cNewResults.length > 0) {
-      await renderLiveResults(_cNewResults);
-    } else {
-      _setLiveFabState(false);
-    }
+    showToast('✅ 이미 완전 탐색된 구역이에요 (최근 30일)');
+    _setLiveFabState(false);
+    filterPlaces();
     return;
   }
-
-  // ── 풀 검색 시작 전 DB 장소 즉시 표시 ────────────────────────────────────
-  // 캐시가 없어서 A+B+C 검색을 시작하더라도, 기존 DB 장소는 검색 완료 전에 바로 마커로 보여야 함
-  filterPlaces();
 
   const bounds = map.getBounds();
   const N = bounds.getNorth(), S = bounds.getSouth();
@@ -4720,15 +4585,13 @@ async function doLiveSearch() {
 
   });
 
-  // ── ② REST API 검색 (청크 병렬) ─────────────────────────────────────────
+  // ── ② REST API 검색 (병렬) ────────────────────────────────────────────────
   // A) 카테고리 검색: SDK는 45개(3p×15)로 끊기므로 REST로 is_end까지 전부 수집
   //    → 밀집 지역(성수동 등)에서 누락 없이 모든 카페/음식점 포함
   // B) 키워드 검색: SDK keywordSearch가 시설 태그 기반 장소를 못 잡을 경우 보완
-  // ★ tasks[]에는 함수만 저장 — 실행은 청크 단위로 지연. push 즉시 실행하면
-  //   70개+가 동시에 날아가 Kakao burst rate limit(429) 유발
   ;(async () => {
     try {
-      const tasks = []; // async 함수 배열 — push 시 실행 안 함
+      const tasks = [];
 
       for (const pt of gridPoints) {
         const locQ = `x=${pt.lng}&y=${pt.lat}&radius=${Math.round(cellRadiusM)}&size=15`;
@@ -4737,44 +4600,43 @@ async function doLiveSearch() {
         // page 최대 45 = Kakao API 허용 최대치 / 성수동같은 고밀도 지역 누락 방지
         // is_end:true 감지 시 자동 조기 종료 → 실제 요청 수는 밀도에 비례
         for (const code of catCodes) {
-          tasks.push(async () => {   // ← () 없음: 함수만 저장, 아직 실행 안 함
+          tasks.push((async () => {
             for (let page = 1; page <= 45; page++) {
-              if (_liveSig.aborted) break;
               try {
                 const resp = await fetch(
                   `https://dapi.kakao.com/v2/local/search/category.json` +
                   `?category_group_code=${code}&${locQ}&page=${page}`,
                   { headers: { 'Authorization': `KakaoAK ${KAKAO_REST_KEY}` },
-                    signal: _liveSig }
+                    signal: AbortSignal.timeout(6000) }
                 );
-                if (resp.status === 429) { _sessionQuotaHit = true; break; }
+                if (resp.status === 429) { _sessionQuotaHit = true; break; } // 쿼터 초과 → 캐시 저장 금지
                 if (!resp.ok) break;
                 const json = await resp.json();
                 if (json.documents?.length) {
+                  // 카테고리 검색 결과 → _fromPetKeyword 없음 (반려동물 확인 필요)
                   allResults = allResults.concat(json.documents);
                 }
-                if (json.meta?.is_end !== false) break;
-                if (page === 45) _liveAllEnded = false;
+                if (json.meta?.is_end !== false) break; // is_end:true → 완전 수집
+                if (page === 45) _liveAllEnded = false; // 45p에서도 is_end:false → 미완료
               } catch(e) { break; }
             }
-          });
+          })());
         }
 
         // B) REST 키워드 검색 (반려동물 시설 태그) — is_end 까지 완전 수집
         // 태그 없는 로컬 장소(콩카세 등)를 잡으려면 넓은 키워드 필요 — 좁히지 말 것
         const restKeywords = ['반려견동반', '애견동반', '반려동물동반', '반려견 카페', '애견카페', '펫카페', '강아지카페', '도그카페', '반려견 식당', '반려동물 동반'];
         for (const kw of restKeywords) {
-          tasks.push(async () => {   // ← 함수만 저장
+          tasks.push((async () => {
             for (let page = 1; page <= 3; page++) {
-              if (_liveSig.aborted) break;
               try {
                 const resp = await fetch(
                   `https://dapi.kakao.com/v2/local/search/keyword.json` +
                   `?query=${encodeURIComponent(kw)}&${locQ}&page=${page}`,
                   { headers: { 'Authorization': `KakaoAK ${KAKAO_REST_KEY}` },
-                    signal: _liveSig }
+                    signal: AbortSignal.timeout(6000) }
                 );
-                if (resp.status === 429) { _sessionQuotaHit = true; break; }
+                if (resp.status === 429) { _sessionQuotaHit = true; break; } // 쿼터 초과
                 if (!resp.ok) break;
                 const json = await resp.json();
                 if (json.documents?.length) {
@@ -4785,7 +4647,7 @@ async function doLiveSearch() {
                 if (json.meta?.is_end !== false) break;
               } catch(e) { break; }
             }
-          });
+          })());
         }
       }
 
@@ -4802,30 +4664,34 @@ async function doLiveSearch() {
         if (rgResp.ok) {
           const rgJson = await rgResp.json();
           const reg    = rgJson.documents?.[0];
-          const dong   = (reg?.region_3depth_name || '').replace(/\d+가$/, '');
+          const dong   = (reg?.region_3depth_name || '').replace(/\d+가$/, ''); // "성수동1가" → "성수동"
           const gu     = reg?.region_2depth_name || '';
+          // 동(洞) + 구(區) 두 레벨 모두 검색 — 구 레벨은 더 넓은 범위 커버
           const searchAreas = [...new Set([dong, gu].filter(Boolean))];
+          // 뷰포트 기준 검색 반경 — 위치 바운딩 없으면 전국 결과가 나와서 로컬 장소 누락
           const rgRadiusM = Math.min(Math.round(Math.sqrt(
-            Math.pow(viewKmW * 1000, 2) + Math.pow(viewKmH * 1000, 2)) / 2), 3000);
+            Math.pow(viewKmW * 1000, 2) + Math.pow(viewKmH * 1000, 2)) / 2 * 1.5), 10000);
           const rgLocQ = `x=${ctr.lng}&y=${ctr.lat}&radius=${rgRadiusM}`;
+          // 넓은 키워드(' 반려견')가 태그 없는 로컬 인기 장소를 잡는 핵심 — 좁히지 말 것
           const petKwSuffixes = [' 반려견 카페', ' 애견 카페', ' 강아지 카페', ' 반려동물 카페', ' 펫카페', ' 반려견', ' 강아지', ' 애견'];
           for (const area of searchAreas) {
             for (const suffix of petKwSuffixes) {
               const kw = area + suffix;
-              tasks.push(async () => {   // ← 함수만 저장
+              tasks.push((async () => {
                 for (let page = 1; page <= 3; page++) {
-                  if (_liveSig.aborted) break;
                   try {
+                    // 위치 반경 바운딩: 현재 뷰포트 중심 기준 → 지금 화면의 로컬 장소 우선
                     const resp = await fetch(
                       `https://dapi.kakao.com/v2/local/search/keyword.json` +
                       `?query=${encodeURIComponent(kw)}&${rgLocQ}&size=15&page=${page}`,
                       { headers: { 'Authorization': `KakaoAK ${KAKAO_REST_KEY}` },
-                        signal: _liveSig }
+                        signal: AbortSignal.timeout(6000) }
                     );
-                    if (resp.status === 429) { _sessionQuotaHit = true; break; }
+                    if (resp.status === 429) { _sessionQuotaHit = true; break; } // 쿼터 초과
                     if (!resp.ok) break;
                     const json = await resp.json();
                     if (json.documents?.length) {
+                      // 지역명+반려동물 조합 검색 결과 → 카카오가 연관 장소로 판단한 것
                       allResults = allResults.concat(
                         json.documents.map(d => ({ ...d, _fromPetKeyword: true }))
                       );
@@ -4833,24 +4699,13 @@ async function doLiveSearch() {
                     if (json.meta?.is_end !== false) break;
                   } catch(e) { break; }
                 }
-              });
+              })());
             }
           }
         }
       } catch(e) { /* 역지오코딩 실패 시 무시 */ }
 
-      // ── 태스크마다 시작 시점을 100ms씩 분산 (stagger) ───────────────────────
-      // tasks[]는 아직 실행 안 된 함수 배열.
-      // CHUNK 방식은 N개를 동시에 발사 → burst 발생. stagger는 1개씩 100ms 간격으로 시작.
-      // zoom15(142개): 총 14.2s, 최대 10 req/s — Kakao burst limit 안전권 유지
-      // zoom16(240개): 총 24s, 동일 rate — 429 없이 모든 타일 처리 가능
-      // 429 발생 시 _liveSig.aborted=true → 이후 태스크 skip, 앞 결과는 유저에게 전달
-      const STAGGER_MS = 100;
-      const staggeredTasks = tasks.map((fn, idx) =>
-        new Promise(r => setTimeout(r, idx * STAGGER_MS))
-          .then(() => { if (!_liveSig.aborted) return fn(); })
-      );
-      await Promise.allSettled(staggeredTasks);
+      await Promise.allSettled(tasks);
     } catch(e) {}
     restDone = true;
     checkAllDone();
@@ -5641,7 +5496,7 @@ function onSearchKeydown(e) {
     _sgKakaoPlaces = docs;
     selectKakaoPlaceSuggestion(0);
   })
-  .catch(e => showToast(e.message === '429' ? '잠깐 쉬는 중... 잠시 후 다시 눌러봐요 🐾' : '검색 중 오류가 발생했어요'));
+  .catch(e => showToast(e.message === '429' ? '자는 중... 밤 12시 이후에 다시 놀아요.' : '검색 중 오류가 발생했어요'));
 }
 
 function clearSearch() {
@@ -5782,7 +5637,7 @@ async function showSearchSuggestions(query) {
       bx.innerHTML = stripped + kakaoHtml;
       bx.classList.add('open');
     } catch(e) {
-      _sgClear(e?.is429 ? '잠깐 쉬는 중... 잠시 후 다시 눌러봐요 🐾' : '결과 없음');
+      _sgClear(e?.is429 ? '자는 중... 밤 12시 이후에 다시 놀아요.' : '결과 없음');
     }
 
   }, 300);
@@ -5805,7 +5660,7 @@ async function _sgRestFallback(query, q, renderFn) {
         const stripped = bx.innerHTML.replace(/<div class="sg-empty[^>]*>[\s\S]*?<\/div>/, '');
         const hasOtherResults = stripped.includes('sg-item');
         if (!hasOtherResults) {
-          bx.innerHTML = stripped + `<div class="sg-empty">잠깐 쉬는 중... 잠시 후 다시 눌러봐요 🐾</div>`;
+          bx.innerHTML = stripped + `<div class="sg-empty">자는 중... 밤 12시 이후에 다시 놀아요.</div>`;
         }
       }
       return;
@@ -6178,11 +6033,6 @@ function openPlace(p) {
   if (!p) return;
   // 드로어 열기 전 선택 상태 강제 갱신 (이미 선택됐어도 다시 적용)
   if (activePlace && activePlace.id !== p.id) setMarkerActive(activePlace.id, false);
-  // 스와이프 닫기 후 남아있던 tooltip-only 마커도 정리 (다른 장소 열 때)
-  if (_activeTooltipId && _activeTooltipId !== p.id) {
-    setMarkerActive(_activeTooltipId, false);
-    _activeTooltipId = null;
-  }
   activePlace = p;
   setMarkerActive(p.id, true);
   // 뷰포트 안에 있으면 지도 고정, 밖에 있을 때만 이동 (현재 줌 유지)
@@ -6317,7 +6167,6 @@ function openPlace(p) {
 let _drawerOpenAt = 0;
 let _drawerExpanded = false;
 let currentDrawerMemTab = 'all'; // 기본: 모두의 추억
-let _activeTooltipId = null;    // 드로어 닫힌 후에도 말풍선만 살려둔 마커 ID
 
 function switchDrawerMemTab(tab) {
   currentDrawerMemTab = tab;
@@ -6333,11 +6182,9 @@ function toggleDrawerExpand() {
   if (btn) btn.textContent = _drawerExpanded ? '⬇' : '⬆';
 }
 
-function closeDrawer(force, keepMarker) {
+function closeDrawer() {
   // 방금 열린 직후 마커 탭 이벤트가 map.click으로도 전파돼 즉시 닫히는 현상 방지 (300ms 쿨다운)
-  // force=true  : 쿨다운 무시 (스와이프·탭 전환 등)
-  // keepMarker  : true 시 말풍선/마커 하이라이트 유지 (스와이프 닫기 전용)
-  if (!force && Date.now() - _drawerOpenAt < 300) return;
+  if (Date.now() - _drawerOpenAt < 300) return;
   document.getElementById('detail-drawer').classList.remove('open');
   document.getElementById('drawer-overlay').classList.remove('active');
   // 확장 상태 리셋
@@ -6347,59 +6194,8 @@ function closeDrawer(force, keepMarker) {
     const btn = document.getElementById('btn-drawer-expand');
     if (btn) btn.textContent = '⬆';
   }
-  if (activePlace) {
-    if (keepMarker) {
-      // 말풍선·하이라이트 유지 — 드로어 UI만 닫음
-      // 이전에 살아있던 다른 tooltip 마커는 정리
-      if (_activeTooltipId && _activeTooltipId !== activePlace.id) {
-        setMarkerActive(_activeTooltipId, false);
-      }
-      _activeTooltipId = activePlace.id;
-    } else {
-      // 기존 tooltip-only 마커도 함께 정리
-      if (_activeTooltipId) { setMarkerActive(_activeTooltipId, false); _activeTooltipId = null; }
-      setMarkerActive(activePlace.id, false);
-    }
-    activePlace = null;
-  }
+  if (activePlace) { setMarkerActive(activePlace.id, false); activePlace = null; }
   filterPlaces();
-  // filterPlaces() 내부에서 upgradeToGreenHeartMarker() 등이 마커 DOM을 교체할 수 있음.
-  // keepMarker=true 시 교체된 새 마커에도 tooltip을 재적용해야 말풍선이 유지됨.
-  if (keepMarker && _activeTooltipId) {
-    setTimeout(() => setMarkerActive(_activeTooltipId, true), 50);
-  }
-}
-
-// ── 추억 카드 장소 태그 클릭 → 해당 마커로 이동 + 드로어 열기 ──────────────────
-function jumpToPlaceFromMemory(placeId) {
-  const p = places.find(x => x.id == placeId);
-  if (!p) {
-    showToast('지도에 없는 장소예요. 먼저 지도를 그 지역으로 이동해보세요.');
-    if (isMobile()) setMobileTab('map', true);
-    return;
-  }
-  // 모바일: 추억 패널 → 지도 탭으로 전환 (드로어는 열 예정이므로 skipCloseDrawer=true)
-  if (isMobile()) {
-    const mobileTabEl = document.getElementById('tab-map');
-    document.querySelectorAll('.mtab').forEach(t => t.classList.remove('active'));
-    if (mobileTabEl) mobileTabEl.classList.add('active');
-    mobileTab = 'map';
-    document.getElementById('sidebar')?.classList.remove('mobile-open');
-    document.getElementById('memories-panel')?.classList.remove('mobile-open');
-    const fabList = document.getElementById('fab-list');
-    if (fabList) fabList.style.display = 'flex';
-    if (map) { map.dragging.enable(); map.touchZoom.enable(); map.tap?.enable(); }
-    setTimeout(() => map?.invalidateSize(), 350);
-  }
-  // 현재 열린 드로어가 있으면 조용히 닫고 새 장소 열기
-  const dd = document.getElementById('detail-drawer');
-  dd.classList.remove('open', 'expanded');
-  document.getElementById('drawer-overlay')?.classList.remove('active');
-  _drawerExpanded = false;
-  activePlace = null;
-  // 지도 이동 후 드로어 열기
-  map.flyTo([p.lat, p.lng], Math.max(map.getZoom(), 15), { duration: 0.7 });
-  setTimeout(() => openPlace(p), 500);
 }
 
 // ══════════════════════════════════════════════════════
@@ -7250,10 +7046,7 @@ function exitMapPickMode() {
 
   // 지도 클릭 핸들러 복원
   map.off('click');
-  map.on('click', () => {
-    if (activePlace) closeDrawer();
-    if (_activeTooltipId) { setMarkerActive(_activeTooltipId, false); _activeTooltipId = null; }
-  });
+  map.on('click', () => { if (activePlace) closeDrawer(); });
 
   // 모달 복원 — 맵픽 모드에서 빠져나올 때만 재오픈
   // (closeModal이 exitMapPickMode를 호출하는 경우엔 재오픈 방지)
@@ -7585,10 +7378,8 @@ function renderMemoryCard(m, showPlace = true) {
     </div>`;
 
   // ── 장소 섹션 (오른쪽) ──
-  // placeId가 있으면 클릭 시 해당 마커로 이동
   const placeSecHtml = m.placeName ? `
-    <div class="mem-card-place-sec${m.placeId ? ' mc-place-link' : ''}"
-      ${m.placeId ? `onclick="event.stopPropagation();jumpToPlaceFromMemory(${m.placeId})" title="지도에서 보기"` : ''}>
+    <div class="mem-card-place-sec">
       <div class="mc-place-name">📍 ${m.placeName}</div>
       ${m.placeArea ? `<div class="mc-place-area">${m.placeArea}</div>` : ''}
     </div>` : '<div class="mem-card-place-sec"></div>';
@@ -7610,13 +7401,72 @@ function renderMemoryCard(m, showPlace = true) {
       ${privNote}
     </div>` : '';
 
+  // ── 좋아요 ──
+  const likeCount = m.likeCount || 0;
+  const isLiked = !!(currentUser && Array.isArray(m.likedBy) && m.likedBy.includes(currentUser.uid));
+  const likeBarHtml = `
+    <div class="mem-like-bar">
+      <button class="mem-like-btn${isLiked ? ' liked' : ''}"
+        onclick="toggleMemLike('${m.id}', ${isLiked})"
+        title="${isLiked ? '좋아요 취소' : '좋아요'}">👍</button>
+      ${likeCount > 0
+        ? `<span class="mem-like-count">${likeCount.toLocaleString()}</span><span class="mem-like-label">명이 좋아해요</span>`
+        : `<span class="mem-like-label">첫 번째로 좋아요를 눌러보세요</span>`}
+    </div>`;
+
   return `<div class="mem-card" data-mem-id="${m.id}">
     <div class="mem-card-info-row">
       ${dogSecHtml}${placeSecHtml}${menuHtml}
     </div>
     ${dateStr ? `<div class="mem-card-date">${dateStr}</div>` : ''}
-    ${imgHtml}${bodyHtml}
+    ${imgHtml}${bodyHtml}${likeBarHtml}
   </div>`;
+}
+
+async function toggleMemLike(memId, currentlyLiked) {
+  if (!currentUser) { showToast('로그인 후 좋아요를 누를 수 있어요 🐾'); return; }
+  const uid = currentUser.uid;
+  const FV  = firebase.firestore.FieldValue;
+
+  // 낙관적 UI 업데이트
+  const card = document.querySelector(`.mem-card[data-mem-id="${memId}"]`);
+  if (card) {
+    const btn      = card.querySelector('.mem-like-btn');
+    const bar      = card.querySelector('.mem-like-bar');
+    const countEl  = card.querySelector('.mem-like-count');
+    const labelEl  = card.querySelector('.mem-like-label');
+    if (currentlyLiked) {
+      btn.classList.remove('liked');
+      btn.title = '좋아요';
+      btn.onclick = () => toggleMemLike(memId, false);
+      const cnt = Math.max(0, (parseInt((countEl?.textContent||'0').replace(/,/g,'')) || 0) - 1);
+      if (cnt > 0) { if (countEl) countEl.textContent = cnt.toLocaleString(); }
+      else {
+        if (countEl) countEl.remove();
+        if (labelEl) labelEl.textContent = '첫 번째로 좋아요를 눌러보세요';
+      }
+    } else {
+      btn.classList.add('liked');
+      btn.title = '좋아요 취소';
+      btn.onclick = () => toggleMemLike(memId, true);
+      const cnt = (parseInt((countEl?.textContent||'0').replace(/,/g,'')) || 0) + 1;
+      if (countEl) { countEl.textContent = cnt.toLocaleString(); }
+      else {
+        labelEl.insertAdjacentHTML('beforebegin', `<span class="mem-like-count">${cnt.toLocaleString()}</span>`);
+        labelEl.textContent = '명이 좋아해요';
+      }
+    }
+  }
+
+  try {
+    await db.collection('memories').doc(memId).update({
+      likedBy:   currentlyLiked ? FV.arrayRemove(uid) : FV.arrayUnion(uid),
+      likeCount: FV.increment(currentlyLiked ? -1 : 1)
+    });
+  } catch(e) {
+    console.warn('[toggleMemLike]', e);
+    showToast('오류가 발생했어요');
+  }
 }
 
 /* 추억 서브탭 전환 */
@@ -8011,14 +7861,12 @@ function setMobileTab(tab, skipCloseDrawer) {
   const memPanel = document.getElementById('memories-panel');
 
   if (tab === 'list') {
-    closeDrawer(true); // 장소 드로어가 열려있어도 탭 전환 허용 — 강제 닫기
     sidebar.classList.add('mobile-open');
     memPanel.classList.remove('mobile-open');
     document.getElementById('fab-list').style.display = 'none';
     // 지도가 터치 이벤트를 가로채지 않도록 비활성화
     if (map) { map.dragging.disable(); map.touchZoom.disable(); map.tap?.disable(); }
   } else if (tab === 'memories') {
-    closeDrawer(true); // 장소 드로어가 열려있어도 탭 전환 허용 — 강제 닫기
     sidebar.classList.remove('mobile-open');
     memPanel.classList.add('mobile-open');
     document.getElementById('fab-list').style.display = 'none';
@@ -8050,7 +7898,7 @@ function openAdminPanel() {
   loadAdminTab('dashboard');
   // 전국 파이프라인 미완료 지역 있으면 재개 배너 표시
   setTimeout(() => nwCheckAutoStart(), 800);
-  // ì ê· ì¥ì í ì ì¡ ìë ì¤ìº (ë¯¸íì¸ ì¥ìë§, ë°±ê·¸ë¼ì´ë)
+  // 신규 장소 펫 정책 자동 스캔 (미확인 장소만, 백그라운드)
   setTimeout(() => _autoScanNewPlaces(), 2000);
 }
 function closeAdminPanel() {
@@ -11463,83 +11311,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const el = document.getElementById(id);
     if (el) el.addEventListener('keypress', e => { if(e.key==='Enter') doAuth(); });
   });
-
-  // ── 드로어 스와이프 다운 → 닫기 ────────────────────────────────────────────
-  // 드로어 상단에서 아래로 80px 이상 스와이프하면 닫힘.
-  // scrollTop > 0 인 경우(내부 스크롤 중)에는 일반 스크롤로 처리.
-  (function initDrawerSwipe() {
-    const drawer = document.getElementById('detail-drawer');
-    if (!drawer) return;
-    let startY = 0, isDraggingDown = false;
-
-    drawer.addEventListener('touchstart', e => {
-      startY = e.touches[0].clientY;
-      isDraggingDown = false;
-      drawer.style.transition = 'none'; // 드래그 중 transition 제거
-    }, { passive: true });
-
-    drawer.addEventListener('touchmove', e => {
-      if (!drawer.classList.contains('open')) return;
-      const deltaY = e.touches[0].clientY - startY;
-      // 내부가 스크롤 가능하고 이미 위쪽이 아니면 일반 스크롤 허용
-      if (deltaY <= 0 || drawer.scrollTop > 0) { isDraggingDown = false; return; }
-      isDraggingDown = true;
-      e.preventDefault(); // 브라우저 기본 스크롤 막기
-      // rubberband 저항감 (0.55 계수 — 손가락보다 덜 이동)
-      drawer.style.transform = `translateY(${(deltaY * 0.55).toFixed(1)}px)`;
-    }, { passive: false });
-
-    drawer.addEventListener('touchend', e => {
-      drawer.style.transition = ''; // CSS transition 복원
-      const deltaY = e.changedTouches[0].clientY - startY;
-      if (isDraggingDown && deltaY > 80) {
-        drawer.style.transform = ''; // 인라인 transform 초기화 후 CSS 닫힘 애니메이션
-        closeDrawer(true, true);     // force=true, keepMarker=true — 말풍선 유지
-      } else {
-        drawer.style.transform = ''; // 스냅백
-      }
-      isDraggingDown = false;
-    }, { passive: true });
-  })();
-
-  // ── 추억 패널 스와이프 다운 → 닫기 ─────────────────────────────────────────
-  // #memories-panel 은 모바일에서 bottom-sheet 형태.
-  // 상단(핸들 포함)을 아래로 80px 이상 끌면 map 탭으로 전환하며 닫힘.
-  // 내부 피드(#mem-feed)가 스크롤 중(scrollTop > 0)이면 일반 스크롤로 동작.
-  (function initMemPanelSwipe() {
-    const panel = document.getElementById('memories-panel');
-    const feed  = document.getElementById('mem-feed');
-    if (!panel) return;
-    let startY = 0, isDraggingDown = false;
-
-    panel.addEventListener('touchstart', e => {
-      startY = e.touches[0].clientY;
-      isDraggingDown = false;
-      panel.style.transition = 'none';
-    }, { passive: true });
-
-    panel.addEventListener('touchmove', e => {
-      if (!panel.classList.contains('mobile-open')) return;
-      const deltaY = e.touches[0].clientY - startY;
-      const feedScrollTop = feed ? feed.scrollTop : 0;
-      if (deltaY <= 0 || feedScrollTop > 0) { isDraggingDown = false; return; }
-      isDraggingDown = true;
-      e.preventDefault();
-      panel.style.transform = `translateY(${(deltaY * 0.55).toFixed(1)}px)`;
-    }, { passive: false });
-
-    panel.addEventListener('touchend', e => {
-      panel.style.transition = ''; // CSS transition 복원
-      const deltaY = e.changedTouches[0].clientY - startY;
-      if (isDraggingDown && deltaY > 80) {
-        panel.style.transform = '';
-        setMobileTab('map');         // 추억 패널 닫고 지도 탭으로
-      } else {
-        panel.style.transform = ''; // 스냅백
-      }
-      isDraggingDown = false;
-    }, { passive: true });
-  })();
 });
 
 // ══════════════════════════════════════════════════════
@@ -11616,9 +11387,7 @@ async function renderAdminGridCache() {
 
   try {
     _agcMap = L.map('agc-map', { center: [36.5, 127.5], zoom: 7, attributionControl: false });
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-      subdomains: 'abcd', maxZoom: 19
-    }).addTo(_agcMap);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, opacity: 0.75 }).addTo(_agcMap);
 
     const snap = await db.collection('liveSearchCache').get();
     const now  = Date.now();
@@ -11635,12 +11404,11 @@ async function renderAdminGridCache() {
       const lngC = parseInt(parts[1]) / 100;
       const zoom = parseInt(parts[2]);
       if (isNaN(latC) || isNaN(lngC) || isNaN(zoom)) return;
-      const ts        = d.completedAt?.toMillis?.() || d.ts?.toMillis?.() || 0; // completedAt 우선 (d.ts는 구버전 폴백)
-      const age       = now - ts;
-      const remaining = ts ? Math.ceil((TTL - age) / (24 * 60 * 60 * 1000)) : 0;
-      const isExpired = !ts || age >= TTL;
+      const age       = now - (d.ts?.toMillis?.() || 0);
+      const remaining = Math.ceil((TTL - age) / (24 * 60 * 60 * 1000));
+      const isExpired = age >= TTL;
       const isOldVer  = (d.v || 1) < _GRID_CACHE_VERSION;
-      entries.push({ key, latC, lngC, zoom, count: d.resultCount || d.count || 0, remaining, isExpired, isOldVer });
+      entries.push({ key, latC, lngC, zoom, count: d.count || 0, remaining, isExpired, isOldVer });
     });
 
     entries.forEach(entry => {
@@ -11684,12 +11452,12 @@ function _estimateGridBounds(latC, lngC, zoom) {
 
 function _agcRectStyle(entry) {
   if (entry.isExpired || entry.isOldVer)
-    return { color:'#888', weight:2, dashArray:'6,4', fillColor:'#bbb', fillOpacity:.15 };
+    return { color:'#aaa', weight:1, dashArray:'5,4', fillColor:'#ccc', fillOpacity:.08 };
   if (entry.remaining > 20)
-    return { color:'#15803d', weight:3, dashArray:'6,4', fillColor:'#22c55e', fillOpacity:.35 };
+    return { color:'#16a34a', weight:1.5, dashArray:'5,4', fillColor:'#22c55e', fillOpacity:.18 };
   if (entry.remaining > 10)
-    return { color:'#b45309', weight:3, dashArray:'6,4', fillColor:'#f59e0b', fillOpacity:.35 };
-  return   { color:'#b91c1c', weight:3, dashArray:'6,4', fillColor:'#f87171', fillOpacity:.35 };
+    return { color:'#ca8a04', weight:1.5, dashArray:'5,4', fillColor:'#eab308', fillOpacity:.18 };
+  return   { color:'#dc2626', weight:1.5, dashArray:'5,4', fillColor:'#ef4444', fillOpacity:.18 };
 }
 
 async function agcSelectGrid(entry, gb) {
@@ -11713,33 +11481,14 @@ async function agcSelectGrid(entry, gb) {
     const backBtn = `<button onclick="renderAdminGridCache()" style="background:none;border:none;color:#E04E14;font-size:13px;cursor:pointer;padding:0 0 8px;font-weight:700;display:block;font-family:inherit">← 뒤로</button>`;
 
     if (!places.length) {
-      const emptyRefreshBtn = `
-        <button onclick="agcRefreshGrid(${entry.latC}, ${entry.lngC}, ${entry.zoom}, '${entry.key}')"
-          style="width:100%;padding:9px;background:#1E3A8A;color:#fff;border:none;border-radius:10px;
-                 font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;margin-top:10px;
-                 display:flex;align-items:center;justify-content:center;gap:6px;">
-          🔄 이 그리드 갱신
-        </button>`;
-      sidebar.innerHTML = `<div style="padding:12px">${backBtn}
-        <div style="font-size:12px;color:#999;">이 범위에 등록된 장소가 없어요<br><span style="font-size:10px">${info}</span></div>
-        ${emptyRefreshBtn}
-      </div>`;
+      sidebar.innerHTML = `<div style="padding:12px">${backBtn}<div style="font-size:12px;color:#999;">이 범위에 등록된 장소가 없어요<br><span style="font-size:10px">${info}</span></div></div>`;
       return;
     }
-
-    const refreshBtn = `
-      <button onclick="agcRefreshGrid(${entry.latC}, ${entry.lngC}, ${entry.zoom}, '${entry.key}')"
-        style="width:100%;padding:9px;background:#1E3A8A;color:#fff;border:none;border-radius:10px;
-               font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;margin-bottom:12px;
-               display:flex;align-items:center;justify-content:center;gap:6px;">
-        🔄 이 그리드 갱신
-      </button>`;
 
     sidebar.innerHTML = `
       <div style="padding:12px 12px 0">${backBtn}
         <div style="font-size:13px;font-weight:700;color:#333;margin-bottom:2px;">${places.length}개 장소</div>
         <div style="font-size:11px;color:#888;margin-bottom:10px;">${info}</div>
-        ${refreshBtn}
       </div>
       <div style="padding:0 8px 16px">
         ${places.map(p => `
@@ -11759,25 +11508,6 @@ async function agcSelectGrid(entry, gb) {
   }
 }
 
-async function agcRefreshGrid(latC, lngC, zoom, cacheKey) {
-  // ① Firestore 캐시 삭제 → 다음 doLiveSearch에서 풀 검색 수행되도록
-  try {
-    await db.collection('liveSearchCache').doc(cacheKey).delete();
-  } catch(e) { console.warn('[agcRefreshGrid] 캐시 삭제 실패:', e); }
-
-  // ② 관리자 패널 닫고 메인 지도로 복귀
-  closeAdminPanel();
-
-  // ③ 메인 지도를 해당 그리드 중심으로 이동
-  await new Promise(r => setTimeout(r, 300)); // 패널 닫힘 대기
-  if (map) map.setView([latC, lngC], zoom, { animate: false });
-
-  // ④ 홍시야 찾아줘 실행 (A+B+C 풀 검색)
-  await new Promise(r => setTimeout(r, 400)); // 지도 이동 대기
-  showToast('🔄 그리드 갱신 시작...');
-  toggleLiveSearch();
-}
-
 function agcViewPlace(fsId) {
   closeAdminPanel();
   db.collection('places').doc(fsId).get().then(doc => {
@@ -11793,15 +11523,15 @@ function agcViewPlace(fsId) {
 
 // ══════════════════════════════════════════════════════
 //  🐾 Admin: Pet Policy Enrichment
-//  data.go.kr 관광정보 API + 네이버 플레이스 태그 조합
+//  네이버 블로그 검색 API 기반 펫 정책 스캔
 // ══════════════════════════════════════════════════════
 let _ppResults = [];
 
-// ââ í« ì ì± ì¤ìº â ë¤ì´ë² ë¸ë¡ê·¸ íì§ í¬í¼ ââââââââââââââââââââââââââââââââââ
+// ── 펫 정책 스캔 — 네이버 블로그 탐지 헬퍼 ──────────────────────────────────
 function _detectBlogLarge(items) {
   const text = (items||[]).map(i => ((i.title||'') + ' ' + (i.description||'')).replace(/<[^>]+>/g,'')).join(' ').toLowerCase();
-  const posKw = ['ëíê²¬ ê°ë¥','ëíê²¬ ok','ëíê²¬ë ê°ë¥','ëíê²¬ íì©','ëíê²¬íì©','ëíê²¬ìì¥ ê°ë¥','ëíê²¬ë ìì¥'];
-  const negKw = ['ìíê²¬ë§','ìíê²¬ì´í','ìíê²¬ë§ ê°ë¥','ëíê²¬ ë¶ê°','ëíê²¬ë¶ê°','ëíê²¬ìì¥ë¶ê°','ëíê²¬ ìë¨','ëíê²¬ì ì','ëíê²¬ì ë¶'];
+  const posKw = ['대형견 가능','대형견 ok','대형견도 가능','대형견 허용','대형견허용','대형견입장 가능','대형견도 입장'];
+  const negKw = ['소형견만','소형견이하','소형견만 가능','대형견 불가','대형견불가','대형견입장불가','대형견 안됨','대형견은 안','대형견은 불'];
   const pos = posKw.some(k => text.includes(k));
   const neg = negKw.some(k => text.includes(k));
   return pos ? true : (neg ? false : null);
@@ -11809,7 +11539,7 @@ function _detectBlogLarge(items) {
 
 function _detectBlogOutdoor(items) {
   const text = (items||[]).map(i => ((i.title||'') + ' ' + (i.description||'')).replace(/<[^>]+>/g,'')).join(' ').toLowerCase();
-  const kws = ['íë¼ì¤','ì¼ì¸ì','ì¼ì¸ íì´ë¸','ë£¨íí','ì¼ì¸ìë¦¬','ì¼ì¸ ê³µê°','ì¼ì¸ì¢ì'];
+  const kws = ['테라스','야외석','야외 테이블','루프탑','야외자리','야외 공간','야외좌석'];
   return kws.some(k => text.includes(k)) ? true : null;
 }
 
@@ -11818,16 +11548,16 @@ async function _fetchNaverBlogPetInfo(place, clientId, clientSecret) {
   const headers = { 'X-Naver-Client-Id': clientId, 'X-Naver-Client-Secret': clientSecret };
   const fields = {};
 
-  // â  ëíê²¬ ì¬ë¶
-  const q1 = encodeURIComponent(`${place.name} ëíê²¬`);
+  // ① 대형견 여부
+  const q1 = encodeURIComponent(`${place.name} 대형견`);
   try {
     const r1 = await fetch(`${PROXY}?url=${encodeURIComponent('https://openapi.naver.com/v1/search/blog.json?query='+q1+'&display=10&sort=sim')}`, { headers, signal: AbortSignal.timeout(8000) });
     if (r1.ok) { const d1 = await r1.json(); const v = _detectBlogLarge(d1.items||[]); if (v !== null) fields.large = v; }
   } catch(e) {}
   await new Promise(r => setTimeout(r, 200));
 
-  // â¡ íë¼ì¤ / ì¼ì¸
-  const q2 = encodeURIComponent(`${place.name} íë¼ì¤`);
+  // ② 테라스 / 야외
+  const q2 = encodeURIComponent(`${place.name} 테라스`);
   try {
     const r2 = await fetch(`${PROXY}?url=${encodeURIComponent('https://openapi.naver.com/v1/search/blog.json?query='+q2+'&display=10&sort=sim')}`, { headers, signal: AbortSignal.timeout(8000) });
     if (r2.ok) { const d2 = await r2.json(); const v = _detectBlogOutdoor(d2.items||[]); if (v !== null) fields.outdoor = v; }
@@ -11836,47 +11566,46 @@ async function _fetchNaverBlogPetInfo(place, clientId, clientSecret) {
   return Object.keys(fields).length ? fields : null;
 }
 
-let _ppMiList = []; // ì¤ìº ìë£ but ì ë³´ ë¯¸ë°ê²¬ ëª©ë¡
+let _ppMiList = []; // 스캔 완료 but 정보 미발견 목록
 
-// ê´ë¦¬ì ë¡ê·¸ì¸ ì ë¯¸ì¡°ì¬ ì¥ì ìë ì¤ìº (ì¡°ì©í ë°±ê·¸ë¼ì´ë ëª¨ë)
+// 관리자 로그인 시 미조사 장소 자동 스캔 (조용한 백그라운드 모드)
 async function _autoScanNewPlaces() {
   if (!firebaseReady || !db) return;
   const clientId     = localStorage.getItem('pp_naver_id')     || '';
   const clientSecret = localStorage.getItem('pp_naver_secret') || '';
-  if (!clientId || !clientSecret) return; // ì¸ì¦í¤ ìì¼ë©´ í¨ì¤
+  if (!clientId || !clientSecret) return; // 인증키 없으면 패스
 
-  // places ë°°ì´ìì policyChecked ìë ì¥ìë§
+  // places 배열에서 policyChecked 없는 장소만
   const unchecked = (places || []).filter(p => !p.isClosed && !p.policyChecked);
   if (!unchecked.length) return;
 
-  console.log(`[AutoScan] ë¯¸ì¡°ì¬ ì¥ì ${unchecked.length}ê° ìë ì¤ìº ìì`);
+  console.log(`[AutoScan] 미조사 장소 ${unchecked.length}개 자동 스캔 시작`);
   let updated = 0;
 
   for (const p of unchecked) {
     try {
       const blogFields = await _fetchNaverBlogPetInfo(p, clientId, clientSecret);
-      const dgkFields  = null; // ìë ëª¨ëë ë¸ë¡ê·¸ ì ì©
-      const merged     = _mergePetFields(p, dgkFields, blogFields);
+      const merged     = _mergePetFields(p, blogFields);
 
       const updateData = { policyChecked: Date.now() };
       if (merged) Object.assign(updateData, merged);
 
       await db.collection('places').doc(p.firestoreId || p.fsId).update(updateData);
       if (merged) {
-        Object.assign(p, updateData); // ë¡ì»¬ ë°ì
+        Object.assign(p, updateData); // 로컬 반영
         updated++;
       } else {
         p.policyChecked = updateData.policyChecked;
       }
-      await new Promise(r => setTimeout(r, 450)); // ë ì´í¸ ë¦¬ë°
+      await new Promise(r => setTimeout(r, 450)); // 레이트 리밋
     } catch(e) { console.warn('[AutoScan]', p.name, e.message); }
   }
 
   if (updated > 0) {
-    showToast(`ð¾ ìë ì¤ìº ìë£ â ${updated}ê° ì¥ì ì ë³´ ë³´ê°`);
+    showToast(`🐾 자동 스캔 완료 — ${updated}개 장소 정보 보강`);
     invalidatePlacesCache?.();
   }
-  console.log(`[AutoScan] ìë£. ìë°ì´í¸: ${updated}ê°`);
+  console.log(`[AutoScan] 완료. 업데이트: ${updated}개`);
 }
 
 function renderAdminPetPolicy() {
@@ -11884,74 +11613,52 @@ function renderAdminPetPolicy() {
   content.innerHTML = `
     <div style="padding:4px 0 16px">
       <div style="font-size:14px;color:#555;margin-bottom:16px;line-height:1.7">
-        ë±ë¡ë ì¥ìì <b>ëíê²¬ ê°ë¥</b> Â· <b>ì¤ë´ ê°ë¥</b> Â· <b>íë¼ì¤ ì ë¬´</b> ì ë³´ë¥¼<br>
-        ì¸ë¶ ë°ì´í° ìì¤ìì ìëì¼ë¡ ì°¾ì ë³´ê°í©ëë¤.
+        등록된 장소의 <b>대형견 가능</b> · <b>실내 가능</b> · <b>테라스 유무</b> 정보를<br>
+        외부 데이터 소스에서 자동으로 찾아 보강합니다.
       </div>
 
-      <!-- ìì¤ ì¤ì  -->
+      <!-- 소스 설정 -->
       <div style="background:#F8FAFF;border-radius:12px;padding:14px 16px;margin-bottom:14px;border:1px solid #DBEAFE">
-        <div style="font-size:13px;font-weight:700;color:#1E3A8A;margin-bottom:12px">ð¡ ë°ì´í° ìì¤ ì¤ì </div>
-
-        <div style="margin-bottom:14px">
-          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-bottom:6px">
-            <input type="checkbox" id="src-datagokr" checked style="width:15px;height:15px;accent-color:#E04E14">
-            <span style="font-size:13px;font-weight:700">â  íêµ­ê´ê´ê³µì¬ ë°ë ¤ëë¬¼ ëë° ê´ê´ì ë³´ API</span>
-          </label>
-          <div style="margin-left:23px">
-            <input type="text" id="datagokr-key" placeholder="ê³µê³µë°ì´í°í¬í¸ ìë¹ì¤í¤ (ëì½ë©ë ìë¬¸í¤)"
-              style="width:100%;padding:8px 10px;border:1px solid #DDD;border-radius:8px;font-size:12px;font-family:inherit;box-sizing:border-box;margin-bottom:4px">
-            <div style="font-size:10px;color:#999">
-              data.go.kr â <b>íêµ­ê´ê´ê³µì¬_ë°ë ¤ëë¬¼ ëë° ê°ë¥ ê´ê´ì ë³´ ìë¹ì¤</b> íì©ì ì²­ â ì¼ë° ì¸ì¦í¤(ëì½ë©)
-            </div>
-          </div>
-        </div>
-
-        <div style="margin-bottom:14px">
-          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-bottom:4px">
-            <input type="checkbox" id="src-naver" checked style="width:15px;height:15px;accent-color:#E04E14">
-            <span style="font-size:13px;font-weight:700">â¡ ë¤ì´ë² íë ì´ì¤ íê·¸ (ë¹ê³µì API)</span>
-          </label>
-          <div style="font-size:10px;color:#999;margin-left:23px">ë³ë ì¸ì¦í¤ ë¶íì Â· íë¡ì ê²½ì  Â· data.go.krìì ëª» ì°¾ì íëë¥¼ ë³´ì</div>
-        </div>
+        <div style="font-size:13px;font-weight:700;color:#1E3A8A;margin-bottom:12px">📡 데이터 소스 설정</div>
 
         <div>
           <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-bottom:6px">
             <input type="checkbox" id="src-naver-blog" checked style="width:15px;height:15px;accent-color:#E04E14">
-            <span style="font-size:13px;font-weight:700">â¢ ë¤ì´ë² ë¸ë¡ê·¸ ê²ì API</span>
+            <span style="font-size:13px;font-weight:700">네이버 블로그 검색 API</span>
           </label>
           <div style="margin-left:23px">
             <div style="display:flex;gap:8px;margin-bottom:4px">
               <input type="text" id="naver-blog-id" placeholder="Client ID"
-                style="flex:1;padding:7px 10px;border:1px solid #DDD;border-radius:8px;font-size:12px;font-family:inherit;box-sizing:border-box-sizing:border-box"
+                style="flex:1;padding:7px 10px;border:1px solid #DDD;border-radius:8px;font-size:12px;font-family:inherit;box-sizing:border-box"
                 oninput="localStorage.setItem('pp_naver_id',this.value)">
               <input type="text" id="naver-blog-secret" placeholder="Client Secret"
                 style="flex:1;padding:7px 10px;border:1px solid #DDD;border-radius:8px;font-size:12px;font-family:inherit;box-sizing:border-box"
                 oninput="localStorage.setItem('pp_naver_secret',this.value)">
             </div>
             <div style="font-size:10px;color:#999">
-              developers.naver.com â ì íë¦¬ì¼ì´ì ë±ë¡ â ê²ì API ì¬ì© ì¤ì  â Client ID / Secret
+              developers.naver.com → 애플리케이션 등록 → 검색 API 사용 설정 → Client ID / Secret
             </div>
           </div>
         </div>
       </div>
 
-      <!-- íí° + ì¤í ë²í¼ -->
+      <!-- 필터 + 실행 버튼 -->
       <div style="display:flex;gap:14px;margin-bottom:14px;align-items:center;flex-wrap:wrap">
         <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer">
           <input type="checkbox" id="filter-missing" checked style="accent-color:#E04E14">
-          ë¯¸ìë ¥(null) í­ëª©ë§ ëì
+          미입력(null) 항목만 대상
         </label>
         <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer">
           <input type="checkbox" id="filter-active" checked style="accent-color:#E04E14">
-          ì´ìì¤ ì¥ìë§
+          운영중 장소만
         </label>
         <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer">
           <input type="checkbox" id="filter-recheck" style="accent-color:#5B6CB8">
-          ê¸°ì¡´ ì¥ì ì¬íì¸íê¸°
+          기존 장소 재확인하기
         </label>
         <button onclick="runPetPolicyScan()"
           style="margin-left:auto;padding:9px 24px;background:#E04E14;color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">
-          ð ì¤ìº ìì
+          🔍 스캔 시작
         </button>
       </div>
 
@@ -11959,7 +11666,7 @@ function renderAdminPetPolicy() {
       <div id="pp-results"></div>
     </div>
   `;
-  // localStorageìì ì ì¥ë Naver í¤ ë³µì
+  // localStorage에서 저장된 Naver 키 복원
   const savedId     = localStorage.getItem('pp_naver_id')     || '';
   const savedSecret = localStorage.getItem('pp_naver_secret') || '';
   if (savedId)     { const el = document.getElementById('naver-blog-id');     if (el) el.value = savedId; }
@@ -11967,23 +11674,19 @@ function renderAdminPetPolicy() {
 }
 
 async function runPetPolicyScan() {
-  if (!firebaseReady || !db) { showToast('Firebase ì°ê²° íì'); return; }
+  if (!firebaseReady || !db) { showToast('Firebase 연결 필요'); return; }
 
-  const useDGK        = document.getElementById('src-datagokr')?.checked;
-  const useNaver      = document.getElementById('src-naver')?.checked;
   const useNaverBlog  = document.getElementById('src-naver-blog')?.checked;
-  const dgkKey        = (document.getElementById('datagokr-key')?.value || '').trim();
   const nbClientId    = (document.getElementById('naver-blog-id')?.value || '').trim();
   const nbClientSec   = (document.getElementById('naver-blog-secret')?.value || '').trim();
   const filterMissing = document.getElementById('filter-missing')?.checked;
   const filterActive  = document.getElementById('filter-active')?.checked;
   const recheck       = document.getElementById('filter-recheck')?.checked;
 
-  if (useDGK && !dgkKey) { showToast('data.go.kr ìë¹ì¤í¤ë¥¼ ìë ¥í´ì£¼ì¸ì'); return; }
-  if (useNaverBlog && (!nbClientId || !nbClientSec)) { showToast('ë¤ì´ë² ë¸ë¡ê·¸ API Client ID/Secretì ìë ¥í´ì£¼ì¸ì'); return; }
-  if (!useDGK && !useNaver && !useNaverBlog) { showToast('ë°ì´í° ìì¤ë¥¼ íë ì´ì ì íí´ì£¼ì¸ì'); return; }
+  if (useNaverBlog && (!nbClientId || !nbClientSec)) { showToast('네이버 블로그 API Client ID/Secret을 입력해주세요'); return; }
+  if (!useNaverBlog) { showToast('네이버 블로그 API를 선택해주세요'); return; }
 
-  // localStorage ì ì¥
+  // localStorage 저장
   if (nbClientId)  localStorage.setItem('pp_naver_id',     nbClientId);
   if (nbClientSec) localStorage.setItem('pp_naver_secret', nbClientSec);
 
@@ -11991,7 +11694,7 @@ async function runPetPolicyScan() {
   const resEl = document.getElementById('pp-results');
   logEl.style.display = 'block';
   logEl.textContent = '';
-  resEl.innerHTML = `<div style="text-align:center;padding:20px;color:#999;font-size:13px">â³ ì¥ì ë¡ë© ì¤...</div>`;
+  resEl.innerHTML = `<div style="text-align:center;padding:20px;color:#999;font-size:13px">⏳ 장소 로딩 중...</div>`;
 
   function log(msg) { logEl.textContent += msg + '\n'; logEl.scrollTop = logEl.scrollHeight; }
 
@@ -11999,7 +11702,7 @@ async function runPetPolicyScan() {
     const snap = await db.collection('places').get();
     let targets = snap.docs.map(d => ({ fsId: d.id, ...d.data() }));
     if (filterActive)  targets = targets.filter(p => !p.isClosed);
-    // ì¬íì¸ ì²´í¬ ì ëì¼ë©´ ì´ë¯¸ ì¡°ì¬ë ì¥ì ê±´ëë
+    // 재확인 체크 안 됐으면 이미 조사된 장소 건너뜀
     if (!recheck) targets = targets.filter(p => !p.policyChecked);
     if (filterMissing) targets = targets.filter(p =>
       p.large === null || p.large === undefined ||
@@ -12007,7 +11710,7 @@ async function runPetPolicyScan() {
       p.outdoor === null || p.outdoor === undefined
     );
 
-    log(`ì´ ${targets.length}ê° ì¥ì ëì ì¤ìº ìì${recheck ? ' (ì¬íì¸ í¬í¨)' : ' (ì ê·ë§)'}`);
+    log(`총 ${targets.length}개 장소 대상 스캔 시작${recheck ? ' (재확인 포함)' : ' (신규만)'}`);
     _ppResults = [];
     _ppMiList  = [];
 
@@ -12015,243 +11718,64 @@ async function runPetPolicyScan() {
       const p = targets[i];
       log(`[${i+1}/${targets.length}] ${p.name}...`);
 
-      let dgkFields   = null;
-      let naverFields = null;
       let blogFields  = null;
 
-      // â  data.go.kr ê´ê´ì ë³´ API
-      if (useDGK && dgkKey && p.lat && p.lng) {
-        dgkFields = await _fetchDGKPetInfo(p, dgkKey).catch(() => null);
-        if (dgkFields) log(`  ð data.go.kr ë§¤ì¹­: ${JSON.stringify(dgkFields)}`);
-      }
-
-      // â¡ ë¤ì´ë² íë ì´ì¤ íê·¸
-      if (useNaver) {
-        naverFields = await _fetchNaverPetTags(p).catch(() => null);
-        if (naverFields) log(`  ð¢ ë¤ì´ë² íë ì´ì¤ ë§¤ì¹­: ${JSON.stringify(naverFields)}`);
-        await new Promise(r => setTimeout(r, 400));
-      }
-
-      // â¢ ë¤ì´ë² ë¸ë¡ê·¸ ê²ì API
+      // 네이버 블로그 검색 API
       if (useNaverBlog) {
         blogFields = await _fetchNaverBlogPetInfo(p, nbClientId, nbClientSec).catch(() => null);
-        if (blogFields) log(`  ð ë¸ë¡ê·¸ ê²ì ë§¤ì¹­: ${JSON.stringify(blogFields)}`);
+        if (blogFields) log(`  📝 블로그 검색 매칭: ${JSON.stringify(blogFields)}`);
       }
 
-      const merged = _mergePetFields(p, dgkFields || naverFields, blogFields);
+      const merged = _mergePetFields(p, blogFields);
       const checkedAt = Date.now();
 
       if (merged && Object.keys(merged).length > 0) {
-        _ppResults.push({ place: p, merged, checkedAt, srcDGK: !!dgkFields, srcNaver: !!naverFields, srcBlog: !!blogFields });
-        log(`  â ì ì ë³´: ${JSON.stringify(merged)}`);
+        _ppResults.push({ place: p, merged, checkedAt, srcBlog: !!blogFields });
+        log(`  ✅ 새 정보: ${JSON.stringify(merged)}`);
       } else {
-        // ì¡°ì¬ë íì§ë§ ì ë³´ ìì â policyChecked ê¸°ë¡ + ë¯¸íì¸ ëª©ë¡
+        // 조사는 했지만 정보 없음 → policyChecked 기록 + 미확인 목록
         try {
           await db.collection('places').doc(p.fsId).update({ policyChecked: checkedAt });
           p.policyChecked = checkedAt;
-        } catch(e) { /* ë¬´ì */ }
+        } catch(e) { /* 무시 */ }
         _ppMiList.push(p);
-        log(`  â¹ï¸ ì ë³´ ìì (ë¯¸íì¸ ì²ë¦¬)`);
+        log(`  ℹ️ 정보 없음 (미확인 처리)`);
       }
     }
 
-    log(`\nìë£ â ë°ê²¬: ${_ppResults.length}ê° / ë¯¸íì¸: ${_ppMiList.length}ê°`);
+    log(`\n완료 — 발견: ${_ppResults.length}개 / 미확인: ${_ppMiList.length}개`);
     _renderPpResults(resEl);
 
   } catch(e) {
-    log('â ì¤ë¥: ' + e.message);
-    resEl.innerHTML = `<div style="color:#e33;font-size:13px;padding:8px">ì¤ë¥: ${e.message}</div>`;
+    log('❌ 오류: ' + e.message);
+    resEl.innerHTML = `<div style="color:#e33;font-size:13px;padding:8px">오류: ${e.message}</div>`;
   }
 }
 
-async function _fetchDGKPetInfo(place, serviceKey) {
-  // 한국관광공사 반려동물 동반 관광정보 — 좌표 반경 검색
-  const url = 'https://apis.data.go.kr/B551011/GreenTour/searchPetTour1'
-    + `?ServiceKey=${encodeURIComponent(serviceKey)}`
-    + `&MobileOS=ETC&MobileApp=HongsiApp&_type=json`
-    + `&mapX=${place.lng}&mapY=${place.lat}&radius=300`
-    + `&arrange=E&numOfRows=5&pageNo=1`;
+function _mergePetFields(place, blogFields) {
+  const combined = blogFields || {};
+  if (!Object.keys(combined).length) return null;
 
-  const PROXIES = [
-    u => `https://mungmungmap-proxy.jaypark.workers.dev/?url=${encodeURIComponent(u)}`,
-    u => `https://corsproxy.io/?url=${encodeURIComponent(u)}`,
-  ];
-
-  for (const proxyFn of PROXIES) {
-    try {
-      const res = await fetch(proxyFn(url), { signal: AbortSignal.timeout(10000) });
-      if (!res.ok) continue;
-      const data = await res.json();
-      const raw = data?.response?.body?.items?.item;
-      if (!raw) return null;
-      const items = Array.isArray(raw) ? raw : [raw];
-
-      // 이름 유사도 기반 매칭
-      const normTarget = _ppNormName(place.name);
-      const match = items.find(it => _ppSimilarity(normTarget, _ppNormName(it.title || '')) > 0.65);
-      if (!match) return null;
-
-      // 동반 조건 텍스트 파싱
-      return _parseDGKCondition(match.acmpyNeedMtr || match.acmpyPetAbl || match.etcAcmpyInfo || '');
-    } catch(e) { continue; }
-  }
-  return null;
-}
-
-function _parseDGKCondition(condText) {
-  const t = condText.toLowerCase();
-  const fields = {};
-  if (t.includes('대형견')) {
-    fields.large = !(t.includes('대형견 불가') || t.includes('대형견불가') || t.includes('대형견 안됨'));
-  }
-  if (t.includes('실내')) fields.indoor = true;
-  if (t.includes('야외') || t.includes('테라스') || t.includes('외부')) fields.outdoor = true;
-  if (t.includes('소형견') || t.includes('반려동물 가능') || t.includes('반려견 가능')) fields.small = true;
-  return Object.keys(fields).length ? fields : null;
-}
-
-async function _fetchNaverPetTags(place) {
-  const query = encodeURIComponent(`${place.name} ${place.area || ''}`);
-  const searchUrl = `https://map.naver.com/v5/api/search?caller=pcweb&query=${query}&type=all&page=1&displayCount=5&lang=ko`;
-
-  const PROXIES = [
-    u => `https://corsproxy.io/?url=${encodeURIComponent(u)}`,
-    u => `https://mungmungmap-proxy.jaypark.workers.dev/?url=${encodeURIComponent(u)}`,
-  ];
-
-  let lastReason = '프록시 전부 실패';
-
-  for (const proxyFn of PROXIES) {
-    try {
-      const res = await fetch(proxyFn(searchUrl), { signal: AbortSignal.timeout(8000) });
-      if (!res.ok) { lastReason = `HTTP ${res.status}`; continue; }
-
-      // Content-Type 확인 — HTML 응답이면 프록시가 에러 페이지를 반환한 것
-      const ct = res.headers.get('content-type') || '';
-      if (ct.includes('text/html')) { lastReason = 'HTML 응답 (프록시 차단)'; continue; }
-
-      let data;
-      try { data = await res.json(); }
-      catch(je) { lastReason = 'JSON 파싱 실패 (HTML 에러페이지)'; continue; }
-
-      const list = data?.result?.place?.list || [];
-      if (!list.length) { lastReason = '검색 결과 없음'; continue; }
-
-      const normTarget = _ppNormName(place.name);
-      const match = list.find(r => _ppSimilarity(normTarget, _ppNormName(r.name || '')) > 0.65);
-      if (!match) {
-        lastReason = `이름 매칭 실패 (최고: ${Math.round(Math.max(...list.map(r=>_ppSimilarity(normTarget,_ppNormName(r.name||''))),0)*100)}%)`;
-        continue;
-      }
-
-      // 검색 결과에서 직접 태그 추출 (keywords, tags, bizcategory 등)
-      const tagSources = [
-        ...(match.keywords || []),
-        ...(match.tags || []),
-        ...(match.bizcategory || []),
-        match.category || '',
-        match.microreview || '',
-      ];
-      const tagStr = tagSources.join(' ').toLowerCase();
-
-      // 상세 정보 조회 시도 (Naver Place ID로)
-      const naverId = match.id;
-      if (naverId) {
-        const detailUrl = `https://place.map.naver.com/api/v2/businesses/summary?ids=${naverId}&lang=ko`;
-        try {
-          const res2 = await fetch(proxyFn(detailUrl), { signal: AbortSignal.timeout(6000) });
-          if (res2.ok) {
-            const d2 = await res2.json();
-            const biz = (d2?.businesses || d2?.result || [])[0] || d2;
-            const extra = [
-              ...(biz?.keywords || []),
-              ...(biz?.conveniences || []),
-              ...(biz?.tags || []),
-            ].join(' ').toLowerCase();
-            const parsed = _parseNaverTagStr(tagStr + ' ' + extra);
-            if (parsed) return { fields: parsed, reason: 'ok' };
-            lastReason = '태그 없음 (반려동물 키워드 미발견)';
-            return { fields: null, reason: lastReason };
-          }
-        } catch(e2) { /* 상세 실패 시 검색결과만 사용 */ }
-      }
-
-      const parsed = _parseNaverTagStr(tagStr);
-      if (parsed) return { fields: parsed, reason: 'ok' };
-      lastReason = '태그 없음 (반려동물 키워드 미발견)';
-      return { fields: null, reason: lastReason };
-    } catch(e) { lastReason = `fetch 오류: ${e.message}`; continue; }
-  }
-  return { fields: null, reason: lastReason };
-}
-
-function _parseNaverTagStr(tagStr) {
-  const t = (tagStr || '').toLowerCase();
-  const fields = {};
-  if (t.includes('대형견')) {
-    fields.large = !(t.includes('대형견 불가') || t.includes('대형견불가') || t.includes('대형견 안됨'));
-  }
-  if (t.includes('실내')) fields.indoor = true;
-  if (t.includes('야외') || t.includes('테라스') || t.includes('루프탑')) fields.outdoor = true;
-  if (t.includes('소형견') || t.includes('반려동물 동반') || t.includes('반려견 동반') || t.includes('펫 가능')) {
-    if (fields.large === undefined) fields.small = true;
-  }
-  return Object.keys(fields).length ? fields : null;
-}
-
-function _ppNormName(name) {
-  return (name || '').replace(/\s+/g, '').replace(/[^\uAC00-\uD7A3a-zA-Z0-9]/g, '').toLowerCase();
-}
-
-function _ppSimilarity(a, b) {
-  if (!a || !b) return 0;
-  if (a === b) return 1;
-  if (a.includes(b) || b.includes(a)) return 0.85;
-  const sa = new Set(a), sb = new Set(b);
-  const inter = [...sa].filter(c => sb.has(c)).length;
-  return inter / Math.max(sa.size, sb.size);
-}
-
-function _mergePetFields(place, dgkFields, naverFields) {
-  // 우선순위 로직: 네이버 > data.go.kr (보강)
-  //   - 네이버 값 있음 → 네이버 채택 (출처: 'naver')
-  //   - 네이버 없고 data.go.kr 있음 → data.go.kr로 보강 (출처: 'dgk')
-  const FIELDS = ['large', 'indoor', 'outdoor', 'small'];
+  // 현재 place에서 실제 null/undefined인 필드만 채움
   const toUpdate = {};
-  const confidence = {}; // 'naver' | 'dgk'
-
+  const FIELDS = ['large', 'indoor', 'outdoor', 'small'];
   FIELDS.forEach(f => {
-    const dVal = dgkFields   ? dgkFields[f]   : undefined;
-    const nVal = naverFields ? naverFields[f] : undefined;
-    const hasD = dVal !== undefined && dVal !== null;
-    const hasN = nVal !== undefined && nVal !== null;
-
-    let chosen = undefined;
-    let conf   = null;
-
-    if (hasN)      { chosen = nVal; conf = 'naver'; } // 네이버 우선
-    else if (hasD) { chosen = dVal; conf = 'dgk';   } // 네이버 없을 때만 data.go.kr 보강
-
-    // place에서 아직 null/undefined인 필드에만 기록
-    if (chosen !== undefined && (place[f] === null || place[f] === undefined)) {
-      toUpdate[f] = chosen;
-      confidence[f] = conf;
+    if (combined[f] !== undefined && (place[f] === null || place[f] === undefined)) {
+      toUpdate[f] = combined[f];
     }
   });
-
-  if (!Object.keys(toUpdate).length) return null;
-  return { fields: toUpdate, confidence };
+  return Object.keys(toUpdate).length ? toUpdate : null;
 }
 
 function _renderPpResults(resEl) {
-  const FIELD_LABEL = { large: 'ëíê²¬', indoor: 'ì¤ë´', outdoor: 'íë¼ì¤', small: 'ìíê²¬' };
+  const FIELD_LABEL = { large: '대형견', indoor: '실내', outdoor: '테라스', small: '소형견' };
 
   const foundHtml = _ppResults.length ? `
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-      <span style="font-size:14px;font-weight:700;color:#333">${_ppResults.length}ê° ì¥ììì ì ì ë³´ ë°ê²¬</span>
+      <span style="font-size:14px;font-weight:700;color:#333">${_ppResults.length}개 장소에서 새 정보 발견</span>
       <button onclick="ppApplyAll()"
         style="padding:8px 20px;background:#E04E14;color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">
-        ì ì²´ ì¼ê´ ì ì©
+        전체 일괄 적용
       </button>
     </div>
     <div id="pp-result-list">
@@ -12260,38 +11784,36 @@ function _renderPpResults(resEl) {
           <div style="display:flex;align-items:center;gap:8px;margin-bottom:7px;flex-wrap:wrap">
             <span style="font-size:13px;font-weight:700;color:#111">${r.place.name}</span>
             <span style="font-size:11px;color:#888">${r.place.area||''}</span>
-            ${r.srcDGK    ? `<span style="font-size:10px;padding:2px 7px;border-radius:5px;background:#EFF6FF;color:#1D4ED8;font-weight:700">data.go.kr</span>` : ''}
-            ${r.srcNaver  ? `<span style="font-size:10px;padding:2px 7px;border-radius:5px;background:#F0FDF4;color:#15803D;font-weight:700">ë¤ì´ë²</span>` : ''}
-            ${r.srcBlog   ? `<span style="font-size:10px;padding:2px 7px;border-radius:5px;background:#FFF7ED;color:#C2410C;font-weight:700">ë¸ë¡ê·¸</span>` : ''}
+            ${r.srcBlog   ? `<span style="font-size:10px;padding:2px 7px;border-radius:5px;background:#FFF7ED;color:#C2410C;font-weight:700">블로그</span>` : ''}
           </div>
           <div style="display:flex;gap:7px;flex-wrap:wrap;margin-bottom:9px">
             ${Object.entries(r.merged).map(([k, v]) => `
               <span style="font-size:12px;padding:3px 11px;border-radius:20px;font-weight:700;
                 background:${v ? '#ECFDF5' : '#FFF1F2'};color:${v ? '#065F46' : '#9F1239'}">
-                ${FIELD_LABEL[k] || k} ${v ? 'â ê°ë¥' : 'â ë¶ê°'}
+                ${FIELD_LABEL[k] || k} ${v ? '✅ 가능' : '❌ 불가'}
               </span>
             `).join('')}
           </div>
           <button onclick="ppApplyOne(${i})"
             style="padding:5px 15px;background:#1E3A8A;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">
-            ì´ ì¥ì ì ì©
+            이 장소 적용
           </button>
         </div>
       `).join('')}
     </div>
-  ` : `<div style="text-align:center;padding:24px;color:#999;font-size:13px">ìë¡ ë°ê²¬ë ì ë³´ê° ìì´ì</div>`;
+  ` : `<div style="text-align:center;padding:24px;color:#999;font-size:13px">새로 발견된 정보가 없어요</div>`;
 
   const miHtml = _ppMiList && _ppMiList.length ? `
     <div style="margin-top:20px">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
-        <span style="font-size:13px;font-weight:700;color:#666">ð ë¯¸íì¸ â ${_ppMiList.length}ê° (ì¡°ì¬íì¼ë ì ë³´ ìì)</span>
+        <span style="font-size:13px;font-weight:700;color:#666">🔍 미확인 — ${_ppMiList.length}개 (조사했으나 정보 없음)</span>
       </div>
       <div style="background:#FAFAFA;border-radius:10px;padding:10px 12px;border:1px solid #E5E7EB">
         ${_ppMiList.map(p => `
           <div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid #F0F0F0">
             <span style="font-size:12px;color:#555;font-weight:600">${p.name}</span>
             <span style="font-size:11px;color:#AAA">${p.area||''}</span>
-            <span style="font-size:10px;padding:1px 6px;border-radius:4px;background:#F3F4F6;color:#9CA3AF;font-weight:700;margin-left:auto">ë¯¸íì¸</span>
+            <span style="font-size:10px;padding:1px 6px;border-radius:4px;background:#F3F4F6;color:#9CA3AF;font-weight:700;margin-left:auto">미확인</span>
           </div>
         `).join('')}
       </div>
