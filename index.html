@@ -9874,8 +9874,9 @@ async function fetchKakaoPagePetSignal(url, kakaoId) {
       }
       // 실내
       if (signalStr.includes('실내')) petDetails.indoor = true;
-      // 야외/테라스
-      if (signalStr.includes('야외') || signalStr.includes('테라스')) petDetails.outdoor = true;
+      // 야외/테라스 — "야외" 단독어는 주차장·산책로 등에도 나오므로 좌석 명시 키워드만 인정
+      const _outdoorKws = ['테라스','야외석','야외좌석','야외 좌석','야외 테이블','야외테이블','루프탑','야외자리','야외 자리','오픈테라스'];
+      if (_outdoorKws.some(k => signalStr.includes(k))) petDetails.outdoor = true;
       // 케이지: 불필요(false) vs 필수/필요/대여(true)
       if (signalStr.includes('케이지 불필요') || signalStr.includes('노케이지') || signalStr.includes('케이지없') || signalStr.includes('케이지 없'))
         petDetails.cage = false;
@@ -11827,9 +11828,17 @@ function _detectBlogLarge(items) {
 }
 
 function _detectBlogOutdoor(items) {
-  const text = (items||[]).map(i => ((i.title||'') + ' ' + (i.description||'')).replace(/<[^>]+>/g,'')).join(' ').toLowerCase();
-  const kws = ['테라스','야외석','야외 테이블','루프탑','야외자리','야외 공간','야외좌석'];
-  return kws.some(k => text.includes(k)) ? true : null;
+  // 좌석이 명시된 키워드만 인정 — "야외", "마당", "정원" 단독어는 문맥 오탐이 많아 제외
+  const kws = [
+    '테라스', '야외석', '야외좌석', '야외 좌석', '야외 테이블', '야외테이블',
+    '루프탑', '야외자리', '야외 자리', '야외테라스', '테라스석', '오픈테라스', '루프탑석'
+  ];
+  // 블로그 결과 10개 중 2개 이상이 키워드를 포함해야 true — 단일 노이즈 결과 차단
+  const matchCount = (items||[]).filter(i => {
+    const t = ((i.title||'') + ' ' + (i.description||'')).replace(/<[^>]+>/g,'').toLowerCase();
+    return kws.some(k => t.includes(k));
+  }).length;
+  return matchCount >= 2 ? true : null;
 }
 
 async function _fetchNaverBlogPetInfo(place, clientId, clientSecret) {
@@ -11845,7 +11854,7 @@ async function _fetchNaverBlogPetInfo(place, clientId, clientSecret) {
   } catch(e) {}
   await new Promise(r => setTimeout(r, 200));
 
-  // ② 테라스 / 야외
+  // ② 테라스 — "{가게명} 테라스"로만 검색 (야외 2차 검색 제거 — "야외" 단독 검색은 오탐률 매우 높음)
   const q2 = encodeURIComponent(`${place.name} 테라스`);
   try {
     const r2 = await fetch(`${PROXY}?url=${encodeURIComponent('https://openapi.naver.com/v1/search/blog.json?query='+q2+'&display=10&sort=sim')}`, { headers, signal: AbortSignal.timeout(8000) });
