@@ -3368,7 +3368,7 @@ async function ensureUserDocument(user) {
 const _loadedTiles = new Set();
 let   _vpLoadTimer = null;        // debounce timer (미사용, 호환성 유지)
 
-async function loadViewportPlaces() {
+async function loadViewportPlaces(force = false) {
   if (!map || !firebaseReady || !db) return;
 
   // ── 실제 뷰포트 bounds 기반 정밀 로딩 (2° 타일 방식 폐기) ──────────────
@@ -3383,57 +3383,74 @@ async function loadViewportPlaces() {
   // 0.05° 단위로 반올림한 area key — 같은 지역 중복 로딩 방지
   const areaKey = [latMin, latMax, lngMin, lngMax]
     .map(v => (Math.round(v / 0.05) * 0.05).toFixed(2)).join('|');
-  if (_loadedTiles.has(areaKey)) return;
+  // force=true(홍시야 찾아줘 호출 시): 타일 캐시 무시하고 항상 최신 DB 조회
+  if (!force && _loadedTiles.has(areaKey)) return;
   _loadedTiles.add(areaKey);
 
   try {
-    const snap = await db.collection('places')
-      .where('lat', '>=', latMin)
-      .where('lat', '<=', latMax)
-      .limit(100)
-      .get();
-
     const existingIds = new Set(places.map(p => p.id));
     const newBatch = [];
 
-    snap.docs.forEach(doc => {
-      try {
-        const p = { ...doc.data(), firestoreId: doc.id };
-        if (p.active === false) return;
-        // auto_pipeline_cat 미확인은 제외
-        if (p.source === 'auto_pipeline_cat') {
-          const st = p.petStatus;
-          if (st !== 'confirmed' && st !== 'verified') return;
-        }
-        // 경도 클라이언트 필터
-        if (p.lng == null || p.lng < lngMin || p.lng > lngMax) return;
-        if (existingIds.has(p.id)) {
-          // ★ Fix D: 이미 로드된 장소라도 Firestore에 manuallyEdited 필드가 있으면 필드 병합
-          // 이를 통해 반려견 정책 수동 편집이 세션 간에 유지됨
-          if (p.manuallyEdited === true) {
-            const existing = places.find(x => x.id == p.id);
-            if (existing && !existing.manuallyEdited) {
-              const POLICY_FIELDS = ['large','small','indoor','outdoor','cage','entryFee','stroller','note','hours'];
-              POLICY_FIELDS.forEach(f => { if (p[f] !== undefined) existing[f] = p[f]; });
-              existing.manuallyEdited = true;
-              existing.firestoreId = p.firestoreId; // 최신 firestoreId로 갱신
-            }
+    // ── 페이지네이션으로 lat 범위 내 모든 장소 로드 ──────────────────────────
+    // 문제: LIMIT 100 + ORDER BY 없음 → Firestore가 doc ID 순으로 100개 반환
+    //       → 경도 클라이언트 필터 후 뷰포트 장소가 0개가 되는 경우 발생
+    // 해결: orderBy('lat') + 100개씩 페이지네이션 → 최대 500개까지 전부 조회
+    const PAGE_SIZE = 100;
+    const MAX_TOTAL = 500;
+    let totalFetched = 0;
+    let lastDoc = null;
+
+    while (totalFetched < MAX_TOTAL) {
+      let q = db.collection('places')
+        .where('lat', '>=', latMin)
+        .where('lat', '<=', latMax)
+        .orderBy('lat')
+        .limit(PAGE_SIZE);
+      if (lastDoc) q = q.startAfter(lastDoc);
+
+      const snap = await q.get();
+      if (snap.empty) break;
+
+      snap.docs.forEach(doc => {
+        try {
+          const p = { ...doc.data(), firestoreId: doc.id };
+          if (p.active === false) return;
+          // auto_pipeline_cat 미확인은 제외
+          if (p.source === 'auto_pipeline_cat') {
+            const st = p.petStatus;
+            if (st !== 'confirmed' && st !== 'verified') return;
           }
-          return;
-        }
-        existingIds.add(p.id);
-        places.push(p);
-        newBatch.push(p);
-        if (typeof p.id === 'number') updateGlobalMaxId(p.id); // ★ Fix H
-      } catch(docErr) { console.warn('[loadViewportPlaces] doc 오류:', docErr); }
-    });
+          // 경도 클라이언트 필터
+          if (p.lng == null || p.lng < lngMin || p.lng > lngMax) return;
+          if (existingIds.has(p.id)) {
+            // ★ Fix D: 이미 로드된 장소라도 Firestore에 manuallyEdited 필드가 있으면 필드 병합
+            // 이를 통해 반려견 정책 수동 편집이 세션 간에 유지됨
+            if (p.manuallyEdited === true) {
+              const existing = places.find(x => x.id == p.id);
+              if (existing && !existing.manuallyEdited) {
+                const POLICY_FIELDS = ['large','small','indoor','outdoor','cage','entryFee','stroller','note','hours'];
+                POLICY_FIELDS.forEach(f => { if (p[f] !== undefined) existing[f] = p[f]; });
+                existing.manuallyEdited = true;
+                existing.firestoreId = p.firestoreId;
+              }
+            }
+            return;
+          }
+          existingIds.add(p.id);
+          places.push(p);
+          newBatch.push(p);
+          if (typeof p.id === 'number') updateGlobalMaxId(p.id); // ★ Fix H
+        } catch(docErr) { console.warn('[loadViewportPlaces] doc 오류:', docErr); }
+      });
+
+      totalFetched += snap.docs.length;
+      lastDoc = snap.docs[snap.docs.length - 1];
+      if (snap.docs.length < PAGE_SIZE) break; // 마지막 페이지 — 더 이상 없음
+    }
 
     if (newBatch.length > 0 && clusterGroup) {
       newBatch.forEach(p => {
         try { addMarker(p); } catch(e) {}
-        // addMarker 시점에 allMemoryPlaceIds/userVisitedPlaceIds가 이미 채워져 있다면
-        // 정상 처리되지만, loadViewportPlaces가 loadAllMemoryPlaceIds보다 늦게 실행될 경우를 위해
-        // 새로 추가된 장소에 대해 하트 업그레이드를 명시적으로 재확인
         const nid = Number(p.id);
         if (!isNaN(nid)) {
           if (userVisitedPlaceIds.has(nid)) upgradeToHeartMarker(nid);
@@ -4501,8 +4518,9 @@ async function doLiveSearch() {
   _liveAllEnded    = true;  // 낙관적 초기화 → REST 루프에서 반증 시 false
 
   // ── 뷰포트 DB 장소 로드를 캐시 확인과 병렬 시작 ───────────────────────────
-  // Firestore 캐시 히트(~300ms) 동안 loadViewportPlaces도 동시에 실행 → 응답 빠름
-  const _vpLoadPromise = loadViewportPlaces();
+  // force=true: 홍시야 찾아줘 호출마다 최신 DB 반영 (_loadedTiles 캐시 무시)
+  // cleanup이 장소를 추가/삭제했을 수 있으므로 항상 새로 조회
+  const _vpLoadPromise = loadViewportPlaces(true);
 
   // ── 캐시 확인: 동일 뷰포트 15분 내 재검색이면 API 호출 없이 바로 표시 ──────
   const _ctr = map.getCenter();
@@ -4519,11 +4537,27 @@ async function doLiveSearch() {
   // is_end:true로 완전 탐색된 구역 → 재검색 생략, DB 장소만 노출
   const _gridCached = await _checkGridCache(_cacheKey);
   if (_gridCached) {
-    await _vpLoadPromise; // 이미 대부분 완료됐을 병렬 로드 마저 완료
-    showToast('✅ 이미 완전 탐색된 구역이에요 (최근 30일)');
-    _setLiveFabState(false);
-    filterPlaces();
-    return;
+    await _vpLoadPromise; // 최신 DB 로드 완료 대기 (force=true로 항상 재조회)
+
+    // ── 캐시 히트지만 장소가 사라진 경우 재검색 ─────────────────────────────
+    // 캐시 저장 당시 카카오 결과가 있었는데(resultCount > 0) 현재 뷰포트에 등록 장소가
+    // 없으면 cleanup 등으로 삭제된 것 → 30일 캐시 무시하고 재검색
+    const _vpBounds = map.getBounds();
+    const _vpPlaceCount = places.filter(p =>
+      p && p.lat != null && p.lng != null && _vpBounds.contains([p.lat, p.lng])
+    ).length;
+    const _cachedResultCount = _gridCached.resultCount || 0;
+
+    if (_cachedResultCount > 0 && _vpPlaceCount === 0) {
+      // 카카오가 찾은 장소는 있었지만 DB에 아무것도 없음 → 재검색
+      console.log('[doLiveSearch] 30일 캐시 히트지만 뷰포트 장소 0개 (캐시 당시', _cachedResultCount, '개) → 재검색');
+      // fall through → 실제 카카오 검색 실행
+    } else {
+      showToast('✅ 이미 완전 탐색된 구역이에요 (최근 30일)');
+      _setLiveFabState(false);
+      filterPlaces();
+      return;
+    }
   }
 
   const bounds = map.getBounds();
@@ -5153,19 +5187,19 @@ async function cleanupInvalidLivePlaces() {
 
         } else if (result.found === true && !p.manuallyEdited) {
           const pd = result.petDetails || {};
-          const newLarge   = pd.large   !== undefined ? pd.large   : null;
-          const newSmall   = pd.small   !== undefined ? pd.small   : null;
-          const newIndoor  = pd.indoor  !== undefined ? pd.indoor  : null;
-          const newOutdoor = pd.outdoor !== undefined ? pd.outdoor : null;
+          // ★ null(미확인)로 기존 데이터를 덮어쓰지 않음 — true/false 확정값만 반영
+          // pd 필드가 null이면 "정보 없음"이지 "아님"이 아니므로 기존 값을 보존
+          const update = {};
+          if (pd.large   === true || pd.large   === false) { if (p.large   !== pd.large)   update.large   = pd.large;   }
+          if (pd.small   === true || pd.small   === false) { if (p.small   !== pd.small)   update.small   = pd.small;   }
+          if (pd.indoor  === true || pd.indoor  === false) { if (p.indoor  !== pd.indoor)  update.indoor  = pd.indoor;  }
+          if (pd.outdoor === true || pd.outdoor === false) { if (p.outdoor !== pd.outdoor) update.outdoor = pd.outdoor; }
 
-          const changed = p.large !== newLarge || p.small !== newSmall ||
-                          p.indoor !== newIndoor || p.outdoor !== newOutdoor;
-          if (changed) {
-            p.large = newLarge; p.small = newSmall;
-            p.indoor = newIndoor; p.outdoor = newOutdoor;
+          if (Object.keys(update).length > 0) {
+            Object.assign(p, update);
             if (firebaseReady && db && p.firestoreId) {
               db.collection('places').doc(p.firestoreId)
-                .update({ large: newLarge, small: newSmall, indoor: newIndoor, outdoor: newOutdoor })
+                .update(update)
                 .catch(e => console.warn('cleanup 교정 실패:', p.name, e));
             }
             corrected++;
