@@ -12072,7 +12072,7 @@ function _ppAutoAnalyze(localTags, snippets) {
 
   // 테라스 – 블로그에서도 엄격하게 (명확한 표현만)
   if (result.outdoor === null) {
-    const strictPosKws = ['테라스 있', '테라스 자리', '테라스 좌석', '테라스에서', '야외석', '야외좌석', '야외 좌석', '루프탑', '테라스 공간'];
+    const strictPosKws = ['테라스 있', '테라스 자리', '테라스 좌석', '테라스석', '테라스 자리에', '야외석', '야외좌석', '야외 좌석', '루프탑', '테라스 공간', '매장 테라스', '카페 테라스'];
     const strictNegKws = ['테라스 없', '야외 없음', '야외석 없', '실내만', '야외 불가', '테라스는 없'];
     const hasPos = strictPosKws.some(k => allText.includes(k));
     const hasNeg = strictNegKws.some(k => allText.includes(k));
