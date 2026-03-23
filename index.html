@@ -1033,6 +1033,13 @@
       white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
     }
     .mc-place-area { font-size:11px; color:#BBBBBB; margin-top:1px; }
+    /* 장소 태그 — 클릭 가능 버전 */
+    .mem-card-place-sec.mc-place-link { cursor:pointer; }
+    .mem-card-place-sec.mc-place-link:active { opacity:0.65; }
+    .mem-card-place-sec.mc-place-link .mc-place-name {
+      text-decoration: underline 1.5px dotted #E04E14;
+      text-underline-offset: 2px;
+    }
     /* 메뉴 버튼 */
     .mem-card-menu { display:flex; gap:4px; flex-shrink:0; }
     .mem-card-menu-btn {
@@ -6368,6 +6375,38 @@ function closeDrawer() {
   filterPlaces();
 }
 
+// ── 추억 카드 장소 태그 클릭 → 해당 마커로 이동 + 드로어 열기 ──────────────────
+function jumpToPlaceFromMemory(placeId) {
+  const p = places.find(x => x.id == placeId);
+  if (!p) {
+    showToast('지도에 없는 장소예요. 먼저 지도를 그 지역으로 이동해보세요.');
+    if (isMobile()) setMobileTab('map');
+    return;
+  }
+  // 모바일: 추억 패널 → 지도 탭으로 전환
+  if (isMobile()) {
+    const mobileTabEl = document.getElementById('tab-map');
+    document.querySelectorAll('.mtab').forEach(t => t.classList.remove('active'));
+    if (mobileTabEl) mobileTabEl.classList.add('active');
+    mobileTab = 'map';
+    document.getElementById('sidebar')?.classList.remove('mobile-open');
+    document.getElementById('memories-panel')?.classList.remove('mobile-open');
+    const fabList = document.getElementById('fab-list');
+    if (fabList) fabList.style.display = 'flex';
+    if (map) { map.dragging.enable(); map.touchZoom.enable(); map.tap?.enable(); }
+    setTimeout(() => map?.invalidateSize(), 350);
+  }
+  // 현재 열린 드로어가 있으면 닫고 새 장소 열기
+  const dd = document.getElementById('detail-drawer');
+  dd.classList.remove('open', 'expanded');
+  document.getElementById('drawer-overlay')?.classList.remove('active');
+  _drawerExpanded = false;
+  activePlace = null;
+  // 지도 이동 후 드로어 열기
+  map.flyTo([p.lat, p.lng], Math.max(map.getZoom(), 15), { duration: 0.7 });
+  setTimeout(() => openPlace(p), 500);
+}
+
 // ── Detail Drawer 스와이프 제스처 ─────────────────────────────────────────────
 // 위로 스와이프 → expand, 아래로 스와이프 → collapse/close
 // 드로어 내부 스크롤과 충돌 방지: scrollTop > 0이면 아래 스와이프 무시
@@ -7617,7 +7656,8 @@ function renderMemoryCard(m, showPlace = true) {
 
   // ── 장소 섹션 (오른쪽) ──
   const placeSecHtml = m.placeName ? `
-    <div class="mem-card-place-sec">
+    <div class="mem-card-place-sec${m.placeId ? ' mc-place-link' : ''}"
+      ${m.placeId ? `onclick="event.stopPropagation();jumpToPlaceFromMemory(${m.placeId})" title="지도에서 보기"` : ''}>
       <div class="mc-place-name">📍 ${m.placeName}</div>
       ${m.placeArea ? `<div class="mc-place-area">${m.placeArea}</div>` : ''}
     </div>` : '<div class="mem-card-place-sec"></div>';
