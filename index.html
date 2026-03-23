@@ -1030,6 +1030,13 @@
       white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
     }
     .mc-place-area { font-size:11px; color:#BBBBBB; margin-top:1px; }
+    /* 장소 태그 — 클릭 가능 버전 */
+    .mem-card-place-sec.mc-place-link { cursor:pointer; }
+    .mem-card-place-sec.mc-place-link:active { opacity:0.65; }
+    .mem-card-place-sec.mc-place-link .mc-place-name {
+      text-decoration: underline 1.5px dotted #E04E14;
+      text-underline-offset: 2px;
+    }
     /* 메뉴 버튼 */
     .mem-card-menu { display:flex; gap:4px; flex-shrink:0; }
     .mem-card-menu-btn {
@@ -3774,7 +3781,7 @@ function initMap() {
   });
 
   // 마커는 loadViewportPlaces() 에서 추가 (initApp에서 호출됨)
-  map.on('click',   () => { if (activePlace) closeDrawer(); });
+  map.on('click',   () => { if (activePlace) closeDrawer(); clearTooltipOnly(); });
   map.on('zoomend', updateAllMarkerSizes);
   // 자동 뷰포트 로딩 제거 — '홍시야 찾아줘' 버튼으로 수동 로딩
   // map.on('moveend', _scheduleVpLoad);
@@ -6100,6 +6107,8 @@ function selectPlace(p) {
 // ══════════════════════════════════════════════════════
 function openPlace(p) {
   if (!p) return;
+  // 말풍선만 남아있던 마커 정리 (다른 장소 열 때 이전 말풍선 제거)
+  if (_tooltipOnlyId != null && _tooltipOnlyId !== p.id) clearTooltipOnly();
   // 드로어 열기 전 선택 상태 강제 갱신 (이미 선택됐어도 다시 적용)
   if (activePlace && activePlace.id !== p.id) setMarkerActive(activePlace.id, false);
   activePlace = p;
@@ -6236,6 +6245,15 @@ function openPlace(p) {
 let _drawerOpenAt = 0;
 let _drawerExpanded = false;
 let currentDrawerMemTab = 'all'; // 기본: 모두의 추억
+let _tooltipOnlyId = null; // 드로어 닫은 후 말풍선만 남긴 마커 ID
+
+// 말풍선만 남아있는 마커 정리
+function clearTooltipOnly() {
+  if (_tooltipOnlyId == null) return;
+  const m = markers[_tooltipOnlyId];
+  if (m) { try { m.marker.unbindTooltip(); } catch(e) {} }
+  _tooltipOnlyId = null;
+}
 
 function switchDrawerMemTab(tab) {
   currentDrawerMemTab = tab;
@@ -6251,9 +6269,10 @@ function toggleDrawerExpand() {
   if (btn) btn.textContent = _drawerExpanded ? '⬇' : '⬆';
 }
 
-function closeDrawer() {
+function closeDrawer(force = false) {
   // 방금 열린 직후 마커 탭 이벤트가 map.click으로도 전파돼 즉시 닫히는 현상 방지 (300ms 쿨다운)
-  if (Date.now() - _drawerOpenAt < 300) return;
+  // force=true 이면 스와이프 등 의도적 닫기 — 쿨다운 무시
+  if (!force && Date.now() - _drawerOpenAt < 300) return;
   document.getElementById('detail-drawer').classList.remove('open');
   document.getElementById('drawer-overlay').classList.remove('active');
   // 확장 상태 리셋
@@ -6263,8 +6282,79 @@ function closeDrawer() {
     const btn = document.getElementById('btn-drawer-expand');
     if (btn) btn.textContent = '⬆';
   }
-  if (activePlace) { setMarkerActive(activePlace.id, false); activePlace = null; }
+  if (activePlace) {
+    const id = activePlace.id;
+    const p  = places.find(x => x && x.id === id);
+    const m  = markers[id];
+    // 마커 dot 색 원래대로 리셋 (빨간 → 원래 색)
+    setMarkerActive(id, false);
+    // 상호명 말풍선만 남기기 (hint 없이)
+    if (p && m) {
+      try {
+        const color = m.color || '#E04E14';
+        m.marker.bindTooltip(p.name, {
+          permanent: true, direction: 'top',
+          className: 'place-name-tooltip', offset: [0, -4]
+        });
+        m.marker.openTooltip();
+        // 말풍선 색 적용 + 클릭 시 드로어 재오픈
+        setTimeout(() => {
+          try {
+            const ttEl = m.marker.getTooltip()?.getElement();
+            if (ttEl) {
+              ttEl.style.borderColor = color;
+              ttEl.style.setProperty('--tt-color', color);
+              ttEl.style.cursor = 'pointer';
+              ttEl.onclick = (e) => { e.stopPropagation(); openPlace(p); };
+            }
+          } catch(e) {}
+        }, 30);
+        _tooltipOnlyId = id;
+      } catch(e) {}
+    }
+    activePlace = null;
+  }
   filterPlaces();
+}
+
+// ══════════════════════════════════════════════════════
+//  추억 카드 → 지도 마커 이동
+// ══════════════════════════════════════════════════════
+function jumpToPlaceFromMemory(placeId) {
+  const p = places.find(x => x.id == placeId);
+  if (!p) {
+    showToast('지도에 없는 장소예요. 먼저 지도를 그 지역으로 이동해보세요.');
+    if (isMobile()) setMobileTab('map');
+    return;
+  }
+
+  // 기존 말풍선 정리
+  clearTooltipOnly();
+
+  // 모바일: 추억 탭 → 지도 탭으로 전환 (drawer는 곧 열 것이므로 skipCloseDrawer=true)
+  if (isMobile()) {
+    mobileTab = 'map';
+    document.querySelectorAll('.mtab').forEach(t => t.classList.remove('active'));
+    document.getElementById('tab-map')?.classList.add('active');
+    document.getElementById('sidebar')?.classList.remove('mobile-open');
+    document.getElementById('memories-panel')?.classList.remove('mobile-open');
+    document.getElementById('fab-list').style.display = 'flex';
+    if (map) { map.dragging.enable(); map.touchZoom.enable(); map.tap?.enable(); }
+    setTimeout(() => map?.invalidateSize(), 350);
+  }
+
+  // 열려있는 드로어 즉시 닫기 (말풍선 없이)
+  const dd = document.getElementById('detail-drawer');
+  if (dd && dd.classList.contains('open')) {
+    dd.classList.remove('open', 'expanded');
+    document.getElementById('drawer-overlay')?.classList.remove('active');
+    _drawerExpanded = false;
+    if (activePlace) { setMarkerActive(activePlace.id, false); activePlace = null; }
+  }
+
+  // 지도 이동 → 드로어 열기
+  map.flyTo([p.lat, p.lng], Math.max(map.getZoom(), 15), { duration: 0.6 });
+  setTimeout(() => openPlace(p), 450);
 }
 
 // ══════════════════════════════════════════════════════
@@ -7446,9 +7536,10 @@ function renderMemoryCard(m, showPlace = true) {
       ${ageStr ? `<span class="mc-dog-age">${ageStr}</span>` : ''}
     </div>`;
 
-  // ── 장소 섹션 (오른쪽) ──
+  // ── 장소 섹션 (오른쪽) — placeId 있으면 클릭 시 해당 마커로 이동 ──
   const placeSecHtml = m.placeName ? `
-    <div class="mem-card-place-sec">
+    <div class="mem-card-place-sec${m.placeId ? ' mc-place-link' : ''}"
+      ${m.placeId ? `onclick="event.stopPropagation();jumpToPlaceFromMemory(${m.placeId})" title="지도에서 보기"` : ''}>
       <div class="mc-place-name">📍 ${m.placeName}</div>
       ${m.placeArea ? `<div class="mc-place-area">${m.placeArea}</div>` : ''}
     </div>` : '<div class="mem-card-place-sec"></div>';
@@ -7871,12 +7962,16 @@ function setMobileTab(tab, skipCloseDrawer) {
   const memPanel = document.getElementById('memories-panel');
 
   if (tab === 'list') {
+    // 드로어가 열려 있으면 닫기 (z-index 800으로 목록 패널을 덮기 때문)
+    closeDrawer(true);
     sidebar.classList.add('mobile-open');
     memPanel.classList.remove('mobile-open');
     document.getElementById('fab-list').style.display = 'none';
     // 지도가 터치 이벤트를 가로채지 않도록 비활성화
     if (map) { map.dragging.disable(); map.touchZoom.disable(); map.tap?.disable(); }
   } else if (tab === 'memories') {
+    // 드로어가 열려 있으면 닫기
+    closeDrawer(true);
     sidebar.classList.remove('mobile-open');
     memPanel.classList.add('mobile-open');
     document.getElementById('fab-list').style.display = 'none';
@@ -11319,6 +11414,105 @@ document.addEventListener('DOMContentLoaded', () => {
     const el = document.getElementById(id);
     if (el) el.addEventListener('keypress', e => { if(e.key==='Enter') doAuth(); });
   });
+
+  // ── 드로어 스와이프 제스처 ─────────────────────────────────────────────────
+  // 핸들(.d-handle) 또는 드로어 최상단 영역에서 터치 시작 → 스와이프 감지
+  // scrollTop > 0 상태에서 아래로 끌면 내부 스크롤 우선 (스와이프 무시)
+  // ↓ 80px 이상: 펼쳐진 상태면 접기, 기본 상태면 닫기
+  // ↑ 60px 이상: 접힌 상태면 펼치기
+  (function() {
+    const drawer  = document.getElementById('detail-drawer');
+    if (!drawer) return;
+
+    let _sy = 0, _scrollTop0 = 0, _active = false;
+
+    drawer.addEventListener('touchstart', e => {
+      _sy          = e.touches[0].clientY;
+      _scrollTop0  = drawer.scrollTop;
+      _active      = false;
+      drawer.style.transition = 'none'; // 드래그 중 transition 끄기
+    }, { passive: true });
+
+    drawer.addEventListener('touchmove', e => {
+      if (!drawer.classList.contains('open')) return;
+      const dy = e.touches[0].clientY - _sy;
+
+      if (dy > 0 && _scrollTop0 <= 0) {
+        // 아래로 드래그 + 내부 스크롤 최상단 → 드로어 끌어내리기
+        _active = true;
+        e.preventDefault();
+        drawer.style.transform = `translateY(${(dy * 0.55).toFixed(1)}px)`;
+      } else if (dy < -50 && !_drawerExpanded && _scrollTop0 <= 0) {
+        // 위로 드래그 + 접힌 상태 → 살짝 저항감만 주고 snap
+        _active = true;
+        e.preventDefault();
+        drawer.style.transform = `translateY(${(dy * 0.2).toFixed(1)}px)`;
+      }
+    }, { passive: false });
+
+    drawer.addEventListener('touchend', e => {
+      drawer.style.transition = ''; // CSS transition 복원
+      const dy = e.changedTouches[0].clientY - _sy;
+
+      if (_active) {
+        drawer.style.transform = ''; // 인라인 transform 초기화
+        if (dy > 80) {
+          // 아래로 충분히 끌어내림
+          if (_drawerExpanded) toggleDrawerExpand(); // 펼침 → 접기
+          else closeDrawer(true);                    // 기본 → 닫기 (force)
+        } else if (dy < -60 && !_drawerExpanded) {
+          toggleDrawerExpand();                      // 위로 → 펼치기
+        }
+        // 그 외: 스냅백 (transform 초기화만으로 CSS가 복원)
+      } else {
+        drawer.style.transform = '';
+      }
+      _active = false;
+    }, { passive: true });
+  })();
+
+  // ── 추억 패널 스와이프 제스처 ───────────────────────────────────────────────
+  // 핸들(.d-handle) 포함한 패널 전체에서 감지
+  // 피드(#mem-feed)가 스크롤 중(scrollTop > 0)이면 아래 스와이프 무시
+  // ↓ 80px 이상: 지도 탭으로 전환 (패널 닫기)
+  (function() {
+    const panel = document.getElementById('memories-panel');
+    const feed  = document.getElementById('mem-feed');
+    if (!panel) return;
+
+    let _sy = 0, _feedTop0 = 0, _active = false;
+
+    panel.addEventListener('touchstart', e => {
+      _sy       = e.touches[0].clientY;
+      _feedTop0 = feed ? feed.scrollTop : 0;
+      _active   = false;
+      panel.style.transition = 'none';
+    }, { passive: true });
+
+    panel.addEventListener('touchmove', e => {
+      if (!panel.classList.contains('mobile-open')) return;
+      const dy = e.touches[0].clientY - _sy;
+
+      if (dy > 0 && _feedTop0 <= 0) {
+        _active = true;
+        e.preventDefault();
+        panel.style.transform = `translateY(${(dy * 0.55).toFixed(1)}px)`;
+      }
+    }, { passive: false });
+
+    panel.addEventListener('touchend', e => {
+      panel.style.transition = '';
+      const dy = e.changedTouches[0].clientY - _sy;
+
+      if (_active) {
+        panel.style.transform = '';
+        if (dy > 80) setMobileTab('map'); // 닫기
+      } else {
+        panel.style.transform = '';
+      }
+      _active = false;
+    }, { passive: true });
+  })();
 });
 
 // ══════════════════════════════════════════════════════
