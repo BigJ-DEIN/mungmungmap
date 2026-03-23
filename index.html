@@ -1645,65 +1645,6 @@
       <!-- 필터 내용 (모바일: 기본 접힘 / 데스크탑: 항상 표시) -->
       <div id="filter-panel-body">
 
-        <!-- ── 조건 row ── -->
-        <div class="frow" id="frow-cond">
-          <div class="frow-hdr" onclick="toggleFrow('cond')">
-            <span class="frow-lbl">조건</span>
-            <span class="frow-sum" id="frow-cond-sum"></span>
-            <span class="frow-arr">▼</span>
-          </div>
-          <div class="frow-body" id="frow-cond-body">
-            <button class="filter-chip" data-cond="대형견"       onclick="toggleFilter(this,'대형견')">🐕 대형견 OK</button>
-            <button class="filter-chip" data-cond="실내"         onclick="toggleFilter(this,'실내')">🏠 실내 가능</button>
-            <button class="filter-chip" data-cond="테라스"       onclick="toggleFilter(this,'테라스')">🌿 테라스</button>
-            <button class="filter-chip" data-cond="케이지불필요"  onclick="toggleFilter(this,'케이지불필요')">케이지 불필요</button>
-            <button class="filter-chip fee-chip" data-cond="입장료있음" onclick="toggleFilter(this,'입장료있음')">💰 입장료</button>
-          </div>
-        </div>
-
-        <!-- ── 등급 row ── -->
-        <div class="frow" id="frow-grade">
-          <div class="frow-hdr" onclick="toggleFrow('grade')">
-            <span class="frow-lbl">등급</span>
-            <span class="frow-sum" id="frow-grade-sum">전체</span>
-            <span class="frow-arr">▼</span>
-          </div>
-          <div class="frow-body" id="frow-grade-body">
-            <button class="filter-chip active" data-grade="all" onclick="setGradeAll(this)">전체</button>
-            <button class="filter-chip grade-chip" data-grade="1"  onclick="toggleGradeChip(this,1)">1</button>
-            <button class="filter-chip grade-chip" data-grade="2"  onclick="toggleGradeChip(this,2)">2</button>
-            <button class="filter-chip grade-chip" data-grade="3"  onclick="toggleGradeChip(this,3)">3</button>
-            <button class="filter-chip grade-chip" data-grade="4"  onclick="toggleGradeChip(this,4)">4</button>
-            <button class="filter-chip grade-chip" data-grade="5"  onclick="toggleGradeChip(this,5)">5</button>
-            <button class="filter-chip grade-chip" data-grade="6"  onclick="toggleGradeChip(this,6)">6</button>
-            <button class="filter-chip grade-chip" data-grade="7"  onclick="toggleGradeChip(this,7)">7</button>
-            <button class="filter-chip grade-chip" data-grade="8"  onclick="toggleGradeChip(this,8)">8</button>
-            <button class="filter-chip grade-chip" data-grade="9"  onclick="toggleGradeChip(this,9)">9</button>
-            <button class="filter-chip grade-chip" data-grade="10" onclick="toggleGradeChip(this,10)">10</button>
-          </div>
-        </div>
-
-        <!-- ── 종류 row ── -->
-        <div class="frow" id="frow-cat">
-          <div class="frow-hdr" onclick="toggleFrow('cat')">
-            <span class="frow-lbl">종류</span>
-            <span class="frow-sum" id="frow-cat-sum">전체</span>
-            <span class="frow-arr">▼</span>
-          </div>
-          <div class="frow-body" id="frow-cat-body">
-            <button class="filter-chip active" data-cat="all"       onclick="setCatFilter(this,'all')">전체</button>
-            <button class="filter-chip" data-cat="cafe"             onclick="setCatFilter(this,'cafe')">☕ 카페</button>
-            <button class="filter-chip" data-cat="petcafe"          onclick="setCatFilter(this,'petcafe')">🐾 애견카페</button>
-            <button class="filter-chip" data-cat="restaurant"       onclick="setCatFilter(this,'restaurant')">🍽 식당</button>
-            <button class="filter-chip" data-cat="bakery"           onclick="setCatFilter(this,'bakery')">🥐 베이커리</button>
-            <button class="filter-chip" data-cat="park"             onclick="setCatFilter(this,'park')">🏃 운동장</button>
-            <button class="filter-chip" data-cat="hotel"            onclick="setCatFilter(this,'hotel')">🏨 숙소</button>
-            <button class="filter-chip" data-cat="hospital"         onclick="setCatFilter(this,'hospital')">🏥 동물병원</button>
-            <button class="filter-chip" data-cat="grooming"         onclick="setCatFilter(this,'grooming')">✂️ 미용</button>
-            <button class="filter-chip" data-cat="other"            onclick="setCatFilter(this,'other')">📍 기타</button>
-          </div>
-        </div>
-
         <!-- ── 지역 row ── -->
         <div class="frow" id="frow-area">
           <div class="frow-hdr" onclick="toggleFrow('area')">
@@ -1731,6 +1672,65 @@
             <button class="filter-chip" data-area="울산"  onclick="setAreaFilter(this,'울산')">울산</button>
             <button class="filter-chip" data-area="부산"  onclick="setAreaFilter(this,'부산')">부산</button>
             <button class="filter-chip" data-area="제주"  onclick="setAreaFilter(this,'제주')">제주</button>
+          </div>
+        </div>
+
+        <!-- ── 조건 row ── -->
+        <div class="frow" id="frow-cond">
+          <div class="frow-hdr" onclick="toggleFrow('cond')">
+            <span class="frow-lbl">펫 정보</span>
+            <span class="frow-sum" id="frow-cond-sum"></span>
+            <span class="frow-arr">▼</span>
+          </div>
+          <div class="frow-body" id="frow-cond-body">
+            <button class="filter-chip" data-cond="대형견"       onclick="toggleFilter(this,'대형견')">🐕 대형견 OK</button>
+            <button class="filter-chip" data-cond="실내"         onclick="toggleFilter(this,'실내')">🏠 실내 가능</button>
+            <button class="filter-chip" data-cond="테라스"       onclick="toggleFilter(this,'테라스')">🌿 테라스</button>
+            <button class="filter-chip" data-cond="케이지불필요"  onclick="toggleFilter(this,'케이지불필요')">케이지 불필요</button>
+            <button class="filter-chip fee-chip" data-cond="입장료있음" onclick="toggleFilter(this,'입장료있음')">💰 입장료</button>
+          </div>
+        </div>
+
+        <!-- ── 종류 row ── -->
+        <div class="frow" id="frow-cat">
+          <div class="frow-hdr" onclick="toggleFrow('cat')">
+            <span class="frow-lbl">종류</span>
+            <span class="frow-sum" id="frow-cat-sum">전체</span>
+            <span class="frow-arr">▼</span>
+          </div>
+          <div class="frow-body" id="frow-cat-body">
+            <button class="filter-chip active" data-cat="all"       onclick="setCatFilter(this,'all')">전체</button>
+            <button class="filter-chip" data-cat="cafe"             onclick="setCatFilter(this,'cafe')">☕ 카페</button>
+            <button class="filter-chip" data-cat="petcafe"          onclick="setCatFilter(this,'petcafe')">🐾 애견카페</button>
+            <button class="filter-chip" data-cat="restaurant"       onclick="setCatFilter(this,'restaurant')">🍽 식당</button>
+            <button class="filter-chip" data-cat="bakery"           onclick="setCatFilter(this,'bakery')">🥐 베이커리</button>
+            <button class="filter-chip" data-cat="park"             onclick="setCatFilter(this,'park')">🏃 운동장</button>
+            <button class="filter-chip" data-cat="hotel"            onclick="setCatFilter(this,'hotel')">🏨 숙소</button>
+            <button class="filter-chip" data-cat="hospital"         onclick="setCatFilter(this,'hospital')">🏥 동물병원</button>
+            <button class="filter-chip" data-cat="grooming"         onclick="setCatFilter(this,'grooming')">✂️ 미용</button>
+            <button class="filter-chip" data-cat="other"            onclick="setCatFilter(this,'other')">📍 기타</button>
+          </div>
+        </div>
+
+        <!-- ── 등급 row ── -->
+        <div class="frow" id="frow-grade">
+          <div class="frow-hdr" onclick="toggleFrow('grade')">
+            <span class="frow-lbl">등급</span>
+            <span class="frow-sum" id="frow-grade-sum">전체</span>
+            <span class="frow-arr">▼</span>
+          </div>
+          <div class="frow-body" id="frow-grade-body">
+            <button class="filter-chip active" data-grade="all" onclick="setGradeAll(this)">전체</button>
+            <button class="filter-chip grade-chip" data-grade="1"  onclick="toggleGradeChip(this,1)">1</button>
+            <button class="filter-chip grade-chip" data-grade="2"  onclick="toggleGradeChip(this,2)">2</button>
+            <button class="filter-chip grade-chip" data-grade="3"  onclick="toggleGradeChip(this,3)">3</button>
+            <button class="filter-chip grade-chip" data-grade="4"  onclick="toggleGradeChip(this,4)">4</button>
+            <button class="filter-chip grade-chip" data-grade="5"  onclick="toggleGradeChip(this,5)">5</button>
+            <button class="filter-chip grade-chip" data-grade="6"  onclick="toggleGradeChip(this,6)">6</button>
+            <button class="filter-chip grade-chip" data-grade="7"  onclick="toggleGradeChip(this,7)">7</button>
+            <button class="filter-chip grade-chip" data-grade="8"  onclick="toggleGradeChip(this,8)">8</button>
+            <button class="filter-chip grade-chip" data-grade="9"  onclick="toggleGradeChip(this,9)">9</button>
+            <button class="filter-chip grade-chip" data-grade="10" onclick="toggleGradeChip(this,10)">10</button>
           </div>
         </div>
 
@@ -11667,8 +11667,8 @@ function renderAdminPetPolicy() {
     </div>
   `;
   // localStorage에서 저장된 Naver 키 복원
-  const savedId     = localStorage.getItem('pp_naver_id')     || '';
-  const savedSecret = localStorage.getItem('pp_naver_secret') || '';
+  const savedId     = localStorage.getItem('pp_naver_id')     || 'HvAmW3tVBhNLouraO9Oe';
+  const savedSecret = localStorage.getItem('pp_naver_secret') || 'r3O4wgjDo0';
   if (savedId)     { const el = document.getElementById('naver-blog-id');     if (el) el.value = savedId; }
   if (savedSecret) { const el = document.getElementById('naver-blog-secret'); if (el) el.value = savedSecret; }
 }
