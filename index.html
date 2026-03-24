@@ -4270,6 +4270,22 @@ function calcPopScore(blogCount) {
   return 10;
 }
 
+/* ── 블로그 등급 정규화 ──────────────────────────────────────────────────────
+ * blogCount(raw 리뷰 수) 또는 blogScore(raw / 이미 계산된 1-10) 에서
+ * 항상 calcPopScore 기반 1~10 등급을 반환한다.
+ * - blogCount > 0  → calcPopScore(blogCount)  (가장 정확)
+ * - blogScore > 10 → calcPopScore(blogScore)  (raw count가 blogScore에 저장된 경우)
+ * - 0 < blogScore ≤ 10 → 이미 등급 값, 그대로 반환
+ * - 그 외 → 0 (등급 없음)
+ */
+function getBlogGrade(p) {
+  if (!p) return 0;
+  if (p.blogCount > 0) return calcPopScore(p.blogCount);
+  if (p.blogScore > 10) return calcPopScore(p.blogScore); // raw count 오저장 케이스
+  if (p.blogScore > 0 && p.blogScore <= 10) return p.blogScore;
+  return 0;
+}
+
 async function fetchKakaoRating(kakaoId) {
   if (!kakaoId) return null;
   if (_ratingCache.has(kakaoId)) return _ratingCache.get(kakaoId);
@@ -4329,8 +4345,9 @@ async function fetchKakaoRating(kakaoId) {
 async function loadRatingForMarker(p) {
   // 저장된 blogScore 우선 사용 (API 호출 없음), 없으면 panel3 조회
   let r = null;
-  if (p.blogScore && p.blogScore > 0) {
-    r = { blog: p.blogCount || 0, score: p.blogScore };
+  const _grade = getBlogGrade(p);
+  if (_grade > 0) {
+    r = { blog: p.blogCount || 0, score: _grade };
   } else if (p.kakaoId) {
     r = await fetchKakaoRating(p.kakaoId);
   }
@@ -6195,7 +6212,7 @@ function liveCardHtml(d) {
 
 /* 미니 마커 HTML — 목록/드로어 인라인 등급 표시 */
 function miniMarkerHtml(p) {
-  const score = p.blogScore || 0;
+  const score = getBlogGrade(p); // raw count → 1~10 등급 정규화
   if (score <= 0) return '';
   const color = p.isClosed ? '#AAAAAA' : (STATUS_COLORS[getPlaceStatus(p)] || STATUS_COLORS.unverified);
   const sat   = (1.5 - (score - 1) / 9 * 1.2).toFixed(2);
@@ -6568,8 +6585,9 @@ function _kwRenderBasic(p) {
 
   const esc = s => (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 
-  const scoreHtml = p.blogScore > 0
-    ? `<span class="kw-score">★ ${p.blogScore}등급${p.blogCount > 0 ? ` (블로그 ${p.blogCount}개)` : ''}</span>` : '';
+  const _pg = getBlogGrade(p);
+  const scoreHtml = _pg > 0
+    ? `<span class="kw-score">★ ${_pg}등급${p.blogCount > 0 ? ` (블로그 ${p.blogCount}개)` : (p.blogScore > 10 ? ` (블로그 ${p.blogScore}개)` : '')}</span>` : '';
   const chipsHtml = chips.length
     ? `<div class="kw-policy-row">${chips.map(c=>`<span class="kw-chip ${c.cls}">${c.label}</span>`).join('')}</div>` : '';
   const addrStr   = p.addr || p.address || '';
