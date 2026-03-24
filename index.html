@@ -5180,6 +5180,13 @@ async function renderLiveResults(rawData) {
   if (removed > 0)   cleanParts.push(`오등록 ${removed}개 제거`);
   if (corrected > 0) cleanParts.push(`${corrected}개 정보 교정`);
   if (cleanParts.length > 0) showToast(`🔄 ${cleanParts.join(' · ')}`);
+
+  // ── 모든 과정 완료 — FAB 레이블 "다 찾았어!" 후 원래대로 ──────────────────
+  const _doneLabel = document.getElementById('feedback-fab-label');
+  if (_doneLabel) {
+    _doneLabel.textContent = '다 찾았어! 🎉';
+    setTimeout(() => { _doneLabel.textContent = '홍시야 찾아줘!'; }, 3000);
+  }
 }
 
 function flyToLive(lat, lng, idx) {
