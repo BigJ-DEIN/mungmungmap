@@ -4678,6 +4678,62 @@ async function _runSectionCOnly() {
   return results;
 }
 
+/* ── 펫 정보 체크 (단일 장소) — A+B+C 이후 추가 단계 ──────────────────────
+ * 네이버 지역검색 + 블로그 API로 대형견·테라스 여부를 파악해 place 객체와
+ * Firestore 문서를 업데이트한다. 이미 값이 있는 필드는 덮어쓰지 않는다.
+ */
+async function _livePetScanOne(place, cid, cs) {
+  if (!cid || !cs || !place) return;
+  try {
+    const [localRes, blogRes] = await Promise.allSettled([
+      _ppNaverLocal(place, cid, cs),
+      _ppNaverBlog(place, cid, cs),
+    ]);
+    const localTags = localRes.status === 'fulfilled' ? (localRes.value?.tags || null) : null;
+    const snippets  = blogRes.status  === 'fulfilled' ? (blogRes.value?.snippets || []) : [];
+
+    const auto = _ppAutoAnalyze(localTags, snippets);
+    let updated = false;
+
+    // 이미 값이 있는 필드는 덮어쓰지 않음 (기존 수동 입력 보호)
+    const updateData = { petScanned: true, petScanAt: new Date() };
+    const autoFields = [...(place.petAutoFields || [])];
+
+    if (auto.large !== null && place.large === null) {
+      place.large = auto.large;
+      updateData.large = auto.large;
+      if (!autoFields.includes('large')) autoFields.push('large');
+      updated = true;
+    }
+    if (auto.outdoor !== null && place.outdoor === null) {
+      place.outdoor = auto.outdoor;
+      updateData.outdoor = auto.outdoor;
+      if (!autoFields.includes('outdoor')) autoFields.push('outdoor');
+      updated = true;
+    }
+
+    // petScanned 플래그는 결과 여부와 무관하게 항상 기록
+    place.petScanned  = true;
+    place.petScanAt   = updateData.petScanAt;
+    place.petAutoFields = autoFields;
+    updateData.petAutoFields = autoFields;
+
+    if (place.firestoreId && firebaseReady && db) {
+      db.collection('places').doc(place.firestoreId)
+        .update(updateData)
+        .catch(e => console.warn('[_livePetScanOne] Firestore 업데이트 실패:', place.name, e));
+    }
+
+    if (updated) {
+      console.log(`[펫 정보 체크] ${place.name} → 대형견:${place.large} 테라스:${place.outdoor}`);
+    }
+  } catch(e) {
+    console.warn('[_livePetScanOne] 오류:', place.name, e);
+  }
+  // Naver API rate limit 방지 (호출 간 최소 간격)
+  await new Promise(r => setTimeout(r, 350));
+}
+
 async function doLiveSearch() {
   _setLiveFabState(true);
   _sessionQuotaHit = false; // 새 검색마다 초기화
@@ -5048,8 +5104,9 @@ async function renderLiveResults(rawData) {
     if (el) el.textContent = `확인 중 ${processed}/${total}...`;
   }
 
-  const snapshot   = liveData.slice();
-  const _executing = new Set();
+  const snapshot        = liveData.slice();
+  const _executing      = new Set();
+  const _newlyRegistered = []; // 이번 라운드에 새로 등록된 장소 (펫 정보 체크용)
 
   for (const d of snapshot) {
     const key = d.id || d.place_name;
@@ -5059,8 +5116,14 @@ async function renderLiveResults(rawData) {
     const p = (async () => {
       try {
         const added = await autoAddLivePlace(d);
-        if (added) registered++;
-        else       skipped++;
+        if (added) {
+          registered++;
+          // 방금 등록된 장소 객체 수집 (펫 정보 체크 대상)
+          const newP = places.find(p => p.source === 'live_search' && p.kakaoId === d.id);
+          if (newP) _newlyRegistered.push(newP);
+        } else {
+          skipped++;
+        }
       } catch(e) {
         console.warn('autoAddLivePlace 실패:', d.place_name, e);
         skipped++;
@@ -5088,6 +5151,28 @@ async function renderLiveResults(rawData) {
   filterPlaces();
   const skipMsg = skipped > 0 ? ` · 미확인 ${skipped}개 제외` : '';
   showToast(`✅ ${registered}개 등록 완료${skipMsg}`);
+
+  // ── 펫 정보 체크 (Naver API — 대형견/테라스) ──────────────────────────────
+  // A+B+C 이후 추가 단계: 네이버 지역검색·블로그로 대형견·테라스 정보 보강
+  const _naverCid = (localStorage.getItem('naver_pp_cid') || '').trim();
+  const _naverCs  = (localStorage.getItem('naver_pp_cs')  || '').trim();
+  if (_newlyRegistered.length > 0 && _naverCid && _naverCs) {
+    const petLabel = document.getElementById('feedback-fab-label');
+    let petDone = 0;
+    const petTotal = _newlyRegistered.length;
+    const _updatePetLabel = () => {
+      if (petLabel) petLabel.textContent = `펫 정보 체크 ${petDone}/${petTotal}...`;
+    };
+    _updatePetLabel();
+
+    for (const place of _newlyRegistered) {
+      await _livePetScanOne(place, _naverCid, _naverCs);
+      petDone++;
+      _updatePetLabel();
+    }
+    filterPlaces(); // 대형견/테라스 필터 반영
+    showToast(`🐾 펫 정보 체크 완료 (${petTotal}개)`);
+  }
 
   // ── 기존 live_search 장소 자동 제거 + 교정 ──────────────────────────────
   const { removed, corrected } = await cleanupInvalidLivePlaces();
