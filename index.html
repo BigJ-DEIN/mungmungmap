@@ -1267,11 +1267,11 @@
     .fab-primary { background:#E04E14; color:#fff; }
     .fab-secondary { background:#fff; color:#E04E14; }
 
-    /* ── 내 위치 버튼 — 홍시야 찾아줘(feedback-fab) 위에 위치 ── */
+    /* ── 내 위치 버튼 — 홍시야 찾아줘(feedback-fab) 아래에 위치 ── */
     #btn-locate {
       position:fixed; right:14px;
-      /* 홍시야FAB: tabs+14px, FAB 높이~78px, 간격10px → tabs+102px */
-      bottom:calc(var(--tabs-h) + env(safe-area-inset-bottom,0px) + 102px);
+      /* 탭바 바로 위 — 홍시야FAB이 그 위에 위치 */
+      bottom:calc(var(--tabs-h) + env(safe-area-inset-bottom,0px) + 14px);
       z-index:711;
       width:42px; height:42px; border-radius:50%; border:1.5px solid #D0D0D0; cursor:pointer;
       background:#fff; color:#4285F4; font-size:18px;
@@ -1286,7 +1286,7 @@
     #btn-filter {
       position:fixed;
       right:66px; /* 14px(locate right) + 42px(locate width) + 10px(gap) */
-      bottom:calc(var(--tabs-h) + env(safe-area-inset-bottom,0px) + 102px);
+      bottom:calc(var(--tabs-h) + env(safe-area-inset-bottom,0px) + 14px);
       z-index:711;
       width:42px; height:42px; border-radius:50%; border:1.5px solid #D0D0D0; cursor:pointer;
       background:#fff; color:#555; font-size:18px;
@@ -1396,7 +1396,8 @@
     /* ── 홍시야 도와줘! 피드백 버튼 — 하단 탭 바로 위 ── */
     #feedback-fab {
       position:fixed; right:14px;
-      bottom:calc(var(--tabs-h) + env(safe-area-inset-bottom,0px) + 14px);
+      /* 내위치(tabs+14px) + 버튼높이(42px) + 간격(10px) = tabs+66px */
+      bottom:calc(var(--tabs-h) + env(safe-area-inset-bottom,0px) + 66px);
       z-index:720;
       display:flex; flex-direction:column; align-items:center; gap:3px;
       cursor:pointer; user-select:none;
@@ -1442,7 +1443,7 @@
     /* ── 홍시 말풍선 ── */
     #hongsi-bubble {
       position:fixed; right:82px;
-      bottom:calc(var(--tabs-h) + env(safe-area-inset-bottom,0px) + 20px);
+      bottom:calc(var(--tabs-h) + env(safe-area-inset-bottom,0px) + 72px);
       z-index:719; background:#E04E14; color:#fff;
       font-size:13px; font-weight:700; line-height:1.5; padding:11px 17px;
       border-radius:22px 22px 22px 22px;
