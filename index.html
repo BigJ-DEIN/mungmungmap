@@ -3306,13 +3306,16 @@ function showQuotaBubble() {
   if (!el) return;
   clearTimeout(_bubbleTimer);
   clearTimeout(_quotaBubbleTimer);
-  el.textContent = '잠깐 쉬는 중... 잠시 후 다시 눌러봐요 🐾';
+  // Worker 일일 쿼터 소진 vs 순간 요청 밀도 초과 구분
+  const exhausted = isQuotaExhausted();
+  el.textContent = exhausted
+    ? '자는 중... 12시 이후에 만나요 🐾'
+    : '킁킁.. 킁 🐾';
   el.classList.add('visible');
   _quotaBubbleTimer = setTimeout(() => {
     el.classList.remove('visible');
-    // 텍스트 원복 (다음 방문자 말풍선 위해)
     el.textContent = '어디 갈꺼야? 내가 찾아줄게♥';
-  }, 7000);
+  }, exhausted ? 12000 : 7000);
 }
 
 function updateUserBadge() {
@@ -5831,7 +5834,7 @@ function onSearchKeydown(e) {
     _sgKakaoPlaces = docs;
     selectKakaoPlaceSuggestion(0);
   })
-  .catch(e => showToast(e.message === '429' ? '잠깐 쉬는 중... 잠시 후 다시 눌러봐요 🐾' : '검색 중 오류가 발생했어요'));
+  .catch(e => showToast(e.message === '429' ? '킁킁.. 킁 🐾' : '검색 중 오류가 발생했어요'));
 }
 
 function clearSearch() {
@@ -5972,7 +5975,7 @@ async function showSearchSuggestions(query) {
       bx.innerHTML = stripped + kakaoHtml;
       bx.classList.add('open');
     } catch(e) {
-      _sgClear(e?.is429 ? '잠깐 쉬는 중... 잠시 후 다시 눌러봐요 🐾' : '결과 없음');
+      _sgClear(e?.is429 ? '킁킁.. 킁 🐾' : '결과 없음');
     }
 
   }, 300);
@@ -5995,7 +5998,7 @@ async function _sgRestFallback(query, q, renderFn) {
         const stripped = bx.innerHTML.replace(/<div class="sg-empty[^>]*>[\s\S]*?<\/div>/, '');
         const hasOtherResults = stripped.includes('sg-item');
         if (!hasOtherResults) {
-          bx.innerHTML = stripped + `<div class="sg-empty">잠깐 쉬는 중... 잠시 후 다시 눌러봐요 🐾</div>`;
+          bx.innerHTML = stripped + `<div class="sg-empty">킁킁.. 킁 🐾</div>`;
         }
       }
       return;
@@ -9792,6 +9795,8 @@ const _proxyQueue = {
     if (this.queue.length > 0) { this.running++; this.queue.shift()(); }
   }
 };
+// 프록시 429 감지 시 전체 요청을 일시적으로 늦추는 쿨다운 타임스탬프
+let _proxyRateLimitUntil = 0;
 
 /* ── 일일 Worker 할당량 관리 ─────────────────────────────────────────────
    Cloudflare 무료 티어: 100,000 req/day → 80% = 80,000 req/day 제한
@@ -9946,6 +9951,10 @@ async function fetchKakaoPagePetSignal(url, kakaoId) {
 
   for (const proxyFn of PROXIES) {
     try {
+      // 429 쿨다운 중이면 해소될 때까지 대기 (최대 3초)
+      const waitMs = _proxyRateLimitUntil - Date.now();
+      if (waitMs > 0) await new Promise(r => setTimeout(r, Math.min(waitMs, 3000)));
+
       if (proxyFn === PROXIES[0]) _incWorkerCall(); // Worker 호출 카운트
       await _proxyQueue.acquire();
       let res;
@@ -9953,8 +9962,15 @@ async function fetchKakaoPagePetSignal(url, kakaoId) {
       finally { _proxyQueue.release(); }
       if (!res.ok) {
         if (autoV.running) autoV.proxyFail = (autoV.proxyFail||0)+1;
+        if (res.status === 429) {
+          // 순간 밀도 초과 → 1.5초 쿨다운 + 동시성 줄이기
+          _proxyRateLimitUntil = Date.now() + 1500;
+          _proxyQueue.maxConcurrent = Math.max(3, _proxyQueue.maxConcurrent - 1);
+        }
         continue;
       }
+      // 성공 시 동시성 점진적 복구 (상한 8)
+      if (_proxyQueue.maxConcurrent < 8) _proxyQueue.maxConcurrent = Math.min(8, _proxyQueue.maxConcurrent + 1);
       const rawText = await res.text();
       if (rawText.length < 500) {
         if (autoV.running) autoV.proxyFail = (autoV.proxyFail||0)+1;
