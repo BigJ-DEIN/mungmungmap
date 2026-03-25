@@ -2245,6 +2245,7 @@ let db = null, auth = null, storage = null, firebaseReady = false;
 
 // ── 앱 공유 설정 (Firestore meta/app_config에서 로드 — 모든 유저 공유) ──
 let _appNaverCid = '', _appNaverCs = '';
+let _appConfigReady = Promise.resolve(); // loadAppConfig() 완료 추적용 (race condition 방지)
 
 async function loadAppConfig() {
   if (!firebaseReady || !db) return;
@@ -3323,9 +3324,11 @@ function showQuotaBubble() {
   clearTimeout(_quotaBubbleTimer);
   // Worker 일일 쿼터 소진 vs 순간 요청 밀도 초과 구분
   const exhausted = isQuotaExhausted();
-  el.textContent = exhausted
-    ? '자는 중... 12시 이후에 만나요 🐾'
-    : '킁킁.. 킁 🐾';
+  if (exhausted) {
+    el.innerHTML = '자는 중.. 12시 이후에 다시 봐요 🐾<br><span style="font-size:0.78em;font-weight:400;opacity:0.8;line-height:1.4">자정까지는 홍시가 이미 아는 장소만 안내</span>';
+  } else {
+    el.textContent = '킁킁.. 킁 🐾';
+  }
   el.classList.add('visible');
   _quotaBubbleTimer = setTimeout(() => {
     el.classList.remove('visible');
@@ -3388,7 +3391,7 @@ function startApp(user) {
   if (firebaseReady && db && !user.uid?.startsWith('local-')) {
     ensureUserDocument(user).catch(() => {});
     loadExcludedPlaces().catch(() => {}); // 오등록 블랙리스트 로드
-    loadAppConfig().catch(() => {});      // 네이버 API 키 등 공유 설정 로드
+    _appConfigReady = loadAppConfig().catch(() => {}); // 네이버 API 키 등 공유 설정 로드 (완료 추적)
   }
 
   requestAnimationFrame(() => setTimeout(() => initApp().catch(e => console.error('[initApp] unhandled error:', e)), 80));
@@ -5174,6 +5177,7 @@ async function renderLiveResults(rawData) {
   // ── 펫 정보 체크 (Naver API — 대형견/테라스) ──────────────────────────────
   // A+B+C 이후 추가 단계: 네이버 지역검색·블로그로 대형견·테라스 정보 보강
   // Firestore 공유 키 우선, 없으면 로컬 fallback (관리자 기기)
+  await _appConfigReady; // Firestore config 로드 완료 대기 (race condition 방지)
   const _naverCid = _appNaverCid || (localStorage.getItem('naver_pp_cid') || '').trim();
   const _naverCs  = _appNaverCs  || (localStorage.getItem('naver_pp_cs')  || '').trim();
   if (_newlyRegistered.length > 0 && _naverCid && _naverCs) {
