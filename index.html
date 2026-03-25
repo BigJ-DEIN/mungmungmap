@@ -2243,6 +2243,21 @@ const ADMIN_EMAILS = ['jiselle1105@naver.com', 'nonesmoking@naver.com'];
 // ══════════════════════════════════════════════════════
 let db = null, auth = null, storage = null, firebaseReady = false;
 
+// ── 앱 공유 설정 (Firestore meta/app_config에서 로드 — 모든 유저 공유) ──
+let _appNaverCid = '', _appNaverCs = '';
+
+async function loadAppConfig() {
+  if (!firebaseReady || !db) return;
+  try {
+    const snap = await db.collection('meta').doc('app_config').get();
+    if (snap.exists) {
+      const d = snap.data();
+      if (d.naver_cid) _appNaverCid = d.naver_cid;
+      if (d.naver_cs)  _appNaverCs  = d.naver_cs;
+    }
+  } catch(e) { console.warn('[loadAppConfig] 실패:', e); }
+}
+
 function initFirebase() {
   try {
     if (firebaseConfig.apiKey === 'YOUR_API_KEY') {
@@ -3373,6 +3388,7 @@ function startApp(user) {
   if (firebaseReady && db && !user.uid?.startsWith('local-')) {
     ensureUserDocument(user).catch(() => {});
     loadExcludedPlaces().catch(() => {}); // 오등록 블랙리스트 로드
+    loadAppConfig().catch(() => {});      // 네이버 API 키 등 공유 설정 로드
   }
 
   requestAnimationFrame(() => setTimeout(() => initApp().catch(e => console.error('[initApp] unhandled error:', e)), 80));
@@ -5157,8 +5173,9 @@ async function renderLiveResults(rawData) {
 
   // ── 펫 정보 체크 (Naver API — 대형견/테라스) ──────────────────────────────
   // A+B+C 이후 추가 단계: 네이버 지역검색·블로그로 대형견·테라스 정보 보강
-  const _naverCid = (localStorage.getItem('naver_pp_cid') || '').trim();
-  const _naverCs  = (localStorage.getItem('naver_pp_cs')  || '').trim();
+  // Firestore 공유 키 우선, 없으면 로컬 fallback (관리자 기기)
+  const _naverCid = _appNaverCid || (localStorage.getItem('naver_pp_cid') || '').trim();
+  const _naverCs  = _appNaverCs  || (localStorage.getItem('naver_pp_cs')  || '').trim();
   if (_newlyRegistered.length > 0 && _naverCid && _naverCs) {
     const petLabel = document.getElementById('feedback-fab-label');
     let petDone = 0;
@@ -12091,9 +12108,9 @@ function renderAdminPetPolicy() {
         </div>
         <button onclick="ppSaveApiKeys()"
           style="padding:5px 14px;background:#1E3A8A;color:#fff;border:none;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">
-          💾 키 저장
+          💾 키 저장 (전체 유저 적용)
         </button>
-        <span style="font-size:10px;color:#999;margin-left:8px">네이버 개발자센터 → 앱 → 지역검색 + 블로그 검색 권한 등록</span>
+        <span style="font-size:10px;color:#999;margin-left:8px">Firestore에 저장 → 모든 기기에서 펫 정보 체크 활성화</span>
       </div>
 
       <!-- 스캔 옵션 -->
@@ -12142,12 +12159,27 @@ function renderAdminPetPolicy() {
   `;
 }
 
-function ppSaveApiKeys() {
+async function ppSaveApiKeys() {
   const cid = (document.getElementById('naver-pp-cid')?.value || '').trim();
   const cs  = (document.getElementById('naver-pp-cs')?.value  || '').trim();
-  if (cid) localStorage.setItem('naver_pp_cid', cid);
-  if (cs)  localStorage.setItem('naver_pp_cs',  cs);
-  showToast('API 키가 저장되었습니다');
+  if (!cid || !cs) { showToast('Client ID와 Secret을 모두 입력해주세요'); return; }
+  // 로컬 저장 (관리자 기기 fallback)
+  localStorage.setItem('naver_pp_cid', cid);
+  localStorage.setItem('naver_pp_cs',  cs);
+  // Firestore 저장 → 모든 유저에게 공유
+  if (firebaseReady && db) {
+    try {
+      await db.collection('meta').doc('app_config').set(
+        { naver_cid: cid, naver_cs: cs }, { merge: true }
+      );
+      _appNaverCid = cid; _appNaverCs = cs; // 메모리도 즉시 반영
+      showToast('✅ API 키 저장 완료 — 모든 유저에게 적용됩니다');
+    } catch(e) {
+      showToast('⚠️ Firestore 저장 실패 — 로컬에만 저장됨');
+    }
+  } else {
+    showToast('API 키가 로컬에 저장되었습니다');
+  }
 }
 
 async function runPetPolicyScan() {
