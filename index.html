@@ -6239,13 +6239,21 @@ function filterPlaces() {
     let needRerate = false;
     places.forEach(p => {
       let m = markers[p.id];
+      const _nid = Number(p.id);
+      const _isLiked = !isNaN(_nid) && userLikedPlaceIds.has(_nid);
       // ★ 마커가 없는데 목록에 있는 장소 → 즉시 마커 생성 (목록 ≠ 마커 불일치 방지)
-      if (!m && filteredSet.has(p.id)) {
+      // ★ 관심장소는 뷰포트 밖이어도 마커 생성 (항상 표시 보장)
+      if (!m && (filteredSet.has(p.id) || _isLiked)) {
         try { addMarker(p); m = markers[p.id]; } catch(e) {}
       }
       if (!m) return;
       // ★ 하트 마커 (나의 추억·친구 추억)는 뷰포트 필터 적용 안 함 — 항상 지도에 표시
       if (m.isHeart) return;
+      // ★ 관심장소(★)도 뷰포트·필터 무관하게 항상 지도에 표시
+      if (_isLiked) {
+        if (!clusterGroup.hasLayer(m.marker)) { clusterGroup.addLayer(m.marker); needRerate = true; }
+        return;
+      }
       const show = filteredSet.has(p.id);
       const inCluster = clusterGroup.hasLayer(m.marker);
       if (show && !inCluster) {
