@@ -4925,15 +4925,15 @@ function _computeHotThreshold(counts) {
 }
 
 // ── 네이버 블로그 리뷰 수 조회 ─────────────────────────────────────────────
+// Firebase Function 프록시를 통해 호출 (CORS 우회)
+const _NAVER_PROXY_URL = 'https://asia-northeast3-hongsi-map.cloudfunctions.net/naverBlog';
+
 async function _fetchNaverBlogCount(name, naverCid, naverCs) {
-  // Naver Blog Search API — returns total blog post count for the place name
-  // (Local Search API does NOT reliably return blogreviewcount)
+  // Naver Blog Search API (CORS 제약으로 Firebase Function 프록시 사용)
   if (!naverCid || !naverCs || !name) return 0;
   try {
-    const resp = await fetch(
-      `https://openapi.naver.com/v1/search/blog.json?query=${encodeURIComponent(name)}&display=1`,
-      { headers: { 'X-Naver-Client-Id': naverCid, 'X-Naver-Client-Secret': naverCs } }
-    );
+    const url = `${_NAVER_PROXY_URL}?query=${encodeURIComponent(name)}&cid=${encodeURIComponent(naverCid)}&cs=${encodeURIComponent(naverCs)}`;
+    const resp = await fetch(url);
     if (!resp.ok) return 0;
     const json = await resp.json();
     return json.total || 0;
