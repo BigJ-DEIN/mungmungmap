@@ -3254,6 +3254,24 @@ function renderAdminBatchFill() {
         style="background:#1a1a2e;color:#00ff88;border-radius:8px;padding:12px;font-size:11px;max-height:300px;overflow-y:auto;white-space:pre-wrap;word-break:break-all"></pre>
 
       <hr style="margin:20px 0;border:none;border-top:1px solid #eee">
+      <h2 style="font-size:16px;font-weight:700;margin-bottom:8px">🔥 핫플레이스 재검증 및 정리</h2>
+      <p style="font-size:13px;color:#666;margin-bottom:12px">
+        Firestore <code>hotplaces</code> 컬렉션 전체를 읽어, 저장된 데이터 기준으로<br>
+        ① 비데이트 카테고리 · ② 낮은 평점(3.5 미만) · ③ 광고성 블로그 장소를 삭제합니다.
+      </p>
+      <div style="background:#fff3cd;border:1px solid #ffc107;border-radius:8px;padding:10px;margin-bottom:12px;font-size:12px">
+        ⚠️ Firestore에서 해당 핫플이 삭제됩니다. 지도 마커도 즉시 제거됩니다.
+      </div>
+      <button id="clean-hot-btn"
+        onclick="batchCleanHotplaces()"
+        style="background:#E64A19;color:#fff;border:none;border-radius:10px;padding:12px 24px;font-size:14px;font-weight:700;cursor:pointer;margin-bottom:12px">
+        🧹 핫플레이스 정리 실행
+      </button>
+      <div id="clean-hot-progress" style="font-size:13px;color:#555;margin-bottom:8px"></div>
+      <pre id="clean-hot-log"
+        style="background:#1a1a2e;color:#00ff88;border-radius:8px;padding:12px;font-size:11px;max-height:240px;overflow-y:auto;white-space:pre-wrap;word-break:break-all"></pre>
+
+      <hr style="margin:20px 0;border:none;border-top:1px solid #eee">
       <h2 style="font-size:16px;font-weight:700;margin-bottom:8px">⭐ 디폴트 표시 장소 동기화</h2>
       <p style="font-size:13px;color:#666;margin-bottom:12px">
         Firestore의 모든 반려동물 장소에 <code>defaultShow</code> 필드를 일괄 설정합니다.<br>
@@ -4747,11 +4765,50 @@ function addHotplaceMarker(h) {
 }
 
 function showHotplacePopup(h) {
-  const total = (h.blogCount || 0) + (h.reviewCount || 0);
+  const totalReviews = (h.kakaoBlog||h.blogCount||0) + (h.kakaoMap||h.reviewCount||0) + (h.naverBlog||0);
   const cat = h.category ? h.category.split(' > ').pop() : '';
-  showToast(`⭐ ${h.name}${cat?' · '+cat:''} — 리뷰 ${total.toLocaleString()}개`);
-  // Kakao 지도 링크로 이동 (상세 정보)
-  if (h.kakaoUrl) window.open(h.kakaoUrl, '_blank', 'noopener');
+
+  document.getElementById('drawer-content').innerHTML = `
+    <div class="d-header">
+      <div class="d-icon">⭐</div>
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;align-items:flex-start;gap:6px">
+          <div class="d-name" style="flex:1;min-width:0">${h.name}</div>
+        </div>
+        <div class="d-sub">${cat ? cat + '&nbsp;·&nbsp;' : ''}핫플레이스</div>
+        <div class="d-sub" style="margin-top:3px">📍 ${h.addr || '주소 미확인'}</div>
+        ${h.phone ? `<div class="d-sub">📞 <a href="tel:${h.phone}" style="color:inherit">${h.phone}</a></div>` : ''}
+      </div>
+      <div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0">
+        <button class="d-expand" id="btn-drawer-expand" onclick="toggleDrawerExpand()" title="전체보기">⬆</button>
+        <button class="d-close" onclick="closeDrawer()">✕</button>
+      </div>
+    </div>
+    <div style="background:#FFF9E6;border-radius:12px;padding:14px;margin-top:12px;border:1.5px solid #FFD740">
+      <div style="font-size:13px;font-weight:700;color:#B8860B;margin-bottom:8px">⭐ 핫플레이스 지수</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <div style="background:#FFF;border-radius:8px;padding:6px 12px;font-size:12px;color:#555;border:1px solid #FFE082">
+          카카오 블로그 <span style="font-weight:700;color:#E65100">${(h.kakaoBlog||h.blogCount||0).toLocaleString()}</span>
+        </div>
+        <div style="background:#FFF;border-radius:8px;padding:6px 12px;font-size:12px;color:#555;border:1px solid #FFE082">
+          카카오 리뷰 <span style="font-weight:700;color:#E65100">${(h.kakaoMap||h.reviewCount||0).toLocaleString()}</span>
+        </div>
+        <div style="background:#FFF;border-radius:8px;padding:6px 12px;font-size:12px;color:#555;border:1px solid #FFE082">
+          네이버 블로그 <span style="font-weight:700;color:#03C75A">${(h.naverBlog||0).toLocaleString()}</span>
+        </div>
+      </div>
+      <div style="margin-top:10px;font-size:12px;color:#888">합산 리뷰 <span style="font-weight:700;color:#555">${totalReviews.toLocaleString()}</span>개${h.threshold ? ' (기준 ' + h.threshold.toLocaleString() + '+)' : ''}</div>
+    </div>
+    <div class="action-row" style="margin-top:16px">
+      ${h.kakaoUrl ? `<button class="btn-act btn-primary" onclick="window.open('${h.kakaoUrl}','_blank','noopener')">
+        <i class="fa fa-location-dot"></i> 상세 보기
+      </button>` : ''}
+    </div>`;
+
+  document.getElementById('detail-drawer').classList.add('open');
+  document.getElementById('drawer-overlay').classList.add('active');
+  _drawerOpenAt = Date.now();
+  if (typeof isMobile === 'function' && isMobile()) setMobileTab('map', true);
 }
 
 // ── Firestore hotplaces 뷰포트 로딩 (자동 — 모든 유저에게 표시) ──────────────
@@ -4895,6 +4952,18 @@ async function _fetchNaverBlogCount(name, naverCid, naverCs) {
   return 0;
 }
 
+// ── 핫플 카테고리 필터 ────────────────────────────────────────────────────────
+// 데이트·나들이 목적에 맞지 않는 카테고리 제외
+const _HOT_EXCLUDE_CATS = [
+  '미용', '의료', '교육', '학문', '금융', '보험', '부동산',
+  '공공기관', '산업', '농업', '세탁', '수선', '병원', '의원',
+  '성형', '학원', '교습', '피부과', '치과', '안과', '한의원'
+];
+function _isExcludedHotCat(catName) {
+  if (!catName) return false;
+  return _HOT_EXCLUDE_CATS.some(kw => catName.includes(kw));
+}
+
 // ══════════════════════════════════════════════════════════════════
 //  핫플레이스 검색 메인 함수
 // ══════════════════════════════════════════════════════════════════
@@ -4978,12 +5047,19 @@ async function doHotplaceSearch() {
       }
     }
 
-    // 청크 4개씩 병렬 실행
+    // 청크 4개씩 병렬 실행 + 검색 중 X/Y 카운터
+    let _p1Done = 0;
+    const _p1Total = tasks.length;
+    _setHotFabState(true, `검색 중 0/${_p1Total}`);
     for (let i=0; i<tasks.length; i+=4) {
-      await Promise.all(tasks.slice(i, i+4).map(t => t()));
+      await Promise.all(tasks.slice(i, i+4).map(async t => {
+        await t();
+        _p1Done++;
+        _setHotFabState(true, `검색 중 ${_p1Done}/${_p1Total}`);
+      }));
     }
 
-    // ── 중복 제거 + 뷰포트 필터 ─────────────────────────────────────────────────
+    // ── 중복 제거 + 뷰포트 필터 + 카테고리 필터 ─────────────────────────────────
     const existingIds = new Set(Object.keys(hotplaceMarkers));
     const uniqueMap = new Map();
     for (const d of allResults) {
@@ -4991,15 +5067,32 @@ async function doHotplaceSearch() {
       const lat = parseFloat(d.y), lng = parseFloat(d.x);
       if (isNaN(lat) || isNaN(lng)) continue;
       if (!bounds.contains([lat, lng])) continue;
+      if (_isExcludedHotCat(d.category_name)) continue; // 미용·의료·학원 등 제외
       uniqueMap.set(d.id, d);
     }
     const unique = [...uniqueMap.values()];
 
-    _setHotFabState(true, `핫플 검증 중... (${unique.length}개)`);
+    // ── 임시 회색 ★ 마커: 수집된 후보 전체를 지도에 표시 ───────────────────────
+    const tempHotMarkers = {};
+    unique.forEach(d => {
+      try {
+        const lat = parseFloat(d.y), lng = parseFloat(d.x);
+        if (isNaN(lat) || isNaN(lng)) return;
+        const sz = Math.max(20, (map ? getMarkerSizeForZoom(map.getZoom()) : 18) + 2);
+        const html = `<div class="m-wrap"><div class="m-hotstar" style="color:#BBBBBB;font-size:${sz}px" data-hid="tmp${d.id}">★</div></div>`;
+        const icon = L.divIcon({ html, className:'', iconSize:[sz+24, sz+12], iconAnchor:[sz/2+12, sz*0.85] });
+        const m = L.marker([lat, lng], { icon });
+        if (clusterGroup) clusterGroup.addLayer(m); else m.addTo(map);
+        tempHotMarkers[d.id] = m;
+      } catch(e) {}
+    });
 
-    // ── Phase 2: Kakao 리뷰 수 수집 ─────────────────────────────────────────────
+    _setHotFabState(true, `선별 중 0/${unique.length}`);
+
+    // ── Phase 2: Kakao 리뷰 수 수집 + 필터링 ────────────────────────────────────
     const PROXY = u => `https://mungmungmap-proxy.jaypark.workers.dev/?url=${encodeURIComponent(u)}`;
     const kakaoCountMap = new Map(); // id → { blog, review, data }
+    let _p2Done = 0;
 
     for (const d of unique) {
       try {
@@ -5028,16 +5121,33 @@ async function doHotplaceSearch() {
             _proxyQueue.maxConcurrent = Math.min(8, _proxyQueue.maxConcurrent + 1);
           }
         }
-        if (!data) continue;
+        if (!data) { _p2Done++; _setHotFabState(true, `선별 중 ${_p2Done}/${unique.length}`); continue; }
 
         const blog   = data?.blog_review?.review_count || 0;
         const review = data?.kakaomap_review?.score_set?.review_count || 0;
+        const score  = data?.kakaomap_review?.score_set?.score || 0;
+
+        // ① 낮은 평점 필터: 충분한 리뷰(30+)인데 평점 3.5 미만이면 제외
+        if (score > 0 && score < 3.5 && review >= 30) {
+          console.log(`[hotplace] 낮은 평점 제외: ${d.place_name} (${score}점, ${review}리뷰)`);
+          _p2Done++; _setHotFabState(true, `선별 중 ${_p2Done}/${unique.length}`); continue;
+        }
+        // ② 광고성 블로그 필터: 카카오 리뷰는 거의 없는데 블로그만 폭발적으로 많으면 제외
+        if (blog >= 800 && review <= 5 && blog / (review + 1) > 80) {
+          console.log(`[hotplace] 광고성 블로그 제외: ${d.place_name} (블로그 ${blog}, 리뷰 ${review})`);
+          _p2Done++; _setHotFabState(true, `선별 중 ${_p2Done}/${unique.length}`); continue;
+        }
+
         kakaoCountMap.set(id, { blog, review, data });
       } catch(e) { console.warn('[hotplace] Kakao 리뷰 조회 오류:', d?.place_name, e); }
+      _p2Done++;
+      _setHotFabState(true, `선별 중 ${_p2Done}/${unique.length}`);
     }
 
     // ── Phase 3: 네이버 전체 병렬 조회 (임계치 계산 전에 완료) ─────────────────
-    _setHotFabState(true, `네이버 리뷰 수집 중... (${kakaoCountMap.size}개)`);
+    const _naverTotal = unique.filter(d => kakaoCountMap.has(d.id)).length;
+    let _p3Done = 0;
+    _setHotFabState(true, `검증 중 0/${_naverTotal}`);
     await _appConfigReady;
     const naverCid = _appNaverCid || (localStorage.getItem('naver_pp_cid') || '').trim();
     const naverCs  = _appNaverCs  || (localStorage.getItem('naver_pp_cs')  || '').trim();
@@ -5049,6 +5159,8 @@ async function doHotplaceSearch() {
       const naverTasks = naverTargets.map(d => async () => {
         const cnt = await _fetchNaverBlogCount(d.place_name, naverCid, naverCs);
         naverCountMap.set(d.id, cnt);
+        _p3Done++;
+        _setHotFabState(true, `검증 중 ${_p3Done}/${_naverTotal}`);
       });
       // 5개씩 병렬 (Naver API rate limit 고려)
       for (let i = 0; i < naverTasks.length; i += 5) {
@@ -5113,16 +5225,32 @@ async function doHotplaceSearch() {
           catch(e) { console.warn('[hotplace] Firestore 저장 실패:', e); }
         }
 
+        // 임시 회색 마커 제거 (금색 ★ 로 교체됨)
+        if (tempHotMarkers[id]) {
+          try { clusterGroup ? clusterGroup.removeLayer(tempHotMarkers[id]) : tempHotMarkers[id].remove(); } catch(e) {}
+          delete tempHotMarkers[id];
+        }
         addHotplaceMarker(h);
         newHotCount++;
       } catch(e) { console.warn('[hotplace] 처리 오류:', d?.place_name, e); }
     }
+
+    // 기준 미달 임시 마커 전부 제거
+    Object.values(tempHotMarkers).forEach(m => {
+      try { clusterGroup ? clusterGroup.removeLayer(m) : m.remove(); } catch(e) {}
+    });
 
     if (newHotCount > 0) showToast(`⭐ ${newHotCount}개 핫플레이스 발견! (기준: 리뷰 ${dynamicThreshold}+)`);
     else showToast('이 지역에서 새로운 핫플을 찾지 못했어요');
 
   } catch(e) {
     console.error('[doHotplaceSearch] 오류:', e);
+    // 오류 시에도 임시 마커 정리
+    if (typeof tempHotMarkers !== 'undefined') {
+      Object.values(tempHotMarkers).forEach(m => {
+        try { clusterGroup ? clusterGroup.removeLayer(m) : m.remove(); } catch(ex) {}
+      });
+    }
     showToast('핫플 검색 중 오류가 발생했어요');
   } finally {
     _setHotFabState(false);
@@ -11159,6 +11287,88 @@ async function batchFillPetDetails() {
   }
 
   _batchRunning = false;
+  if (btnEl) btnEl.disabled = false;
+}
+
+/* ── Firestore hotplaces 재검증 및 정리 ──────────────────────────────────────
+ * ① 카테고리 필터: 미용·의료·학원 등 비데이트 카테고리 → 삭제
+ * ② 낮은 평점: score가 저장된 경우 3.5 미만 + review 30+ → 삭제 (미저장 시 스킵)
+ * ③ 광고성 블로그: kakaoBlog 800+ & kakaoMap 5이하 & 비율 80배 초과 → 삭제
+ */
+async function batchCleanHotplaces() {
+  if (!firebaseReady || !db) { showToast('Firebase 연결 필요'); return; }
+  const logEl  = document.getElementById('clean-hot-log');
+  const progEl = document.getElementById('clean-hot-progress');
+  const btnEl  = document.getElementById('clean-hot-btn');
+  if (btnEl) btnEl.disabled = true;
+
+  function log(msg) {
+    if (logEl) logEl.textContent = (logEl.textContent ? logEl.textContent + '\n' : '') + msg;
+    console.log('[cleanHotplaces]', msg);
+  }
+
+  log('Firestore hotplaces 전체 로드 중...');
+  let total = 0, deleted = 0;
+  try {
+    let lastDoc = null;
+    while (true) {
+      let q = db.collection('hotplaces').orderBy('__name__').limit(300);
+      if (lastDoc) q = q.startAfter(lastDoc);
+      const snap = await q.get();
+      if (snap.empty) break;
+      lastDoc = snap.docs[snap.docs.length - 1];
+
+      const batch = db.batch();
+      let batchDel = 0;
+
+      for (const doc of snap.docs) {
+        total++;
+        const h = doc.data();
+        const kakaoId = doc.id;
+        let reason = null;
+
+        // ① 카테고리 필터
+        if (_isExcludedHotCat(h.category)) {
+          reason = `카테고리(${h.category})`;
+        }
+        // ② 광고성 블로그 (저장된 수치 기준)
+        else if ((h.kakaoBlog||0) >= 800 && (h.kakaoMap||0) <= 5 &&
+                 (h.kakaoBlog||0) / ((h.kakaoMap||0) + 1) > 80) {
+          reason = `광고성 블로그(블로그 ${h.kakaoBlog}, 리뷰 ${h.kakaoMap})`;
+        }
+        // ③ 낮은 평점 — score 필드가 저장된 경우에만 적용
+        else if (h.score != null && h.score > 0 && h.score < 3.5 && (h.kakaoMap||0) >= 30) {
+          reason = `낮은 평점(${h.score}점, ${h.kakaoMap}리뷰)`;
+        }
+
+        if (reason) {
+          log(`🗑️ 삭제: ${h.name} — ${reason}`);
+          batch.delete(doc.ref);
+          batchDel++;
+          deleted++;
+          // 지도 마커도 즉시 제거
+          if (hotplaceMarkers[kakaoId]) {
+            try {
+              clusterGroup
+                ? clusterGroup.removeLayer(hotplaceMarkers[kakaoId].marker)
+                : hotplaceMarkers[kakaoId].marker.remove();
+            } catch(e) {}
+            delete hotplaceMarkers[kakaoId];
+          }
+        }
+      }
+
+      if (batchDel > 0) await batch.commit();
+      if (progEl) progEl.textContent = `진행 중: ${total}개 검사 / ${deleted}개 삭제...`;
+      if (snap.docs.length < 300) break;
+    }
+
+    log(`\n✅ 완료: 전체 ${total}개 검사 | ${deleted}개 삭제 | ${total - deleted}개 유지`);
+    if (progEl) progEl.textContent = `완료: ${total}개 검사 | ${deleted}개 삭제`;
+  } catch(e) {
+    log(`❌ 오류: ${e.message}`);
+    console.error('[batchCleanHotplaces]', e);
+  }
   if (btnEl) btnEl.disabled = false;
 }
 
