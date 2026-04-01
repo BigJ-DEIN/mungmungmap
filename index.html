@@ -4298,7 +4298,7 @@ function upgradeToLikedStarMarker(placeId) {
   const starColor  = place.isClosed ? '#AAAAAA' : '#E53935';
   const typeLabel  = getTypeLabel(place);
   const onClick    = e => { L.DomEvent.stopPropagation(e); if (mapPickMode) { setPickedPlace(place); showToast(`"${place.name}" 선택됐어요 🐾`); exitMapPickMode(); } else { selectPlace(place); } };
-  const html = `<div class="m-wrap"><div class="m-liked-star" style="color:${starColor};font-size:${ss}px;margin-left:${-ss/2}px;margin-top:${-ss*0.9}px" data-id="${placeId}">★</div>${typeLabel?`<div class="m-type-label">${typeLabel}</div>`:''}</div>`;
+  const html = `<div class="m-wrap"><div class="m-liked-star" style="color:${starColor};font-size:${ss}px" data-id="${placeId}">★</div>${typeLabel?`<div class="m-type-label">${typeLabel}</div>`:''}</div>`;
   const icon = L.divIcon({ html, className:'', iconSize:[ss+40, ss+16], iconAnchor:[ss/2+20, ss*0.9] });
   const m = L.marker([place.lat, place.lng], { icon }).on('click', onClick);
   if (info) clusterGroup.removeLayer(info.marker);
@@ -4505,7 +4505,7 @@ function addMarker(p) {
   } else if (userLikedPlaceIds.has(_nid)) {
     const starColor = p.isClosed ? '#AAAAAA' : '#E53935';
     const ss = Math.round(sz * 1.5);
-    const html = `<div class="m-wrap"><div class="m-liked-star" style="color:${starColor};font-size:${ss}px;margin-left:${-ss/2}px;margin-top:${-ss*0.9}px" data-id="${p.id}">★</div>${typeLabel?`<div class="m-type-label">${typeLabel}</div>`:''}</div>`;
+    const html = `<div class="m-wrap"><div class="m-liked-star" style="color:${starColor};font-size:${ss}px" data-id="${p.id}">★</div>${typeLabel?`<div class="m-type-label">${typeLabel}</div>`:''}</div>`;
     const icon = L.divIcon({ html, className:'', iconSize:[ss+40, ss+16], iconAnchor:[ss/2+20, ss*0.9] });
     const m = L.marker([p.lat, p.lng], { icon }).on('click', onClick);
     clusterGroup.addLayer(m);
