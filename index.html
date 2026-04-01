@@ -3252,6 +3252,24 @@ function renderAdminBatchFill() {
       <div id="batch-fill-progress" style="font-size:13px;color:#555;margin-bottom:8px"></div>
       <pre id="batch-fill-log"
         style="background:#1a1a2e;color:#00ff88;border-radius:8px;padding:12px;font-size:11px;max-height:300px;overflow-y:auto;white-space:pre-wrap;word-break:break-all"></pre>
+
+      <hr style="margin:20px 0;border:none;border-top:1px solid #eee">
+      <h2 style="font-size:16px;font-weight:700;margin-bottom:8px">⭐ 디폴트 표시 장소 동기화</h2>
+      <p style="font-size:13px;color:#666;margin-bottom:12px">
+        Firestore의 모든 반려동물 장소에 <code>defaultShow</code> 필드를 일괄 설정합니다.<br>
+        블로그 리뷰 500개 이상(1등급) → <b>true</b>, 미만 → <b>false</b>
+      </p>
+      <div style="background:#e8f5e9;border:1px solid #4CAF50;border-radius:8px;padding:10px;margin-bottom:12px;font-size:12px">
+        ✅ 앱 시작 시 1등급 반려동물 장소 + 핫플레이스가 자동으로 표시되려면 이 동기화가 필요합니다.
+      </div>
+      <button id="sync-default-btn"
+        onclick="batchSyncDefaultShow()"
+        style="background:#4CAF50;color:#fff;border:none;border-radius:10px;padding:12px 24px;font-size:14px;font-weight:700;cursor:pointer;margin-bottom:12px">
+        🔄 defaultShow 동기화 실행
+      </button>
+      <div id="sync-default-progress" style="font-size:13px;color:#555;margin-bottom:8px"></div>
+      <pre id="sync-default-log"
+        style="background:#1a1a2e;color:#00ff88;border-radius:8px;padding:12px;font-size:11px;max-height:200px;overflow-y:auto;white-space:pre-wrap;word-break:break-all"></pre>
     </div>`;
 }
 
@@ -3800,11 +3818,17 @@ async function patchMissingCoords(p) {
 async function initApp() {
   // 이전 세션 캐시 초기화 — 확인완료/필요 마커를 매 세션마다 현재 위치 기준으로 새로 로딩
   invalidatePlacesCache(true);
-  initMap();   // 지도 초기화 — 시작 시 DB 장소 로딩 없음
-  // 시작 시 장소 자동 로딩 없음:
-  //   - 나의 추억, 친구 추억, 좋아요 마커만 loadPersistentPlaces()에서 로딩됨
-  //   - 나머지(검증 완료 등)는 '홍시야 찾아줘' 버튼 클릭 시에만 표시
+  initMap();   // 지도 초기화
+  // 디폴트 마커 로딩 — 핫플레이스 + 1등급 반려동물 장소 (로그인 후 자동 표시)
+  //   - 나의 추억, 친구 추억, 좋아요 마커: loadPersistentPlaces()에서 로딩
+  //   - 핫플레이스 + 1등급 반려동물: 앱 시작 시 자동 표시 (Firestore)
+  //   - 나머지(2~10등급 반려동물 등)는 '홍시야 찾아줘' 버튼 클릭 시에만 표시
   filterPlaces();
+  // persistent places 로딩 완료(~1s) 후에 디폴트 마커 추가
+  setTimeout(() => {
+    loadViewportHotplaces().catch(() => {});
+    loadDefaultGrade1Pets().catch(() => {});
+  }, 1500);
   loadNotices();
   // Deep link — 뷰포트 밖 장소일 수 있으므로 Firestore fallback 포함
   const sharedId = parseInt(new URLSearchParams(window.location.search).get('place'));
@@ -3936,6 +3960,12 @@ function initMap() {
   // map.on('zoomend', _scheduleVpLoad);
   // 지도 범위 연동: 이동/줌 완료 시 목록 갱신
   map.on('moveend zoomend', () => { if (viewportSync) filterPlaces(); });
+  // 디폴트 마커(핫플 + 1등급 반려동물): 지도 이동 시 새 영역 자동 로딩
+  // (_loadedHotTiles / _loadedGrade1Tiles로 중복 방지)
+  map.on('moveend', () => {
+    loadViewportHotplaces().catch(() => {});
+    loadDefaultGrade1Pets().catch(() => {});
+  });
   setTimeout(updateAllMarkerSizes, 200);
 
   // 현재 위치로 이동 (동 단위 줌 = 15)
@@ -4744,6 +4774,36 @@ async function loadViewportHotplaces() {
       addHotplaceMarker(h);
     });
   } catch(e) { console.warn('[loadViewportHotplaces]', e); }
+}
+
+// ── 1등급 반려동물 장소 디폴트 로딩 (blogCount >= 500) ────────────────────────
+// 앱 시작 시 자동으로 뷰포트 내 1등급 장소를 지도에 표시
+const _loadedGrade1Tiles = new Set();
+async function loadDefaultGrade1Pets() {
+  if (!map || !firebaseReady || !db) return;
+  const b = map.getBounds().pad(0.1);
+  const latMin = b.getSouth(), latMax = b.getNorth();
+  const lngMin = b.getWest(),  lngMax = b.getEast();
+  const tileKey = [latMin,latMax,lngMin,lngMax].map(v=>(Math.round(v/0.1)*0.1).toFixed(1)).join('|')+':g1';
+  if (_loadedGrade1Tiles.has(tileKey)) return;
+  _loadedGrade1Tiles.add(tileKey);
+  try {
+    const snap = await db.collection('places')
+      .where('lat','>=',latMin).where('lat','<=',latMax)
+      .orderBy('lat').limit(500).get();
+    let added = 0;
+    snap.docs.forEach(doc => {
+      try {
+        const p = { ...doc.data(), firestoreId: doc.id };
+        if (p.lng == null || p.lng < lngMin || p.lng > lngMax) return;
+        if (getBlogGrade(p) !== 1) return;              // 1등급(블로그 500+)만
+        if (places.find(x => x.id == p.id)) return;    // 이미 로드된 장소 스킵
+        places.push(p);
+        if (clusterGroup) { try { addMarker(p); added++; } catch(e) {} }
+      } catch(e) {}
+    });
+    if (added > 0) { filterPlaces(); console.log(`[defaultLoad] 1등급 반려동물 ${added}개 표시`); }
+  } catch(e) { console.warn('[loadDefaultGrade1Pets]', e); }
 }
 
 // ── 뷰포트 내 기존 핫플 폐업 검증 ─────────────────────────────────────────────
@@ -5900,6 +5960,8 @@ async function autoAddLivePlace(dOverride) {
       // 블로그 기반 인기 점수
       blogCount:  blogRating?.blog  ?? null,
       blogScore:  blogRating?.score ?? null,
+      // 디폴트 표시 여부 — 1등급(블로그 500+)은 앱 시작 시 자동 노출
+      defaultShow: (blogRating?.blog ?? 0) >= 500,
     };
 
     // 4) 로컬 배열 먼저 반영 (UI 즉시 업데이트 + Firestore 실패해도 세션 내 유지)
@@ -11097,6 +11159,60 @@ async function batchFillPetDetails() {
   }
 
   _batchRunning = false;
+  if (btnEl) btnEl.disabled = false;
+}
+
+/* ── Firestore places에 defaultShow 필드 일괄 동기화 ──────────────────────────
+ * blogCount >= 500 (1등급) → defaultShow: true
+ * blogCount < 500          → defaultShow: false
+ * blogCount 없음           → 건드리지 않음 (아직 수집 전)
+ */
+async function batchSyncDefaultShow() {
+  if (!firebaseReady || !db) { showToast('Firebase 연결 필요'); return; }
+  const logEl  = document.getElementById('sync-default-log');
+  const progEl = document.getElementById('sync-default-progress');
+  const btnEl  = document.getElementById('sync-default-btn');
+  if (btnEl) btnEl.disabled = true;
+
+  function log(msg) {
+    if (logEl) logEl.textContent = (logEl.textContent ? logEl.textContent + '\n' : '') + msg;
+    console.log('[syncDefaultShow]', msg);
+  }
+
+  log('Firestore places 전체 로드 중...');
+  let total = 0, grade1 = 0, others = 0, skipped = 0;
+  try {
+    let lastDoc = null;
+    while (true) {
+      let q = db.collection('places').orderBy('__name__').limit(400);
+      if (lastDoc) q = q.startAfter(lastDoc);
+      const snap = await q.get();
+      if (snap.empty) break;
+      lastDoc = snap.docs[snap.docs.length - 1];
+
+      const batch = db.batch();
+      let batchCount = 0;
+      snap.docs.forEach(doc => {
+        total++;
+        const d = doc.data();
+        const bc = d.blogCount;
+        if (bc == null) { skipped++; return; } // blogCount 없음 — 아직 수집 전
+        const shouldShow = bc >= 500;
+        if (d.defaultShow === shouldShow) return; // 이미 올바른 값
+        batch.update(doc.ref, { defaultShow: shouldShow });
+        if (shouldShow) grade1++; else others++;
+        batchCount++;
+      });
+
+      if (batchCount > 0) await batch.commit();
+      if (progEl) progEl.textContent = `진행 중: ${total}개 처리 완료...`;
+      if (snap.docs.length < 400) break;
+    }
+    log(`✅ 동기화 완료: 전체 ${total}개 | 1등급(true) ${grade1}개 | 나머지(false) ${others}개 | 건너뜀(blogCount없음) ${skipped}개`);
+    if (progEl) progEl.textContent = `완료: ${total}개 처리 | 1등급 ${grade1}개 | 기타 ${others}개`;
+  } catch(e) {
+    log(`❌ 오류: ${e.message}`);
+  }
   if (btnEl) btnEl.disabled = false;
 }
 
