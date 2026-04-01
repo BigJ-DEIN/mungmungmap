@@ -1773,24 +1773,17 @@
           </div>
         </div>
 
-        <!-- ── 종류 row ── -->
-        <div class="frow" id="frow-cat">
-          <div class="frow-hdr" onclick="toggleFrow('cat')">
+        <!-- ── 모드 탭 (전체 / 반려동물 동반 / 핫플레이스) ── -->
+        <div class="frow open" id="frow-mode">
+          <div class="frow-hdr" onclick="toggleFrow('mode')">
             <span class="frow-lbl">종류</span>
-            <span class="frow-sum" id="frow-cat-sum">전체</span>
+            <span class="frow-sum" id="frow-mode-sum">전체</span>
             <span class="frow-arr">▼</span>
           </div>
-          <div class="frow-body" id="frow-cat-body">
-            <button class="filter-chip active" data-cat="all"       onclick="setCatFilter(this,'all')">전체</button>
-            <button class="filter-chip" data-cat="cafe"             onclick="setCatFilter(this,'cafe')">☕ 카페</button>
-            <button class="filter-chip" data-cat="petcafe"          onclick="setCatFilter(this,'petcafe')">🐾 애견카페</button>
-            <button class="filter-chip" data-cat="restaurant"       onclick="setCatFilter(this,'restaurant')">🍽 식당</button>
-            <button class="filter-chip" data-cat="bakery"           onclick="setCatFilter(this,'bakery')">🥐 베이커리</button>
-            <button class="filter-chip" data-cat="park"             onclick="setCatFilter(this,'park')">🏃 운동장</button>
-            <button class="filter-chip" data-cat="hotel"            onclick="setCatFilter(this,'hotel')">🏨 숙소</button>
-            <button class="filter-chip" data-cat="hospital"         onclick="setCatFilter(this,'hospital')">🏥 동물병원</button>
-            <button class="filter-chip" data-cat="grooming"         onclick="setCatFilter(this,'grooming')">✂️ 미용</button>
-            <button class="filter-chip" data-cat="other"            onclick="setCatFilter(this,'other')">📍 기타</button>
+          <div class="frow-body" id="frow-mode-body">
+            <button class="filter-chip active" data-mode="all"       onclick="setViewMode(this,'all')">전체</button>
+            <button class="filter-chip"        data-mode="pets"      onclick="setViewMode(this,'pets')">🐾 반려동물 동반</button>
+            <button class="filter-chip"        data-mode="hotplaces" onclick="setViewMode(this,'hotplaces')">⭐ 핫플레이스</button>
           </div>
         </div>
 
@@ -2421,6 +2414,7 @@ let _doAuthInProgress = false; // doAuth 실행 중 onAuthStateChanged 가드
 let clusterGroup  = null;
 let markers       = {};
 let activeFilters = { area:'all', largeDog:false, indoor:false, outdoor:false, noCage:false, hasFee:false, noFee:false, catType:'all' };
+let _viewMode = 'all'; // 'all' | 'pets' | 'hotplaces'
 let viewportSync  = true;   // 지도 범위 연동 모드 (기본: 켜짐)
 let activePlace   = null;
 let searchText    = '';
@@ -4932,22 +4926,17 @@ function _computeHotThreshold(counts) {
 
 // ── 네이버 블로그 리뷰 수 조회 ─────────────────────────────────────────────
 async function _fetchNaverBlogCount(name, naverCid, naverCs) {
+  // Naver Blog Search API — returns total blog post count for the place name
+  // (Local Search API does NOT reliably return blogreviewcount)
   if (!naverCid || !naverCs || !name) return 0;
   try {
     const resp = await fetch(
-      `https://openapi.naver.com/v1/search/local.json?query=${encodeURIComponent(name)}&display=5`,
+      `https://openapi.naver.com/v1/search/blog.json?query=${encodeURIComponent(name)}&display=1`,
       { headers: { 'X-Naver-Client-Id': naverCid, 'X-Naver-Client-Secret': naverCs } }
     );
     if (!resp.ok) return 0;
     const json = await resp.json();
-    const items = json.items || [];
-    const cleanQuery = name.replace(/[^\w가-힣]/g, '').toLowerCase();
-    for (const item of items) {
-      const itemName = (item.title || '').replace(/<[^>]+>/g, '').replace(/[^\w가-힣]/g, '').toLowerCase();
-      if (itemName.includes(cleanQuery) || cleanQuery.includes(itemName)) {
-        return parseInt(item.blogreviewcount || 0) + parseInt(item.reviewcount || 0);
-      }
-    }
+    return json.total || 0;
   } catch(e) {}
   return 0;
 }
@@ -4962,6 +4951,83 @@ const _HOT_EXCLUDE_CATS = [
 function _isExcludedHotCat(catName) {
   if (!catName) return false;
   return _HOT_EXCLUDE_CATS.some(kw => catName.includes(kw));
+}
+
+// ── 프랜차이즈/체인점 필터 ─────────────────────────────────────────────────────
+// 방법1: 카테고리 자체가 프랜차이즈인 경우 (편의점, 패스트푸드 등)
+const _HOT_FRANCHISE_CATS = [
+  '편의점','패스트푸드','패밀리레스토랑','대형마트','슈퍼마켓','기업형슈퍼마켓',
+  '아울렛','면세점','백화점','쇼핑몰','코스트코','이케아',
+];
+// 방법2: 브랜드명 직접 매칭 (한국 체인점 전체)
+const _HOT_EXCLUDE_BRANDS = [
+  // ── 커피/음료 체인 ──
+  '스타벅스','이디야','투썸플레이스','커피빈','파스쿠찌','할리스','엔제리너스',
+  '메가커피','메가MGC','컴포즈커피','빽다방','더벤티','폴바셋','블루보틀',
+  '탐앤탐스','카페베네','달콤커피','커피나무','드롭탑','카페드롭탑',
+  '스무디킹','쥬씨','요거트월드','공차','흑화당','더리터','더작은컵',
+  '커피에반하다','이젠요거트','요거프레소','쟈뎅','루소','봄봄',
+  '벤티스','카페뮤제오','커피베이','투자일','파커스',
+  // ── 패스트푸드 ──
+  '맥도날드','버거킹','롯데리아','KFC','맘스터치','노브랜드버거',
+  '웬디스','파이브가이즈','쉐이크쉑','쉑쉑','모스버거','서브웨이',
+  '타코벨','파파이스','파파존스','도미노','피자헛','미스터피자',
+  '피자알볼로','피자나라치킨공주','반올림피자','59피자','반피자',
+  // ── 편의점 ──
+  'CU편의점','GS25','세븐일레븐','이마트24','미니스톱','스토리웨이',
+  // ── 베이커리/디저트 ──
+  '파리바게뜨','뚜레쥬르','파리크라상','던킨도너츠','던킨','크리스피크림',
+  '브레댄코','아티제','성심당','삼립','샤니','파바',
+  // ── 아이스크림 ──
+  '배스킨라빈스','나뚜루','하겐다즈','소프트리','밀크카우','아이스크림의달인',
+  '레드망고','요플레','31아이스크림',
+  // ── 치킨 체인 ──
+  '교촌치킨','교촌','BBQ','BHC','굽네치킨','굽네','네네치킨','페리카나',
+  '처갓집','푸라닭','60계치킨','호식이두마리치킨','바른치킨','멕시카나',
+  '또래오래','치킨마루','지코바','노랑통닭','땅땅치킨','부어치킨',
+  '자담치킨','훌랄라','치킨플러스','bhc','bbq','kfc',
+  // ── 패밀리레스토랑/외식 체인 ──
+  '아웃백','빕스','애슐리','TGI프라이데이','T.G.I.','세븐스프링스',
+  '베니건스','토니로마스','칠리스','스테이크아웃','블랙앵거스',
+  '매드포갈릭','놀부','한솥','본죽','본죽&비빔밥','한솥도시락',
+  '김가네','명동칼국수','이차돌','이삭토스트','이삭',
+  '국대떡볶이','두끼떡볶이','신전떡볶이','청년다방','청담동말자싸롱',
+  '봉구스밥버거','죠스떡볶이','엽기떡볶이','오봉집','오다리','역전할머니맥주',
+  '홍콩반점','중화비빔밥','공수간','착한떡볶이','떡볶이의신',
+  // ── 고깃집 체인 ──
+  '하남돼지집','원할머니보쌈','원조할머니','족발보쌈','놀부보쌈',
+  '한우물','이차돌','연탄불고기','돼지집','참숯바베큐','황금돼지',
+  // ── 마트/유통 ──
+  '이마트','홈플러스','롯데마트','코스트코','이케아','킴스클럽',
+  '노브랜드','롯데슈퍼','GS더프레시','하나로마트',
+  // ── 뷰티/패션 리테일 ──
+  '올리브영','다이소','무인양품','유니클로','H&M','자라','ZARA','SPA',
+  '이니스프리','에뛰드','더페이스샵','미샤','토니모리','네이처리퍼블릭',
+  '아모레','설화수','후','헤라','마몽드','라네즈','아이오페',
+  '스킨푸드','이니스프리','에뛰드하우스',
+  // ── 피트니스/스포츠 ──
+  '스포애니','애니타임피트니스','24시간헬스','GX코리아','바디프로필',
+  // ── 은행/금융 ──
+  '국민은행','신한은행','우리은행','하나은행','기업은행','농협은행',
+  'SC제일은행','씨티은행','카카오뱅크','케이뱅크',
+];
+function _isFranchise(name, catName) {
+  if (!name) return false;
+  // 카테고리 체크
+  if (catName && _HOT_FRANCHISE_CATS.some(kw => catName.includes(kw))) return true;
+  // 브랜드명 체크: 이름이 브랜드로 시작하거나 브랜드를 포함
+  const n = name.trim();
+  return _HOT_EXCLUDE_BRANDS.some(brand => {
+    if (!brand) return false;
+    // 정확히 일치하거나, 브랜드명 뒤에 지점 구분자가 오는 경우만 매칭
+    // (예: "스타벅스 판교역점" ✓, "스타벅스처럼예쁜카페" ✗)
+    if (n === brand) return true;
+    const idx = n.indexOf(brand);
+    if (idx < 0) return false;
+    // 브랜드명 직후 문자가 공백·숫자·점·괄호거나 끝이면 매칭
+    const after = n[idx + brand.length];
+    return !after || /[\s\d\.\(\)·]/.test(after);
+  });
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -5059,7 +5125,7 @@ async function doHotplaceSearch() {
       }));
     }
 
-    // ── 중복 제거 + 뷰포트 필터 + 카테고리 필터 ─────────────────────────────────
+    // ── 중복 제거 + 뷰포트 필터 + 카테고리/프랜차이즈 필터 ──────────────────────
     const existingIds = new Set(Object.keys(hotplaceMarkers));
     const uniqueMap = new Map();
     for (const d of allResults) {
@@ -5068,6 +5134,7 @@ async function doHotplaceSearch() {
       if (isNaN(lat) || isNaN(lng)) continue;
       if (!bounds.contains([lat, lng])) continue;
       if (_isExcludedHotCat(d.category_name)) continue; // 미용·의료·학원 등 제외
+      if (_isFranchise(d.place_name, d.category_name)) { console.log(`[hotplace] 프랜차이즈 제외: ${d.place_name} (${d.category_name})`); continue; }
       uniqueMap.set(d.id, d);
     }
     const unique = [...uniqueMap.values()];
@@ -5121,24 +5188,27 @@ async function doHotplaceSearch() {
             _proxyQueue.maxConcurrent = Math.min(8, _proxyQueue.maxConcurrent + 1);
           }
         }
-        if (!data) { _p2Done++; _setHotFabState(true, `선별 중 ${_p2Done}/${unique.length}`); continue; }
+        if (!data) {
+          // 카카오 데이터 없음 → 즉시 회색 마커 제거
+          if (tempHotMarkers[id]) { try { clusterGroup ? clusterGroup.removeLayer(tempHotMarkers[id]) : tempHotMarkers[id].remove(); } catch(e){} delete tempHotMarkers[id]; }
+          _p2Done++; _setHotFabState(true, `선별 중 ${_p2Done}/${unique.length}`); continue;
+        }
 
-        const blog   = data?.blog_review?.review_count || 0;
-        const review = data?.kakaomap_review?.score_set?.review_count || 0;
-        const score  = data?.kakaomap_review?.score_set?.score || 0;
+        const blog      = data?.blog_review?.review_count || 0;
+        const review    = data?.kakaomap_review?.score_set?.review_count || 0;
+        const scoreRaw  = data?.kakaomap_review?.score_set?.score;
+        // scoreRaw가 0이면 "평점 없음"이 아닌 "0점"일 수 있어서 null/undefined 구분
+        const score     = (scoreRaw != null && scoreRaw !== '') ? parseFloat(scoreRaw) : null;
 
-        // ① 낮은 평점 필터: 충분한 리뷰(30+)인데 평점 3.5 미만이면 제외
-        if (score > 0 && score < 3.5 && review >= 30) {
+        // ① 낮은 평점 필터: 충분한 리뷰(30+)인데 평점 3.5 미만이면 즉시 제외 + 마커 제거
+        if (score !== null && score < 3.5 && review >= 30) {
           console.log(`[hotplace] 낮은 평점 제외: ${d.place_name} (${score}점, ${review}리뷰)`);
+          if (tempHotMarkers[id]) { try { clusterGroup ? clusterGroup.removeLayer(tempHotMarkers[id]) : tempHotMarkers[id].remove(); } catch(e){} delete tempHotMarkers[id]; }
           _p2Done++; _setHotFabState(true, `선별 중 ${_p2Done}/${unique.length}`); continue;
         }
-        // ② 광고성 블로그 필터: 카카오 리뷰는 거의 없는데 블로그만 폭발적으로 많으면 제외
-        if (blog >= 800 && review <= 5 && blog / (review + 1) > 80) {
-          console.log(`[hotplace] 광고성 블로그 제외: ${d.place_name} (블로그 ${blog}, 리뷰 ${review})`);
-          _p2Done++; _setHotFabState(true, `선별 중 ${_p2Done}/${unique.length}`); continue;
-        }
+        // 광고성 블로그 필터는 네이버 검증(Phase 3) 이후로 이동 — 회색 마커 유지
 
-        kakaoCountMap.set(id, { blog, review, data });
+        kakaoCountMap.set(id, { blog, review, score, data });
       } catch(e) { console.warn('[hotplace] Kakao 리뷰 조회 오류:', d?.place_name, e); }
       _p2Done++;
       _setHotFabState(true, `선별 중 ${_p2Done}/${unique.length}`);
@@ -5158,7 +5228,22 @@ async function doHotplaceSearch() {
       const naverTargets = unique.filter(d => kakaoCountMap.has(d.id));
       const naverTasks = naverTargets.map(d => async () => {
         const cnt = await _fetchNaverBlogCount(d.place_name, naverCid, naverCs);
-        naverCountMap.set(d.id, cnt);
+        const id = d.id;
+        const kk = kakaoCountMap.get(id);
+
+        // ② 광고성 블로그 필터: 카카오 블로그 수 대비 실방문 리뷰가 너무 적으면 광고성
+        // 카카오 블로그 100+이고 (블로그/리뷰) 비율 > 8배 이상이면 광고 의심
+        const adRatio = kk ? kk.blog / Math.max(kk.review, 1) : 0;
+        const isAdBlog = kk && kk.blog >= 100 && adRatio > 8;
+        // 네이버 블로그도 적으면 광고 확신 (네이버는 자연 유입이 많아서 광고면 적음)
+        const naverAlsoLow = cnt < Math.max(50, kk.blog * 0.05);
+        if (isAdBlog && naverAlsoLow) {
+          console.log(`[hotplace] 광고성 블로그 제외: ${d.place_name} (카카오블로그 ${kk.blog}, 리뷰 ${kk.review}, 비율 ${adRatio.toFixed(1)}x, 네이버 ${cnt})`);
+          if (tempHotMarkers[id]) { try { clusterGroup ? clusterGroup.removeLayer(tempHotMarkers[id]) : tempHotMarkers[id].remove(); } catch(e){} delete tempHotMarkers[id]; }
+          kakaoCountMap.delete(id); // Phase 5 처리 제외
+        } else {
+          naverCountMap.set(id, cnt);
+        }
         _p3Done++;
         _setHotFabState(true, `검증 중 ${_p3Done}/${_naverTotal}`);
       });
@@ -5188,7 +5273,7 @@ async function doHotplaceSearch() {
         const kk = kakaoCountMap.get(id);
         if (!kk) continue;
 
-        const { blog: kakaoBlog, review: kakaoMap, data } = kk;
+        const { blog: kakaoBlog, review: kakaoMap, score: kakaoScore, data } = kk;
         const naverBlog = naverCountMap.get(id) || 0;
         const totalCount = kakaoBlog + kakaoMap + naverBlog;
 
@@ -5196,9 +5281,16 @@ async function doHotplaceSearch() {
         const isClosed =
           data?.place_add_info?.status?.state === 'CLOSED' ||
           data?.basic_info?.operation?.closed_type === 'PERMANENT';
-        if (isClosed) continue;
+        if (isClosed) {
+          if (tempHotMarkers[id]) { try { clusterGroup ? clusterGroup.removeLayer(tempHotMarkers[id]) : tempHotMarkers[id].remove(); } catch(e){} delete tempHotMarkers[id]; }
+          continue;
+        }
 
-        if (totalCount < dynamicThreshold) continue; // 동적 임계치 미달
+        if (totalCount < dynamicThreshold) {
+          // 임계치 미달 → 즉시 회색 마커 제거
+          if (tempHotMarkers[id]) { try { clusterGroup ? clusterGroup.removeLayer(tempHotMarkers[id]) : tempHotMarkers[id].remove(); } catch(e){} delete tempHotMarkers[id]; }
+          continue;
+        }
 
         const lat = parseFloat(d.y), lng = parseFloat(d.x);
         const h = {
@@ -5211,6 +5303,7 @@ async function doHotplaceSearch() {
           category:     d.category_name || '',
           kakaoBlog,
           kakaoMap,
+          kakaoScore:   kakaoScore ?? null,
           naverBlog,
           totalCount,
           threshold:    dynamicThreshold,
@@ -6397,6 +6490,27 @@ function toggleFilter(btn, type) {
   if (isMobile()) setMobileTab('list');
 }
 
+function setViewMode(btn, mode) {
+  _viewMode = mode;
+  document.querySelectorAll('[data-mode]').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  // 조건 필터는 반려동물/전체 모드에서만 표시
+  const condRow = document.getElementById('frow-cond');
+  if (condRow) condRow.style.display = (mode === 'hotplaces') ? 'none' : '';
+  // 핫플레이스 마커 표시/숨김
+  Object.values(hotplaceMarkers).forEach(({ marker }) => {
+    const inCluster = clusterGroup?.hasLayer(marker);
+    if (mode === 'pets') {
+      if (inCluster) clusterGroup.removeLayer(marker);
+    } else {
+      if (!inCluster) clusterGroup?.addLayer(marker);
+    }
+  });
+  filterPlaces();
+  updateFrowSummaries();
+  if (isMobile()) setMobileTab('list');
+}
+
 function setCatFilter(btn, catKey) {
   document.querySelectorAll('[data-cat]').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
@@ -6929,7 +7043,8 @@ document.addEventListener('click', e => {
 
 function filterPlaces() {
   // 검색어 무관하게 뷰포트·필터 기준으로만 표시 — 목록과 마커 동일 기준
-  const markerFiltered = getFiltered(false, true); // ignoreSearch=true
+  // 핫플 전용 모드면 반려동물 목록 비움, 핫플 카드 표시
+  const markerFiltered = (_viewMode === 'hotplaces') ? [] : getFiltered(false, true);
   renderList(markerFiltered);
   if (clusterGroup) {
     const filteredSet = new Set(markerFiltered.map(f => f.id));
@@ -6951,7 +7066,8 @@ function filterPlaces() {
         if (!clusterGroup.hasLayer(m.marker)) { clusterGroup.addLayer(m.marker); needRerate = true; }
         return;
       }
-      const show = filteredSet.has(p.id);
+      // 핫플 전용 모드: 반려동물 마커 모두 숨김
+      const show = (_viewMode !== 'hotplaces') && filteredSet.has(p.id);
       const inCluster = clusterGroup.hasLayer(m.marker);
       if (show && !inCluster) {
         clusterGroup.addLayer(m.marker);
@@ -6983,9 +7099,26 @@ function filterPlaces() {
 function renderList(filtered) {
   const list = document.getElementById('place-list');
   const cnt  = document.getElementById('place-count');
-  cnt.textContent = `총 ${filtered.length}곳`;
 
   let html = '';
+
+  // ─── 핫플레이스 카드 (뷰포트 내 hotplaceMarkers 기준) ─────────────────────
+  if (_viewMode === 'hotplaces' || _viewMode === 'all') {
+    const vpBounds = map ? map.getBounds() : null;
+    const hotCards = Object.values(hotplaceMarkers)
+      .filter(({ data: h }) => !vpBounds || vpBounds.contains([h.lat, h.lng]))
+      .sort((a, b) => ((b.data.totalCount||0) - (a.data.totalCount||0)));
+    if (hotCards.length) {
+      if (_viewMode === 'all') html += `<div class="list-section-header"><div class="sec-line"></div>&nbsp;⭐ 핫플레이스 (${hotCards.length}개)&nbsp;<div class="sec-line"></div></div>`;
+      html += hotCards.map(({ data: h }) => hotplaceCardHtml(h)).join('');
+    }
+    if (_viewMode === 'hotplaces') {
+      cnt.textContent = `총 ${hotCards.length}곳`;
+      list.innerHTML = html || `<div class="no-results"><div class="nr-emoji">⭐</div><p>이 지역에 핫플레이스가 없어요.<br>⭐ 버튼으로 검색해보세요!</p></div>`;
+      return;
+    }
+    if (hotCards.length && _viewMode === 'all') html += `<div class="list-section-header"><div class="sec-line"></div>&nbsp;🐾 반려동물 동반 (${filtered.length}개)&nbsp;<div class="sec-line"></div></div>`;
+  }
 
   // ─── 카카오 라이브 검색 결과 섹션 (등록 대기 중인 미등록 장소만 표시) ───
   if (liveData.length > 0) {
@@ -6994,7 +7127,10 @@ function renderList(filtered) {
     html += `<div style="height:8px"></div>`;
   }
 
-  if (!filtered.length && !liveData.length) {
+  const totalCount = filtered.length + (liveData?.length || 0);
+  cnt.textContent = `총 ${totalCount}곳`;
+
+  if (!html && !filtered.length) {
     list.innerHTML = `<div class="no-results"><div class="nr-emoji">🔍</div><p>조건에 맞는 곳이 없어요.<br>다른 필터로 찾아볼까요?</p></div>`;
     return;
   }
@@ -7004,6 +7140,42 @@ function renderList(filtered) {
   }
 
   list.innerHTML = html;
+}
+
+// ── 핫플레이스 목록 카드 렌더러 ──────────────────────────────────────────────
+function hotplaceCardHtml(h) {
+  const total = (h.kakaoBlog||h.blogCount||0) + (h.kakaoMap||h.reviewCount||0) + (h.naverBlog||0);
+  const cat = h.category ? h.category.split(' > ').pop() : '';
+  const addrShort = (h.addr || '').split(' ').slice(0, 3).join(' ');
+  return `
+  <div class="place-card" onclick="openHotplaceCard('${h.kakaoId}')">
+    <div class="pc-top">
+      <div class="pc-emoji" style="color:#F4B400;font-size:22px">★</div>
+      <div class="pc-info">
+        <div class="pc-name">${h.name}</div>
+        <div class="pc-meta">${cat || '핫플레이스'}${addrShort ? '&nbsp;·&nbsp;' + addrShort : ''}</div>
+      </div>
+    </div>
+    <div class="pc-footer">
+      <div class="pc-tags">
+        <span class="tag t-gold">리뷰 ${total.toLocaleString()}개</span>
+        ${h.threshold ? `<span class="tag t-gray">기준 ${h.threshold.toLocaleString()}+</span>` : ''}
+      </div>
+      <button class="card-view-btn" onclick="event.stopPropagation();openHotplaceCard('${h.kakaoId}')">보기</button>
+    </div>
+  </div>`;
+}
+
+// 핫플 카드 클릭 시 지도 이동 + 드로어 열기
+function openHotplaceCard(kakaoId) {
+  const info = hotplaceMarkers[kakaoId];
+  if (!info) return;
+  const h = info.data;
+  if (h.lat && h.lng && map) {
+    if (!map.getBounds().contains([h.lat, h.lng])) map.setView([h.lat, h.lng], map.getZoom(), { animate: true });
+  }
+  showHotplacePopup(h);
+  if (typeof isMobile === 'function' && isMobile()) setMobileTab('map', true);
 }
 
 function liveCardHtml(d) {
@@ -11331,14 +11503,18 @@ async function batchCleanHotplaces() {
         if (_isExcludedHotCat(h.category)) {
           reason = `카테고리(${h.category})`;
         }
-        // ② 광고성 블로그 (저장된 수치 기준)
-        else if ((h.kakaoBlog||0) >= 800 && (h.kakaoMap||0) <= 5 &&
-                 (h.kakaoBlog||0) / ((h.kakaoMap||0) + 1) > 80) {
-          reason = `광고성 블로그(블로그 ${h.kakaoBlog}, 리뷰 ${h.kakaoMap})`;
+        // ② 프랜차이즈 필터 (브랜드명 + 카테고리 기반)
+        else if (_isFranchise(h.name, h.category)) {
+          reason = `프랜차이즈(${h.name})`;
         }
-        // ③ 낮은 평점 — score 필드가 저장된 경우에만 적용
-        else if (h.score != null && h.score > 0 && h.score < 3.5 && (h.kakaoMap||0) >= 30) {
-          reason = `낮은 평점(${h.score}점, ${h.kakaoMap}리뷰)`;
+        // ③ 광고성 블로그: 카카오 블로그 100+이고 리뷰 대비 8배 초과 → 광고성
+        else if ((h.kakaoBlog||0) >= 100 &&
+                 (h.kakaoBlog||0) / Math.max(h.kakaoMap||0, 1) > 8) {
+          reason = `광고성 블로그(블로그 ${h.kakaoBlog}, 리뷰 ${h.kakaoMap}, 비율 ${((h.kakaoBlog||0)/Math.max(h.kakaoMap||0,1)).toFixed(1)}x)`;
+        }
+        // ④ 낮은 평점 — kakaoScore 필드가 저장된 경우에만 적용
+        else if (h.kakaoScore != null && h.kakaoScore < 3.5 && (h.kakaoMap||0) >= 30) {
+          reason = `낮은 평점(${h.kakaoScore}점, ${h.kakaoMap}리뷰)`;
         }
 
         if (reason) {
