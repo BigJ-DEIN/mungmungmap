@@ -382,6 +382,14 @@
       display:block;
     }
     .m-heart.active { transform:scale(1.5) !important; }
+    /* 관심장소 마커 — 사용자가 즐겨찾기한 곳 */
+    .m-liked-star {
+      font-size:20px; line-height:1; user-select:none; cursor:pointer;
+      filter:drop-shadow(0 1px 3px rgba(0,0,0,.28));
+      transition:font-size .2s, margin .2s, transform .2s;
+      display:block;
+    }
+    .m-liked-star.active { transform:scale(1.5) !important; }
     /* 추억 탭 내부 서브탭 */
     .mem-subtab-row {
       display:flex; border-bottom:2px solid #F5F5F5; flex-shrink:0;
@@ -1440,6 +1448,31 @@
       color: #E04E14;
     }
 
+    /* ── 검색 옵션 버블 (홍시야 찾아줘 클릭 시 표시) ── */
+    #search-option-bubble {
+      position:absolute; bottom:calc(100% + 10px); right:0;
+      display:flex; flex-direction:column; gap:8px; align-items:flex-end;
+      pointer-events:none; opacity:0; transform:translateY(8px);
+      transition:opacity .2s, transform .2s; z-index:730;
+    }
+    #search-option-bubble.open { pointer-events:auto; opacity:1; transform:translateY(0); }
+    .search-opt-btn {
+      background:white; border:none; border-radius:20px; padding:9px 16px;
+      font-size:12px; font-weight:700; color:#333; cursor:pointer; white-space:nowrap;
+      box-shadow:0 3px 14px rgba(0,0,0,.18); font-family:inherit;
+      transition:transform .15s, box-shadow .15s;
+    }
+    .search-opt-btn:hover { transform:scale(1.04); box-shadow:0 4px 18px rgba(0,0,0,.22); }
+    .search-opt-btn.pet { border-left:3px solid #7BC74D; }
+    .search-opt-btn.hot { border-left:3px solid #FFC107; }
+
+    /* ── 핫플레이스 별 마커 ── */
+    .m-hotstar {
+      color:#FFC107; text-shadow:0 1px 5px rgba(0,0,0,.35);
+      line-height:1; cursor:pointer; display:block; transition:transform .15s;
+    }
+    .m-hotstar:hover { transform:scale(1.2); }
+
     /* ── 홍시 말풍선 ── */
     #hongsi-bubble {
       position:fixed; right:82px;
@@ -1809,7 +1842,12 @@
   <div id="hongsi-bubble" onclick="dismissHongsiBubble()">어디 갈꺼야? 내가 찾아줄게♥</div>
 
   <!-- ══ 홍시야 찾아줘! — 카카오 주변 장소 검색 FAB ══ -->
-  <div id="feedback-fab" onclick="toggleLiveSearch()" title="홍시야 찾아줘!">
+  <div id="feedback-fab" onclick="toggleSearchOptionBubble()" title="홍시야 찾아줘!">
+    <!-- 검색 옵션 버블 -->
+    <div id="search-option-bubble">
+      <button class="search-opt-btn hot" onclick="event.stopPropagation();startHotplaceSearch()">🔥 핫플레이스 추천</button>
+      <button class="search-opt-btn pet" onclick="event.stopPropagation();startPetSearch()">🐾 반려동물 동반 추천</button>
+    </div>
     <img id="feedback-fab-img" src="icon-192.png" alt="홍시">
     <div id="feedback-fab-label">홍시야 찾아줘!</div>
   </div>
@@ -1838,9 +1876,9 @@
       </div>
       <div class="legend-item"><span style="font-size:14px;color:#F07030;line-height:1">♥</span><span>나의 추억</span></div>
       <div class="legend-item"><span style="font-size:14px;color:#7BC74D;line-height:1">♥</span><span>친구 추억</span></div>
-      <div class="legend-item"><span style="font-size:15px;color:#FFC107;line-height:1">★</span><span>관심 장소</span></div>
-      <div class="legend-item"><div class="legend-dot" style="background:#8B8B4A"></div><span>검증 완료</span></div>
-      <div class="legend-item"><div class="legend-dot" style="background:#7BC74D"></div><span>검색 완료</span></div>
+      <div class="legend-item"><span style="font-size:15px;color:#E53935;line-height:1">★</span><span>관심 장소</span></div>
+      <div class="legend-item"><div class="legend-dot" style="background:#7BC74D"></div><span>반려동물</span></div>
+      <div class="legend-item"><span style="font-size:15px;color:#FFC107;line-height:1">★</span><span>핫플 추천</span></div>
     </div>
 
     <!-- 범례 도움말 오버레이 -->
@@ -1874,18 +1912,18 @@
         </div>
 
         <div class="lh-row">
-          <div class="lh-dot" style="background:#8B8B4A"></div>
+          <div class="lh-dot" style="background:#7BC74D"></div>
           <div>
-            <div class="lh-title">검증 완료</div>
-            <div class="lh-desc">최근 3개월 리뷰에 반려동물 관련 내용이 있거나, 대형견·소형견·테라스·실내 여부 등 상세 정보가 확인된 장소예요.</div>
+            <div class="lh-title">반려동물</div>
+            <div class="lh-desc">'반려동물 동반 추천'으로 찾은 장소예요. 반려동물 동반이 가능한 것으로 확인된 카페·식당·공원 등이에요. 1등급 장소는 숫자가 함께 표시돼요.</div>
           </div>
         </div>
 
         <div class="lh-row">
-          <div class="lh-dot" style="background:#7BC74D"></div>
+          <span style="font-size:20px;color:#FFC107;line-height:1;flex-shrink:0;margin-top:1px">★</span>
           <div>
-            <div class="lh-title">검색 완료</div>
-            <div class="lh-desc">키워드·카테고리 검색 후 1단계 반려동물 동반 검증이 완료된 장소예요. '홍시야 찾아줘'로 찾은 장소가 여기에 해당해요.</div>
+            <div class="lh-title">핫플 추천</div>
+            <div class="lh-desc">'핫플레이스 추천'으로 찾은 장소예요. 블로그·카카오 리뷰 합산 500개 이상의 인기 장소로, 반려동물 여부와 관계없이 표시돼요.</div>
           </div>
         </div>
 
@@ -2330,6 +2368,9 @@ async function updatePlaceStatus(placeId, status) {
   if (info.isHeart) {
     const heart = el?.querySelector('.m-heart');
     if (heart) heart.style.color = color;
+  } else if (info.isLikedStar) {
+    const star = el?.querySelector('.m-liked-star');
+    if (star) star.style.color = color;
   } else {
     const dot = el?.querySelector('.m-dot');
     if (dot) dot.style.background = color;
@@ -3531,6 +3572,9 @@ async function loadViewportPlaces() {
       filterPlaces();
     }
   } catch(e) { console.warn('[loadViewportPlaces] 쿼리 실패:', e); }
+
+  // 핫플레이스도 함께 로드 (모든 유저 자동 표시)
+  loadViewportHotplaces().catch(() => {});
 }
 
 function invalidatePlacesCache(forceTiles = false) {
@@ -3827,6 +3871,10 @@ function updateAllMarkerSizes() {
   const hs = Math.round(sz * 1.6);
   document.querySelectorAll('.m-heart').forEach(h => {
     h.style.fontSize = hs + 'px';
+  });
+  const ss = Math.round(sz * 1.5);
+  document.querySelectorAll('.m-liked-star').forEach(s => {
+    s.style.fontSize = ss + 'px';
   });
   // 줌 14 이상이면 유형 레이블 표시 (map 컨테이너에 클래스 토글)
   const mapEl = document.getElementById('map');
@@ -4178,14 +4226,9 @@ async function loadUserLikedPlaces(uid) {
     const doc = await db.collection('users').doc(uid).get();
     const ids = (doc.data()?.likedPlaceIds || []).map(Number).filter(Boolean);
     ids.forEach(id => userLikedPlaceIds.add(id));
-    // 이미 로딩된 마커 → 홍시색 원으로 색상 변경
+    // 이미 로딩된 마커 → 빨간 별 마커로 교체
     ids.forEach(id => {
-      const info = markers[id];
-      if (info && !info.isHeart && !allMemoryPlaceIds.has(id)) {
-        const el = info.marker.getElement();
-        const dot = el?.querySelector('.m-dot');
-        if (dot) { dot.style.background = '#F07030'; info.color = '#F07030'; }
-      }
+      if (!allMemoryPlaceIds.has(id)) upgradeToLikedStarMarker(id);
     });
     // 아직 로딩 안 된 장소 → 전체 데이터 로딩 (마커 표시에 필요), 최대 200개 제한
     const missingIds = ids.filter(id => !places.find(p => p.id == id)).slice(0, 200);  // == 느슨한 비교
@@ -4240,6 +4283,27 @@ function upgradeToGreenHeartMarker(placeId) {
   if (info) clusterGroup.removeLayer(info.marker);
   clusterGroup.addLayer(m);
   markers[placeId] = { marker:m, color, isHeart:true };
+}
+
+/* dot 마커 → 관심장소 빨간 별 마커로 교체 */
+function upgradeToLikedStarMarker(placeId) {
+  if (!clusterGroup) return;
+  const info  = markers[placeId];
+  // 이미 별/하트 마커면 스킵 (추억 마커가 더 높은 우선순위)
+  if (info && (info.isHeart || info.isLikedStar)) return;
+  const place = places.find(p => p.id == placeId);
+  if (!place) return;
+  const sz         = map ? getMarkerSizeForZoom(map.getZoom()) : 20;
+  const ss         = Math.round(sz * 1.5);
+  const starColor  = place.isClosed ? '#AAAAAA' : '#E53935';
+  const typeLabel  = getTypeLabel(place);
+  const onClick    = e => { L.DomEvent.stopPropagation(e); if (mapPickMode) { setPickedPlace(place); showToast(`"${place.name}" 선택됐어요 🐾`); exitMapPickMode(); } else { selectPlace(place); } };
+  const html = `<div class="m-wrap"><div class="m-liked-star" style="color:${starColor};font-size:${ss}px;margin-left:${-ss/2}px;margin-top:${-ss*0.9}px" data-id="${placeId}">★</div>${typeLabel?`<div class="m-type-label">${typeLabel}</div>`:''}</div>`;
+  const icon = L.divIcon({ html, className:'', iconSize:[ss+40, ss+16], iconAnchor:[ss/2+20, ss*0.9] });
+  const m = L.marker([place.lat, place.lng], { icon }).on('click', onClick);
+  if (info) clusterGroup.removeLayer(info.marker);
+  clusterGroup.addLayer(m);
+  markers[placeId] = { marker:m, color: starColor, isLikedStar: true };
 }
 
 /* 장소 유형 → 필터 키 */
@@ -4437,15 +4501,15 @@ function addMarker(p) {
     clusterGroup.addLayer(m);
     markers[p.id] = { marker:m, color, isHeart:true };
 
-  // ── 우선순위 3: 좋아요 누른 곳 → 홍시색 원형 마커 ──
+  // ── 우선순위 3: 좋아요 누른 곳 → 빨간 별 마커 ──
   } else if (userLikedPlaceIds.has(_nid)) {
-    const color = p.isClosed ? '#AAAAAA' : '#F07030';
-    const html  = `<div class="m-wrap"><div class="m-dot" style="background:${color};width:${sz}px;height:${sz}px" data-id="${p.id}"></div>${typeLabel?`<div class="m-type-label">${typeLabel}</div>`:''}</div>`;
-    const icon  = L.divIcon({ html, className:'', iconSize:[sz+40, sz+16], iconAnchor:[sz/2+20, sz/2] });
+    const starColor = p.isClosed ? '#AAAAAA' : '#E53935';
+    const ss = Math.round(sz * 1.5);
+    const html = `<div class="m-wrap"><div class="m-liked-star" style="color:${starColor};font-size:${ss}px;margin-left:${-ss/2}px;margin-top:${-ss*0.9}px" data-id="${p.id}">★</div>${typeLabel?`<div class="m-type-label">${typeLabel}</div>`:''}</div>`;
+    const icon = L.divIcon({ html, className:'', iconSize:[ss+40, ss+16], iconAnchor:[ss/2+20, ss*0.9] });
     const m = L.marker([p.lat, p.lng], { icon }).on('click', onClick);
     clusterGroup.addLayer(m);
-    markers[p.id] = { marker:m, color };
-    loadRatingForMarker(p);
+    markers[p.id] = { marker:m, color: starColor, isLikedStar: true };
 
   // ── 우선순위 4: 일반 장소 → 상태별 색상 원형 마커 ──
   } else {
@@ -4466,6 +4530,10 @@ function setMarkerActive(id, active) {
     const heart = el.querySelector('.m-heart'); if (!heart) return;
     heart.style.color = active ? '#D32F2F' : m.color;
     if (active) heart.classList.add('active'); else heart.classList.remove('active');
+  } else if (m.isLikedStar) {
+    const star = el.querySelector('.m-liked-star'); if (!star) return;
+    star.style.color = active ? '#B71C1C' : m.color;
+    if (active) star.classList.add('active'); else star.classList.remove('active');
   } else {
     const dot = el.querySelector('.m-dot'); if (!dot) return;
     dot.style.background = active ? '#D32F2F' : m.color;
@@ -4560,6 +4628,445 @@ function _setLiveFabState(loading) {
   if (img)   img.style.opacity = '';           // 애니메이션이 시각 피드백을 대체 — opacity 고정 제거
   if (fab)   fab.classList.toggle('searching', loading); // 두근두근 애니메이션 on/off
   _liveSearchRunning = loading;
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  검색 옵션 버블 제어
+// ══════════════════════════════════════════════════════════════════
+let _searchBubbleOutsideListener = null;
+
+function toggleSearchOptionBubble() {
+  if (_liveSearchRunning || _hotSearchRunning) return;
+  const bubble = document.getElementById('search-option-bubble');
+  if (!bubble) return;
+  const willOpen = !bubble.classList.contains('open');
+  bubble.classList.toggle('open');
+  if (willOpen) {
+    // 외부 클릭 시 닫기 (딜레이 0으로 등록 - 현재 클릭 이벤트와 충돌 방지)
+    setTimeout(() => {
+      _searchBubbleOutsideListener = e => {
+        if (!e.target.closest('#feedback-fab')) {
+          bubble.classList.remove('open');
+          document.removeEventListener('click', _searchBubbleOutsideListener);
+          _searchBubbleOutsideListener = null;
+        }
+      };
+      document.addEventListener('click', _searchBubbleOutsideListener);
+    }, 0);
+  } else {
+    if (_searchBubbleOutsideListener) {
+      document.removeEventListener('click', _searchBubbleOutsideListener);
+      _searchBubbleOutsideListener = null;
+    }
+  }
+}
+
+function _closeSearchOptionBubble() {
+  document.getElementById('search-option-bubble')?.classList.remove('open');
+  if (_searchBubbleOutsideListener) {
+    document.removeEventListener('click', _searchBubbleOutsideListener);
+    _searchBubbleOutsideListener = null;
+  }
+}
+
+function startPetSearch() {
+  _closeSearchOptionBubble();
+  toggleLiveSearch();
+}
+
+function startHotplaceSearch() {
+  _closeSearchOptionBubble();
+  if (_hotSearchRunning) return;
+  const key = window.KAKAO_JS_KEY;
+  if (!key || key === 'YOUR_KAKAO_JS_KEY') { showKakaoKeyGuide(); return; }
+  initKakaoSearch();
+  let tries = 0;
+  const tryHot = () => {
+    if (kakaoReady) doHotplaceSearch();
+    else if (tries++ < 20) setTimeout(tryHot, 200);
+    else showToast('카카오 API 로드 실패. API 키를 확인해주세요.');
+  };
+  tryHot();
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  핫플레이스 검색 — 데이터 구조 + 마커
+// ══════════════════════════════════════════════════════════════════
+let _hotSearchRunning = false;
+const hotplaceMarkers = {};       // kakaoId → { marker, data }
+const _loadedHotTiles  = new Set();
+
+function _setHotFabState(loading, msg) {
+  const fab   = document.getElementById('feedback-fab');
+  const label = document.getElementById('feedback-fab-label');
+  if (label) label.textContent = loading ? (msg || '핫플 찾는 중...') : '홍시야 찾아줘!';
+  if (fab)   fab.classList.toggle('searching', loading);
+  _hotSearchRunning = loading;
+}
+
+function addHotplaceMarker(h) {
+  if (!map || !clusterGroup) return;
+  if (hotplaceMarkers[h.kakaoId]) return; // 중복 방지
+  const sz = Math.max(20, (map ? getMarkerSizeForZoom(map.getZoom()) : 18) + 2);
+  const html = `<div class="m-wrap"><div class="m-hotstar" style="font-size:${sz}px" data-hid="${h.kakaoId}">★</div></div>`;
+  const icon = L.divIcon({ html, className:'', iconSize:[sz+24, sz+12], iconAnchor:[sz/2+12, sz*0.85] });
+  const m = L.marker([h.lat, h.lng], { icon })
+    .on('click', e => { L.DomEvent.stopPropagation(e); showHotplacePopup(h); });
+  clusterGroup.addLayer(m);
+  hotplaceMarkers[h.kakaoId] = { marker: m, data: h };
+}
+
+function showHotplacePopup(h) {
+  const total = (h.blogCount || 0) + (h.reviewCount || 0);
+  const cat = h.category ? h.category.split(' > ').pop() : '';
+  showToast(`⭐ ${h.name}${cat?' · '+cat:''} — 리뷰 ${total.toLocaleString()}개`);
+  // Kakao 지도 링크로 이동 (상세 정보)
+  if (h.kakaoUrl) window.open(h.kakaoUrl, '_blank', 'noopener');
+}
+
+// ── Firestore hotplaces 뷰포트 로딩 (자동 — 모든 유저에게 표시) ──────────────
+async function loadViewportHotplaces() {
+  if (!map || !firebaseReady || !db) return;
+  const b = map.getBounds().pad(0.05);
+  const latMin = b.getSouth(), latMax = b.getNorth();
+  const lngMin = b.getWest(),  lngMax = b.getEast();
+  const tileKey = [latMin,latMax,lngMin,lngMax].map(v=>(Math.round(v/0.05)*0.05).toFixed(2)).join('|')+':hot';
+  if (_loadedHotTiles.has(tileKey)) return;
+  _loadedHotTiles.add(tileKey);
+  try {
+    const snap = await db.collection('hotplaces')
+      .where('lat','>=',latMin).where('lat','<=',latMax)
+      .orderBy('lat').limit(300).get();
+    snap.docs.forEach(doc => {
+      const h = { kakaoId: doc.id, ...doc.data() };
+      if (h.isClosed) return;
+      if (h.lng == null || h.lng < lngMin || h.lng > lngMax) return;
+      addHotplaceMarker(h);
+    });
+  } catch(e) { console.warn('[loadViewportHotplaces]', e); }
+}
+
+// ── 뷰포트 내 기존 핫플 폐업 검증 ─────────────────────────────────────────────
+async function validateViewportHotplaces() {
+  if (!map || !firebaseReady || !db) return;
+  const b = map.getBounds();
+  const toCheck = Object.entries(hotplaceMarkers).filter(([,info]) => {
+    const h = info.data;
+    return h && b.contains([h.lat, h.lng]);
+  }).slice(0, 15); // 최대 15개 (과부하 방지)
+
+  let removed = 0;
+  for (const [id, info] of toCheck) {
+    try {
+      let data = _panel3Cache.get(id);
+      if (!data) {
+        const PROXY = u => `https://mungmungmap-proxy.jaypark.workers.dev/?url=${encodeURIComponent(u)}`;
+        const waitMs = _proxyRateLimitUntil - Date.now();
+        if (waitMs > 0) await new Promise(r => setTimeout(r, Math.min(waitMs, 3000)));
+        await _proxyQueue.acquire();
+        let res;
+        try { res = await fetch(PROXY(`https://place-api.map.kakao.com/places/panel3/${id}`), { signal: AbortSignal.timeout(8000) }); }
+        finally { _proxyQueue.release(); }
+        if (res?.ok) {
+          const txt = await res.text();
+          if (txt.length >= 200) try { data = JSON.parse(txt); _panel3Cache.set(id, data); } catch(e) {}
+        }
+      }
+      if (!data) continue;
+      const isClosed =
+        data?.place_add_info?.status?.state === 'CLOSED' ||
+        data?.basic_info?.operation?.closed_type === 'PERMANENT' ||
+        (typeof data?.basic_info?.closed === 'boolean' && data.basic_info.closed);
+      if (isClosed) {
+        clusterGroup?.removeLayer(info.marker);
+        delete hotplaceMarkers[id];
+        try { await db.collection('hotplaces').doc(id).update({ isClosed: true }); } catch(e) {}
+        removed++;
+      }
+    } catch(e) { console.warn('[validateHotplace]', id, e); }
+  }
+  if (removed > 0) showToast(`🔄 폐업 핫플 ${removed}개 제거됐어요`);
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  동적 임계치 계산 (지역 밀도 기반)
+// ══════════════════════════════════════════════════════════════════
+function _computeHotThreshold(counts) {
+  // counts = Kakao(블로그+맵) + Naver(블로그+리뷰) 3소스 합산값 배열
+  // 네이버 블로그가 포함되면 수치가 3~5배 커지므로 임계치 상향 보정
+  const FLOOR = 400, CEIL = 5000;
+  if (!counts.length) return 800;
+  const sorted   = [...counts].sort((a, b) => b - a);
+  const top25pct = sorted[Math.floor(sorted.length * 0.25)] || 0;
+  const over500  = counts.filter(c => c >= 500).length; // 3소스 기준 density marker
+  let base;
+  if (over500 >= 30 || top25pct >= 1500) {
+    // 인기상업지역 (성수동·홍대·강남 등): 네이버 블로그 2000+ 흔함
+    base = Math.max(2000, top25pct * 0.55);
+  } else if (over500 >= 12 || top25pct >= 700) {
+    // 일반상업지역: 괜찮은 맛집은 네이버 500~1500
+    base = Math.max(800, top25pct * 0.50);
+  } else {
+    // 한적지역: 진짜 괜찮은 곳은 3소스 합산 400~800 수준
+    base = Math.max(400, top25pct * 0.45);
+  }
+  return Math.min(CEIL, Math.max(FLOOR, Math.round(base / 100) * 100));
+}
+
+// ── 네이버 블로그 리뷰 수 조회 ─────────────────────────────────────────────
+async function _fetchNaverBlogCount(name, naverCid, naverCs) {
+  if (!naverCid || !naverCs || !name) return 0;
+  try {
+    const resp = await fetch(
+      `https://openapi.naver.com/v1/search/local.json?query=${encodeURIComponent(name)}&display=5`,
+      { headers: { 'X-Naver-Client-Id': naverCid, 'X-Naver-Client-Secret': naverCs } }
+    );
+    if (!resp.ok) return 0;
+    const json = await resp.json();
+    const items = json.items || [];
+    const cleanQuery = name.replace(/[^\w가-힣]/g, '').toLowerCase();
+    for (const item of items) {
+      const itemName = (item.title || '').replace(/<[^>]+>/g, '').replace(/[^\w가-힣]/g, '').toLowerCase();
+      if (itemName.includes(cleanQuery) || cleanQuery.includes(itemName)) {
+        return parseInt(item.blogreviewcount || 0) + parseInt(item.reviewcount || 0);
+      }
+    }
+  } catch(e) {}
+  return 0;
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  핫플레이스 검색 메인 함수
+// ══════════════════════════════════════════════════════════════════
+async function doHotplaceSearch() {
+  _setHotFabState(true, '핫플 찾는 중...');
+  try {
+    // 기존 핫플 로드 + 폐업 검증
+    await loadViewportHotplaces();
+    await validateViewportHotplaces();
+
+    // ── 뷰포트 그리드 계산 (doLiveSearch와 동일 방식) ──────────────────────────
+    const bounds = map.getBounds();
+    const N = bounds.getNorth(), S = bounds.getSouth();
+    const E = bounds.getEast(),  W = bounds.getWest();
+    const latDiff = N-S, lngDiff = E-W;
+    const viewKmW = lngDiff*88, viewKmH = latDiff*111;
+    const viewMaxKm = Math.max(viewKmW, viewKmH);
+    const gridN = viewMaxKm <= 2 ? 4 : viewMaxKm <= 5 ? 3 : 2;
+
+    const gridPoints = [];
+    for (let i=0; i<gridN; i++)
+      for (let j=0; j<gridN; j++)
+        gridPoints.push({ lat: S+latDiff*(i+0.5)/gridN, lng: W+lngDiff*(j+0.5)/gridN });
+
+    const cellDiagM = Math.sqrt(
+      Math.pow((viewKmW/gridN)*1000, 2) + Math.pow((viewKmH/gridN)*1000, 2)
+    ) / 2;
+    const cellRadiusM = Math.min(Math.max(cellDiagM*1.3, 300), 5000);
+
+    showToast(`🔥 ${gridN}×${gridN} 구역 핫플 탐색 중...`);
+
+    // ── Phase 1: 카테고리 검색 (CE7·FD6·AT4·AD5·CT1) + 키워드 검색 ─────────────
+    const catCodes = ['CE7', 'FD6', 'AT4', 'AD5', 'CT1'];
+    const hotKeywords = ['편집샵', '소품샵', '라이프스타일샵', '인테리어샵', '쇼핑몰'];
+    let allResults = [];
+    const tasks = [];
+
+    // 카테고리 코드 검색
+    for (const pt of gridPoints) {
+      for (const code of catCodes) {
+        tasks.push(async () => {
+          for (let page=1; page<=10; page++) {
+            try {
+              const resp = await fetch(
+                `https://dapi.kakao.com/v2/local/search/category.json` +
+                `?category_group_code=${code}&x=${pt.lng}&y=${pt.lat}` +
+                `&radius=${Math.round(cellRadiusM)}&size=15&page=${page}`,
+                { headers: { 'Authorization': `KakaoAK ${KAKAO_REST_KEY}` } }
+              );
+              if (resp.status === 429) { _sessionQuotaHit = true; break; }
+              if (!resp.ok) break;
+              const json = await resp.json();
+              if (json.documents?.length) allResults = allResults.concat(json.documents);
+              if (json.meta?.is_end !== false) break;
+            } catch(e) { break; }
+          }
+        });
+      }
+    }
+
+    // 키워드 검색 (쇼핑 카테고리 코드 없는 장소 보완)
+    for (const pt of gridPoints) {
+      for (const kw of hotKeywords) {
+        tasks.push(async () => {
+          for (let page=1; page<=3; page++) {
+            try {
+              const resp = await fetch(
+                `https://dapi.kakao.com/v2/local/search/keyword.json` +
+                `?query=${encodeURIComponent(kw)}&x=${pt.lng}&y=${pt.lat}` +
+                `&radius=${Math.round(cellRadiusM)}&size=15&page=${page}`,
+                { headers: { 'Authorization': `KakaoAK ${KAKAO_REST_KEY}` } }
+              );
+              if (resp.status === 429) { _sessionQuotaHit = true; break; }
+              if (!resp.ok) break;
+              const json = await resp.json();
+              if (json.documents?.length) allResults = allResults.concat(json.documents);
+              if (json.meta?.is_end !== false) break;
+            } catch(e) { break; }
+          }
+        });
+      }
+    }
+
+    // 청크 4개씩 병렬 실행
+    for (let i=0; i<tasks.length; i+=4) {
+      await Promise.all(tasks.slice(i, i+4).map(t => t()));
+    }
+
+    // ── 중복 제거 + 뷰포트 필터 ─────────────────────────────────────────────────
+    const existingIds = new Set(Object.keys(hotplaceMarkers));
+    const uniqueMap = new Map();
+    for (const d of allResults) {
+      if (!d.id || existingIds.has(d.id) || uniqueMap.has(d.id)) continue;
+      const lat = parseFloat(d.y), lng = parseFloat(d.x);
+      if (isNaN(lat) || isNaN(lng)) continue;
+      if (!bounds.contains([lat, lng])) continue;
+      uniqueMap.set(d.id, d);
+    }
+    const unique = [...uniqueMap.values()];
+
+    _setHotFabState(true, `핫플 검증 중... (${unique.length}개)`);
+
+    // ── Phase 2: Kakao 리뷰 수 수집 ─────────────────────────────────────────────
+    const PROXY = u => `https://mungmungmap-proxy.jaypark.workers.dev/?url=${encodeURIComponent(u)}`;
+    const kakaoCountMap = new Map(); // id → { blog, review, data }
+
+    for (const d of unique) {
+      try {
+        const id = d.id;
+        let data = _panel3Cache.get(id);
+        if (!data) {
+          const waitMs = _proxyRateLimitUntil - Date.now();
+          if (waitMs > 0) await new Promise(r => setTimeout(r, Math.min(waitMs, 3000)));
+          _incWorkerCall();
+          await _proxyQueue.acquire();
+          let res;
+          try {
+            res = await fetch(PROXY(`https://place-api.map.kakao.com/places/panel3/${id}`),
+              { signal: AbortSignal.timeout(8000) });
+          } finally { _proxyQueue.release(); }
+          if (res?.ok) {
+            const txt = await res.text();
+            if (txt.length >= 200) {
+              try { data = JSON.parse(txt); _panel3Cache.set(id, data); } catch(e) {}
+            }
+          }
+          if (res?.status === 429) {
+            _proxyRateLimitUntil = Date.now() + 1500;
+            _proxyQueue.maxConcurrent = Math.max(3, _proxyQueue.maxConcurrent - 1);
+          } else if (res?.ok && _proxyQueue.maxConcurrent < 8) {
+            _proxyQueue.maxConcurrent = Math.min(8, _proxyQueue.maxConcurrent + 1);
+          }
+        }
+        if (!data) continue;
+
+        const blog   = data?.blog_review?.review_count || 0;
+        const review = data?.kakaomap_review?.score_set?.review_count || 0;
+        kakaoCountMap.set(id, { blog, review, data });
+      } catch(e) { console.warn('[hotplace] Kakao 리뷰 조회 오류:', d?.place_name, e); }
+    }
+
+    // ── Phase 3: 네이버 전체 병렬 조회 (임계치 계산 전에 완료) ─────────────────
+    _setHotFabState(true, `네이버 리뷰 수집 중... (${kakaoCountMap.size}개)`);
+    await _appConfigReady;
+    const naverCid = _appNaverCid || (localStorage.getItem('naver_pp_cid') || '').trim();
+    const naverCs  = _appNaverCs  || (localStorage.getItem('naver_pp_cs')  || '').trim();
+    const naverCountMap = new Map(); // id → naverBlog count
+
+    if (naverCid && naverCs) {
+      // Kakao Panel3 결과가 있는 장소만 대상 (데이터 없으면 어차피 필터링됨)
+      const naverTargets = unique.filter(d => kakaoCountMap.has(d.id));
+      const naverTasks = naverTargets.map(d => async () => {
+        const cnt = await _fetchNaverBlogCount(d.place_name, naverCid, naverCs);
+        naverCountMap.set(d.id, cnt);
+      });
+      // 5개씩 병렬 (Naver API rate limit 고려)
+      for (let i = 0; i < naverTasks.length; i += 5) {
+        await Promise.all(naverTasks.slice(i, i + 5).map(t => t()));
+      }
+      console.log(`[hotplace] 네이버 조회 완료: ${naverCountMap.size}개`);
+    }
+
+    // ── Phase 4: 동적 임계치 계산 (3소스 합산 기준) ───────────────────────────
+    const allTotals = unique
+      .filter(d => kakaoCountMap.has(d.id))
+      .map(d => {
+        const kk = kakaoCountMap.get(d.id);
+        return (kk.blog + kk.review) + (naverCountMap.get(d.id) || 0);
+      });
+    const dynamicThreshold = _computeHotThreshold(allTotals);
+    console.log(`[hotplace] 동적 임계치: ${dynamicThreshold} (샘플 ${allTotals.length}개, 3소스 합산 기준)`);
+
+    // ── Phase 5: 최종 선별 + 저장 ─────────────────────────────────────────────
+    let newHotCount = 0;
+
+    for (const d of unique) {
+      try {
+        const id = d.id;
+        const kk = kakaoCountMap.get(id);
+        if (!kk) continue;
+
+        const { blog: kakaoBlog, review: kakaoMap, data } = kk;
+        const naverBlog = naverCountMap.get(id) || 0;
+        const totalCount = kakaoBlog + kakaoMap + naverBlog;
+
+        // 폐업 체크
+        const isClosed =
+          data?.place_add_info?.status?.state === 'CLOSED' ||
+          data?.basic_info?.operation?.closed_type === 'PERMANENT';
+        if (isClosed) continue;
+
+        if (totalCount < dynamicThreshold) continue; // 동적 임계치 미달
+
+        const lat = parseFloat(d.y), lng = parseFloat(d.x);
+        const h = {
+          kakaoId:      id,
+          name:         d.place_name || '',
+          lat, lng,
+          addr:         d.road_address_name || d.address_name || '',
+          phone:        d.phone || '',
+          kakaoUrl:     d.place_url || `https://place.map.kakao.com/${id}`,
+          category:     d.category_name || '',
+          kakaoBlog,
+          kakaoMap,
+          naverBlog,
+          totalCount,
+          threshold:    dynamicThreshold,
+          isClosed:     false,
+          addedAt:      firebase.firestore.FieldValue.serverTimestamp(),
+          lastVerified: firebase.firestore.FieldValue.serverTimestamp(),
+        };
+
+        // Firestore 저장
+        if (firebaseReady && db) {
+          try { await db.collection('hotplaces').doc(id).set(h, { merge: true }); }
+          catch(e) { console.warn('[hotplace] Firestore 저장 실패:', e); }
+        }
+
+        addHotplaceMarker(h);
+        newHotCount++;
+      } catch(e) { console.warn('[hotplace] 처리 오류:', d?.place_name, e); }
+    }
+
+    if (newHotCount > 0) showToast(`⭐ ${newHotCount}개 핫플레이스 발견! (기준: 리뷰 ${dynamicThreshold}+)`);
+    else showToast('이 지역에서 새로운 핫플을 찾지 못했어요');
+
+  } catch(e) {
+    console.error('[doHotplaceSearch] 오류:', e);
+    showToast('핫플 검색 중 오류가 발생했어요');
+  } finally {
+    _setHotFabState(false);
+  }
 }
 
 function toggleLiveSearch() {
