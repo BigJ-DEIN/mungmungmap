@@ -5011,12 +5011,30 @@ const _HOT_EXCLUDE_BRANDS = [
   '국민은행','신한은행','우리은행','하나은행','기업은행','농협은행',
   'SC제일은행','씨티은행','카카오뱅크','케이뱅크',
 ];
+function _hasBranchSuffix(name) {
+  if (!name) return false;
+  const n = name.trim();
+  // 본점·지점·분점·직영점·대리점·가맹점 → 명백한 체인
+  if (/[가-힣](본점|지점|분점|직영점|대리점|가맹점)$/.test(n)) return true;
+  // 1호점, 2호점 등 번호 지점
+  if (/\d+호점$/.test(n)) return true;
+  // "[브랜드] [지역]점" 패턴: 공백이 있고 마지막이 [한글2~5자]+점
+  // 단 중식당 "반점(飯店)", 분식집, 가게 등 업종명으로 끝나는 것 제외
+  const BRANCH_FALSE_POS = ['반점','음식점','분식점','매점','상점','가게','식당'];
+  if (n.includes(' ') && /[가-힣]{2,5}점$/.test(n)) {
+    return !BRANCH_FALSE_POS.some(fp => n.endsWith(fp));
+  }
+  return false;
+}
+
 function _isFranchise(name, catName) {
   if (!name) return false;
   // 카테고리 체크
   if (catName && _HOT_FRANCHISE_CATS.some(kw => catName.includes(kw))) return true;
-  // 브랜드명 체크: 이름이 브랜드로 시작하거나 브랜드를 포함
   const n = name.trim();
+  // 지점명 패턴 체크 ("판교점", "강남역점", "직영점" 등)
+  if (_hasBranchSuffix(n)) return true;
+  // 브랜드명 체크: 이름이 브랜드로 시작하거나 브랜드를 포함
   return _HOT_EXCLUDE_BRANDS.some(brand => {
     if (!brand) return false;
     // 정확히 일치하거나, 브랜드명 뒤에 지점 구분자가 오는 경우만 매칭
