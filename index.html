@@ -5306,7 +5306,9 @@ async function doHotplaceSearch() {
 
         const blog      = data?.blog_review?.review_count || 0;
         const review    = data?.kakaomap_review?.score_set?.review_count || 0;
-        const scoreRaw  = data?.kakaomap_review?.score_set?.score;
+        // ★ 카카오 API 응답 필드: average_score (구버전: score → 현재: average_score)
+        const scoreRaw  = data?.kakaomap_review?.score_set?.average_score
+                       ?? data?.kakaomap_review?.score_set?.score; // 하위 호환
         // scoreRaw가 0이면 "평점 없음"이 아닌 "0점"일 수 있어서 null/undefined 구분
         const score     = (scoreRaw != null && scoreRaw !== '') ? parseFloat(scoreRaw) : null;
 
