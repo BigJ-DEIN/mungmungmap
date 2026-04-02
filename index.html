@@ -4769,8 +4769,9 @@ function addHotplaceMarker(h) {
   const icon  = L.divIcon({ html, className:'', iconSize:[sz+24, sz+12], iconAnchor:[sz/2+12, sz*0.85] });
   const m = L.marker([h.lat, h.lng], { icon })
     .on('click', e => { L.DomEvent.stopPropagation(e); showHotplacePopup(h); });
-  // 1등급: 기본 뷰(all/hotplaces)에서 항상 표시. 2등급: hotplaces 탭에서만 표시.
-  const shouldAdd = grade === 1 ? (_viewMode !== 'pets') : (_viewMode === 'hotplaces');
+  // 1등급 4.7+: 기본 뷰(all)에서 표시. 1등급 4.7미만·2등급: hotplaces 탭에서만 표시.
+  const isTopGrade1 = grade === 1 && (h.kakaoScore ?? 0) >= 4.7;
+  const shouldAdd = isTopGrade1 ? (_viewMode !== 'pets') : (_viewMode === 'hotplaces');
   if (shouldAdd) clusterGroup.addLayer(m);
   hotplaceMarkers[h.kakaoId] = { marker: m, data: h, grade };
 }
@@ -6623,14 +6624,15 @@ function setViewMode(btn, mode) {
   if (condRow) condRow.style.display = (mode === 'hotplaces') ? 'none' : '';
   // 핫플레이스 마커 표시/숨김 (등급별 제어)
   // · pets 모드: 전체 숨김
-  // · all  모드: 1등급만 표시
-  // · hotplaces 모드: 1·2등급 모두 표시
-  Object.values(hotplaceMarkers).forEach(({ marker, grade = 1 }) => {
+  // · all  모드: 1등급 4.7+ 만 표시 (디폴트)
+  // · hotplaces 모드: 1등급 전체(4.7미만 포함) + 2등급 모두 표시
+  Object.values(hotplaceMarkers).forEach(({ marker, grade = 1, data: _d }) => {
+    const isTopGrade1 = grade === 1 && (_d?.kakaoScore ?? 0) >= 4.7;
     const inCluster = clusterGroup?.hasLayer(marker);
     if (mode === 'pets') {
       if (inCluster) clusterGroup.removeLayer(marker);
     } else if (mode === 'all') {
-      if (grade === 1) { if (!inCluster) clusterGroup?.addLayer(marker); }
+      if (isTopGrade1) { if (!inCluster) clusterGroup?.addLayer(marker); }
       else             { if (inCluster)  clusterGroup.removeLayer(marker); }
     } else { // hotplaces
       if (!inCluster) clusterGroup?.addLayer(marker);
@@ -7254,9 +7256,11 @@ function renderList(filtered) {
   if (_viewMode === 'hotplaces' || _viewMode === 'all') {
     const vpBounds = map ? map.getBounds() : null;
     const hotCards = Object.values(hotplaceMarkers)
-      .filter(({ data: h, grade = 1 }) =>
-        (!vpBounds || vpBounds.contains([h.lat, h.lng])) &&
-        (_viewMode !== 'all' || grade === 1)) // all 모드: 1등급만 표시
+      .filter(({ data: h, grade = 1 }) => {
+        const isTopGrade1 = grade === 1 && (h.kakaoScore ?? 0) >= 4.7;
+        return (!vpBounds || vpBounds.contains([h.lat, h.lng])) &&
+          (_viewMode !== 'all' || isTopGrade1); // all 모드: 1등급 4.7이상만 표시
+      })
       .sort((a, b) => ((b.data.hotScore||0) - (a.data.hotScore||0))); // 종합점수 내림차순
     if (hotCards.length) {
       if (_viewMode === 'all') html += `<div class="list-section-header"><div class="sec-line"></div>&nbsp;⭐ 핫플레이스 (${hotCards.length}개)&nbsp;<div class="sec-line"></div></div>`;
