@@ -7298,8 +7298,11 @@ function hotplaceCardHtml(h) {
   const addrShort = (h.addr || '').split(' ').slice(0, 3).join(' ');
   const kakaoReview = h.kakaoMap || h.reviewCount || 0;
   const hs = h.hotScore || 0;
+  const hGrade = h.grade ?? 1;
   // 점수 등급 색상: 400+=금색강조, 300+=금색, 200+=주황
   const scoreColor = hs >= 400 ? '#C8A400' : hs >= 300 ? '#E65100' : '#888';
+  // 별 색상: 1등급=금색, 2등급=은빛
+  const starColor = hGrade === 1 ? '#F4B400' : '#B0BEC5';
   // 별점 표시 (있을 때만)
   const ratingTag = (h.kakaoScore != null && h.kakaoScore > 0)
     ? `<span class="tag t-gray">★ ${h.kakaoScore.toFixed(1)}</span>`
@@ -7307,7 +7310,7 @@ function hotplaceCardHtml(h) {
   return `
   <div class="place-card" onclick="openHotplaceCard('${h.kakaoId}')">
     <div class="pc-top">
-      <div class="pc-emoji" style="color:#F4B400;font-size:22px">★</div>
+      <div class="pc-emoji" style="color:${starColor};font-size:22px">★</div>
       <div class="pc-info">
         <div class="pc-name">${h.name}</div>
         <div class="pc-meta">${cat || '핫플레이스'}${addrShort ? '&nbsp;·&nbsp;' + addrShort : ''}</div>
