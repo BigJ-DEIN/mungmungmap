@@ -1478,6 +1478,12 @@
       line-height:1; cursor:pointer; display:block; transition:transform .15s;
     }
     .m-hotstar-2:hover { transform:scale(1.15); }
+    /* 숨은 명소 별 마커 — 보라색 */
+    .m-hotstar-3 {
+      color:#9C27B0; text-shadow:0 1px 4px rgba(156,39,176,.35);
+      line-height:1; cursor:pointer; display:block; transition:transform .15s;
+    }
+    .m-hotstar-3:hover { transform:scale(1.15); }
     /* 선별 중 임시 별 마커 — 하늘색 */
     .m-hotstar-pending {
       color:#42A5F5; text-shadow:0 1px 4px rgba(66,165,245,.45);
@@ -4762,16 +4768,17 @@ function addHotplaceMarker(h) {
   if (hotplaceMarkers[h.kakaoId]) return; // 중복 방지
   const grade = h.grade ?? 1; // 기존 데이터(grade 없음) = 1등급 처리
   const base  = Math.max(20, (map ? getMarkerSizeForZoom(map.getZoom()) : 18) + 2);
-  // 1등급: 금색 ★, 2등급: 은빛 ★ (약간 작음)
+  // 1등급: 금색 ★, 2등급: 은빛 ★, 3등급(숨은명소): 보라색 ★ (약간 작음)
   const sz    = grade === 1 ? base : Math.max(14, base - 4);
-  const cls   = grade === 1 ? 'm-hotstar' : 'm-hotstar-2';
+  const cls   = grade === 1 ? 'm-hotstar' : grade === 3 ? 'm-hotstar-3' : 'm-hotstar-2';
   const html  = `<div class="m-wrap"><div class="${cls}" style="font-size:${sz}px" data-hid="${h.kakaoId}">★</div></div>`;
   const icon  = L.divIcon({ html, className:'', iconSize:[sz+24, sz+12], iconAnchor:[sz/2+12, sz*0.85] });
   const m = L.marker([h.lat, h.lng], { icon })
     .on('click', e => { L.DomEvent.stopPropagation(e); showHotplacePopup(h); });
-  // 1등급 4.7+: 기본 뷰(all)에서 표시. 1등급 4.7미만·2등급: hotplaces 탭에서만 표시.
+  // 1등급 4.7+, 3등급(숨은명소): 기본 뷰(all)에서 표시. 1등급 4.7미만·2등급: hotplaces 탭에서만 표시.
   const isTopGrade1 = grade === 1 && (h.kakaoScore ?? 0) >= 4.7;
-  const shouldAdd = isTopGrade1 ? (_viewMode !== 'pets') : (_viewMode === 'hotplaces');
+  const isDefaultVisible = isTopGrade1 || grade === 3;
+  const shouldAdd = isDefaultVisible ? (_viewMode !== 'pets') : (_viewMode === 'hotplaces');
   if (shouldAdd) clusterGroup.addLayer(m);
   hotplaceMarkers[h.kakaoId] = { marker: m, data: h, grade };
 }
@@ -4788,6 +4795,8 @@ function showHotplacePopup(h) {
   // 등급 배지 (1등급=금색, 2등급=회색)
   const gradeBadge = hGrade === 1
     ? `<span style="background:#FFC107;color:#fff;font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px;margin-left:6px">1등급</span>`
+    : hGrade === 3
+    ? `<span style="background:#9C27B0;color:#fff;font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px;margin-left:6px">🔮 숨은명소</span>`
     : `<span style="background:#B0BEC5;color:#fff;font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px;margin-left:6px">2등급</span>`;
 
   document.getElementById('drawer-content').innerHTML = `
@@ -4987,12 +4996,18 @@ function _computeHotScore(kakaoBlog, kakaoMap, kakaoRating, naverBlog) {
 // 2등급: 별점 4.3+ AND 리뷰 30+ AND 종합점수 200+ → 핫플 탭 클릭 시만 표시
 // 0     : 기준 미달
 function _getHotGrade(kakaoBlog, kakaoMap, kakaoRating, naverBlog) {
-  if (kakaoMap < 10) return 0; // 최소 10개 미만이면 신뢰도 없음
   const hs = _computeHotScore(kakaoBlog, kakaoMap, kakaoRating, naverBlog);
   // 1등급: 4.6+ 별점 + 리뷰 15+ + 점수 250+
   if (kakaoRating != null && kakaoRating >= 4.6 && kakaoMap >= 15 && hs >= 250) return 1;
   // 2등급: 4.3+ 별점 + 리뷰 30+ + 점수 200+
   if (kakaoRating != null && kakaoRating >= 4.3 && kakaoMap >= 30 && hs >= 200) return 2;
+  // 3등급 (숨은 명소): 고평점 + 저리뷰 + 블로그 갭 — 입소문은 탔지만 아직 대중화 전
+  // 조건: 평점 4.3+ AND 리뷰 3~20개 AND 블로그 후기 5개+ AND 블로그/리뷰 비율 2x+
+  const blogGap = kakaoBlog / Math.max(kakaoMap, 1);
+  if (kakaoRating != null && kakaoRating >= 4.3
+      && kakaoMap >= 3 && kakaoMap <= 20
+      && kakaoBlog >= 5 && blogGap >= 2.0) return 3;
+  if (kakaoMap < 10) return 0; // 최소 10개 미만이면 신뢰도 없음
   return 0;
 }
 // 합격 여부 (1등급 or 2등급이면 합격)
@@ -5417,6 +5432,18 @@ async function doHotplaceSearch() {
 
         const lat = parseFloat(d.y), lng = parseFloat(d.x);
         const grade = _getHotGrade(kakaoBlog, kakaoMap, kakaoScore ?? null, naverBlog);
+
+        // 숨은 명소(grade 3)는 프랜차이즈 체인 제외
+        if (grade === 3) {
+          const FRANCHISE = ['이디야','스타벅스','투썸플레이스','메가MGC','메가커피','빽다방','컴포즈','할리스','파스쿠찌','탐앤탐스','커피빈','엔제리너스','드롭탑','폴바셋','블루보틀','커피에반하다','달콤커피','더벤티'];
+          const isFranchise = FRANCHISE.some(f => d.place_name.includes(f));
+          if (isFranchise) {
+            if (tempHotMarkers[id]) { try { tempHotMarkers[id].remove(); } catch(e){} delete tempHotMarkers[id]; }
+            continue;
+          }
+        }
+
+        const isHiddenGem = grade === 3;
         const h = {
           kakaoId:      id,
           name:         d.place_name || '',
@@ -5430,7 +5457,8 @@ async function doHotplaceSearch() {
           kakaoScore:   kakaoScore ?? null,
           naverBlog,
           hotScore,                // 종합 점수 (0~500)
-          grade,                   // 1=지도 기본표시 / 2=핫플탭에서만
+          grade,                   // 1=지도 기본표시 / 2=핫플탭에서만 / 3=숨은명소
+          isHiddenGem,             // 숨은 명소 여부
           totalCount:   kakaoBlog + kakaoMap, // 카카오 기반만 (표시용)
           isClosed:     false,
           addedAt:      firebase.firestore.FieldValue.serverTimestamp(),
@@ -5458,7 +5486,11 @@ async function doHotplaceSearch() {
       try { m.remove(); } catch(e) {}
     });
 
-    if (newHotCount > 0) showToast(`⭐ ${newHotCount}개 핫플레이스 발견!`);
+    const newHiddenCount = topCandidates.filter(c => _getHotGrade(c.kk.blog||0,c.kk.review||0,c.kk.score??null,c.nb)===3).length;
+    if (newHotCount > 0) {
+      const hiddenMsg = newHiddenCount > 0 ? ` (숨은명소 ${newHiddenCount}개 포함)` : '';
+      showToast(`⭐ ${newHotCount}개 핫플레이스 발견!${hiddenMsg}`);
+    }
     else showToast('이 지역에서 새로운 핫플을 찾지 못했어요');
 
   } catch(e) {
@@ -6628,12 +6660,13 @@ function setViewMode(btn, mode) {
   // · hotplaces 모드: 1등급 전체(4.7미만 포함) + 2등급 모두 표시
   Object.values(hotplaceMarkers).forEach(({ marker, grade = 1, data: _d }) => {
     const isTopGrade1 = grade === 1 && (_d?.kakaoScore ?? 0) >= 4.7;
+    const isDefaultVisible = isTopGrade1 || grade === 3; // 1등급 4.7+ 또는 숨은명소는 기본 표시
     const inCluster = clusterGroup?.hasLayer(marker);
     if (mode === 'pets') {
       if (inCluster) clusterGroup.removeLayer(marker);
     } else if (mode === 'all') {
-      if (isTopGrade1) { if (!inCluster) clusterGroup?.addLayer(marker); }
-      else             { if (inCluster)  clusterGroup.removeLayer(marker); }
+      if (isDefaultVisible) { if (!inCluster) clusterGroup?.addLayer(marker); }
+      else                  { if (inCluster)  clusterGroup.removeLayer(marker); }
     } else { // hotplaces
       if (!inCluster) clusterGroup?.addLayer(marker);
     }
@@ -7258,8 +7291,9 @@ function renderList(filtered) {
     const hotCards = Object.values(hotplaceMarkers)
       .filter(({ data: h, grade = 1 }) => {
         const isTopGrade1 = grade === 1 && (h.kakaoScore ?? 0) >= 4.7;
+        const isDefaultVisible = isTopGrade1 || grade === 3; // 숨은명소도 기본 표시
         return (!vpBounds || vpBounds.contains([h.lat, h.lng])) &&
-          (_viewMode !== 'all' || isTopGrade1); // all 모드: 1등급 4.7이상만 표시
+          (_viewMode !== 'all' || isDefaultVisible); // all 모드: 1등급 4.7이상 + 숨은명소 표시
       })
       .sort((a, b) => ((b.data.hotScore||0) - (a.data.hotScore||0))); // 종합점수 내림차순
     if (hotCards.length) {
@@ -7307,8 +7341,8 @@ function hotplaceCardHtml(h) {
   const hGrade = h.grade ?? 1;
   // 점수 등급 색상: 400+=금색강조, 300+=금색, 200+=주황
   const scoreColor = hs >= 400 ? '#C8A400' : hs >= 300 ? '#E65100' : '#888';
-  // 별 색상: 1등급=금색, 2등급=은빛
-  const starColor = hGrade === 1 ? '#F4B400' : '#B0BEC5';
+  // 별 색상: 1등급=금색, 2등급=은빛, 3등급=보라색
+  const starColor = hGrade === 1 ? '#F4B400' : hGrade === 3 ? '#9C27B0' : '#B0BEC5';
   // 별점 표시 (있을 때만)
   const ratingTag = (h.kakaoScore != null && h.kakaoScore > 0)
     ? `<span class="tag t-gray">★ ${h.kakaoScore.toFixed(1)}</span>`
