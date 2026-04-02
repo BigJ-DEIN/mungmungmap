@@ -7254,7 +7254,9 @@ function renderList(filtered) {
   if (_viewMode === 'hotplaces' || _viewMode === 'all') {
     const vpBounds = map ? map.getBounds() : null;
     const hotCards = Object.values(hotplaceMarkers)
-      .filter(({ data: h }) => !vpBounds || vpBounds.contains([h.lat, h.lng]))
+      .filter(({ data: h, grade = 1 }) =>
+        (!vpBounds || vpBounds.contains([h.lat, h.lng])) &&
+        (_viewMode !== 'all' || grade === 1)) // all 모드: 1등급만 표시
       .sort((a, b) => ((b.data.hotScore||0) - (a.data.hotScore||0))); // 종합점수 내림차순
     if (hotCards.length) {
       if (_viewMode === 'all') html += `<div class="list-section-header"><div class="sec-line"></div>&nbsp;⭐ 핫플레이스 (${hotCards.length}개)&nbsp;<div class="sec-line"></div></div>`;
