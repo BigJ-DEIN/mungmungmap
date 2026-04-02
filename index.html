@@ -6527,6 +6527,24 @@ function setViewMode(btn, mode) {
   filterPlaces();
   updateFrowSummaries();
   if (isMobile()) setMobileTab('list');
+
+  // ── 핫플레이스 탭 클릭 시 자동 검색 (모든 사용자) ──────────────────────────
+  // 뷰포트 내 핫플이 없고 검색 중이 아닐 때 자동으로 탐색 시작
+  if (mode === 'hotplaces' && !_hotSearchRunning) {
+    const vb = map?.getBounds();
+    const hotInView = vb
+      ? Object.values(hotplaceMarkers).some(({ data: h }) => h && vb.contains([h.lat, h.lng]))
+      : false;
+    if (!hotInView) {
+      // 쿨다운: 마지막 자동검색으로부터 3분 이내면 재실행 안 함
+      const now = Date.now();
+      const lastAuto = setViewMode._lastAutoHot || 0;
+      if (now - lastAuto > 3 * 60 * 1000) {
+        setViewMode._lastAutoHot = now;
+        startHotplaceSearch();
+      }
+    }
+  }
 }
 
 function setCatFilter(btn, catKey) {
@@ -7132,7 +7150,9 @@ function renderList(filtered) {
     }
     if (_viewMode === 'hotplaces') {
       cnt.textContent = `총 ${hotCards.length}곳`;
-      list.innerHTML = html || `<div class="no-results"><div class="nr-emoji">⭐</div><p>이 지역에 핫플레이스가 없어요.<br>⭐ 버튼으로 검색해보세요!</p></div>`;
+      list.innerHTML = html || (_hotSearchRunning
+        ? `<div class="no-results"><div class="nr-emoji">🔥</div><p>이 지역 핫플레이스를<br>탐색하고 있어요...</p></div>`
+        : `<div class="no-results"><div class="nr-emoji">⭐</div><p>이 지역에 핫플레이스가 없어요.<br>잠시 후 자동으로 탐색돼요!</p></div>`);
       return;
     }
     if (hotCards.length && _viewMode === 'all') html += `<div class="list-section-header"><div class="sec-line"></div>&nbsp;🐾 반려동물 동반 (${filtered.length}개)&nbsp;<div class="sec-line"></div></div>`;
