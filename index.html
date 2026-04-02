@@ -1472,6 +1472,17 @@
       line-height:1; cursor:pointer; display:block; transition:transform .15s;
     }
     .m-hotstar:hover { transform:scale(1.2); }
+    /* 2등급 핫플 별 마커 — 은빛 */
+    .m-hotstar-2 {
+      color:#B0BEC5; text-shadow:0 1px 4px rgba(0,0,0,.22);
+      line-height:1; cursor:pointer; display:block; transition:transform .15s;
+    }
+    .m-hotstar-2:hover { transform:scale(1.15); }
+    /* 선별 중 임시 별 마커 — 하늘색 */
+    .m-hotstar-pending {
+      color:#42A5F5; text-shadow:0 1px 4px rgba(66,165,245,.45);
+      line-height:1; display:block;
+    }
 
     /* ── 홍시 말풍선 ── */
     #hongsi-bubble {
@@ -4749,13 +4760,19 @@ function _setHotFabState(loading, msg) {
 function addHotplaceMarker(h) {
   if (!map || !clusterGroup) return;
   if (hotplaceMarkers[h.kakaoId]) return; // 중복 방지
-  const sz = Math.max(20, (map ? getMarkerSizeForZoom(map.getZoom()) : 18) + 2);
-  const html = `<div class="m-wrap"><div class="m-hotstar" style="font-size:${sz}px" data-hid="${h.kakaoId}">★</div></div>`;
-  const icon = L.divIcon({ html, className:'', iconSize:[sz+24, sz+12], iconAnchor:[sz/2+12, sz*0.85] });
+  const grade = h.grade ?? 1; // 기존 데이터(grade 없음) = 1등급 처리
+  const base  = Math.max(20, (map ? getMarkerSizeForZoom(map.getZoom()) : 18) + 2);
+  // 1등급: 금색 ★, 2등급: 은빛 ★ (약간 작음)
+  const sz    = grade === 1 ? base : Math.max(14, base - 4);
+  const cls   = grade === 1 ? 'm-hotstar' : 'm-hotstar-2';
+  const html  = `<div class="m-wrap"><div class="${cls}" style="font-size:${sz}px" data-hid="${h.kakaoId}">★</div></div>`;
+  const icon  = L.divIcon({ html, className:'', iconSize:[sz+24, sz+12], iconAnchor:[sz/2+12, sz*0.85] });
   const m = L.marker([h.lat, h.lng], { icon })
     .on('click', e => { L.DomEvent.stopPropagation(e); showHotplacePopup(h); });
-  clusterGroup.addLayer(m);
-  hotplaceMarkers[h.kakaoId] = { marker: m, data: h };
+  // 1등급: 기본 뷰(all/hotplaces)에서 항상 표시. 2등급: hotplaces 탭에서만 표시.
+  const shouldAdd = grade === 1 ? (_viewMode !== 'pets') : (_viewMode === 'hotplaces');
+  if (shouldAdd) clusterGroup.addLayer(m);
+  hotplaceMarkers[h.kakaoId] = { marker: m, data: h, grade };
 }
 
 function showHotplacePopup(h) {
@@ -4763,9 +4780,14 @@ function showHotplacePopup(h) {
   const kakaoBlog   = h.kakaoBlog || h.blogCount || 0;
   const hs = h.hotScore || _computeHotScore(kakaoBlog, kakaoReview, h.kakaoScore ?? null, h.naverBlog || 0);
   const cat = h.category ? h.category.split(' > ').pop() : '';
+  const hGrade = h.grade ?? 1;
   // 점수 등급 라벨
   const scoreLabel = hs >= 400 ? '최상급' : hs >= 300 ? '상급' : hs >= 200 ? '우수' : '등록됨';
   const scoreColor = hs >= 400 ? '#C8A400' : hs >= 300 ? '#E65100' : '#888';
+  // 등급 배지 (1등급=금색, 2등급=회색)
+  const gradeBadge = hGrade === 1
+    ? `<span style="background:#FFC107;color:#fff;font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px;margin-left:6px">1등급</span>`
+    : `<span style="background:#B0BEC5;color:#fff;font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px;margin-left:6px">2등급</span>`;
 
   document.getElementById('drawer-content').innerHTML = `
     <div class="d-header">
@@ -4773,6 +4795,7 @@ function showHotplacePopup(h) {
       <div style="flex:1;min-width:0">
         <div style="display:flex;align-items:flex-start;gap:6px">
           <div class="d-name" style="flex:1;min-width:0">${h.name}</div>
+          ${gradeBadge}
         </div>
         <div class="d-sub">${cat ? cat + '&nbsp;·&nbsp;' : ''}핫플레이스</div>
         <div class="d-sub" style="margin-top:3px">📍 ${h.addr || '주소 미확인'}</div>
@@ -4929,11 +4952,14 @@ function _computeHotScore(kakaoBlog, kakaoMap, kakaoRating, naverBlog) {
   const s1 = Math.min(300, Math.round(Math.sqrt(Math.max(0, kakaoMap)) * 17));
 
   // ② 별점 보정 (리뷰 30개 이상일 때만 유효)
-  //    4.5점+=+150 / 4.3점+=+100 / 4.0점+=+40 / 3.7점+=−30 / 3.7점 미만(리뷰50+)=−120
-  //    → 4.3점 이상이 진짜 의미있는 가게임을 반영
+  //    4.7점+=+200 / 4.6점+=+170 / 4.5점+=+150 / 4.3점+=+100 / 4.0점+=+40
+  //    3.7점+=−30 / 3.7점 미만(리뷰50+)=−120
+  //    → 4.6점 이상이 1등급 진짜 핫플. 4.3~4.5는 2등급 가볼만한 곳.
   let s2 = 0;
   if (kakaoRating != null && kakaoRating > 0 && kakaoMap >= 30) {
-    if      (kakaoRating >= 4.5) s2 = 150;
+    if      (kakaoRating >= 4.7) s2 = 200;
+    else if (kakaoRating >= 4.6) s2 = 170;
+    else if (kakaoRating >= 4.5) s2 = 150;
     else if (kakaoRating >= 4.3) s2 = 100;
     else if (kakaoRating >= 4.0) s2 = 40;
     else if (kakaoRating >= 3.7) s2 = -30;
@@ -4954,12 +4980,20 @@ function _computeHotScore(kakaoBlog, kakaoMap, kakaoRating, naverBlog) {
   return Math.max(0, s1 + s2 + s3 + s4);
 }
 
-// ── 1등급 합격 판정 ──────────────────────────────────────────────
-// 조건 ①: 카카오맵 실방문리뷰 30개 이상
-// 조건 ②: 종합 점수 200점 이상
+// ── 핫플 등급 판정 ──────────────────────────────────────────────
+// 1등급: 별점 4.6+ AND 종합점수 250+ → 지도 기본 표시 (정말 특별한 곳)
+// 2등급: 별점 4.3+ AND 종합점수 200+ → 핫플 탭 클릭 시만 표시 (가볼만한 곳)
+// 0     : 기준 미달
+function _getHotGrade(kakaoBlog, kakaoMap, kakaoRating, naverBlog) {
+  if (kakaoMap < 30) return 0;
+  const hs = _computeHotScore(kakaoBlog, kakaoMap, kakaoRating, naverBlog);
+  if (kakaoRating != null && kakaoRating >= 4.6 && hs >= 250) return 1;
+  if (kakaoRating != null && kakaoRating >= 4.3 && hs >= 200) return 2;
+  return 0;
+}
+// 합격 여부 (1등급 or 2등급이면 합격)
 function _isHotplaceQualified(kakaoBlog, kakaoMap, kakaoRating, naverBlog) {
-  if (kakaoMap < 30) return false;
-  return _computeHotScore(kakaoBlog, kakaoMap, kakaoRating, naverBlog) >= 200;
+  return _getHotGrade(kakaoBlog, kakaoMap, kakaoRating, naverBlog) > 0;
 }
 
 // ── 주소에서 구/군 단위 추출 (네이버 쿼리 지역 한정용) ─────────────────────────
@@ -5221,7 +5255,8 @@ async function doHotplaceSearch() {
         const lat = parseFloat(d.y), lng = parseFloat(d.x);
         if (isNaN(lat) || isNaN(lng)) return;
         const sz = Math.max(20, (map ? getMarkerSizeForZoom(map.getZoom()) : 18) + 2);
-        const html = `<div class="m-wrap"><div class="m-hotstar" style="color:#BBBBBB;font-size:${sz}px" data-hid="tmp${d.id}">★</div></div>`;
+        const psz  = Math.max(12, sz - 6); // 진행 중 별은 조금 더 작게
+        const html = `<div class="m-wrap"><div class="m-hotstar-pending" style="font-size:${psz}px" data-hid="tmp${d.id}">★</div></div>`;
         const icon = L.divIcon({ html, className:'', iconSize:[sz+24, sz+12], iconAnchor:[sz/2+12, sz*0.85] });
         // 임시 회색 마커는 map에 직접 추가 (clusterGroup 거치면 remove 시 즉시 반영 안 됨)
         const m = L.marker([lat, lng], { icon }).addTo(map);
@@ -5343,7 +5378,9 @@ async function doHotplaceSearch() {
       .filter(({ kk, nb, hs }) => _isHotplaceQualified(kk.blog || 0, kk.review || 0, kk.score ?? null, nb))
       .sort((a, b) => b.hs - a.hs); // 점수 내림차순 정렬
 
-    console.log(`[hotplace] 종합점수 200+ 합격: ${finalCandidates.length}개 (상위 30개만 저장)`);
+    const g1cnt = finalCandidates.filter(c=>_getHotGrade(c.kk.blog||0,c.kk.review||0,c.kk.score??null,c.nb)===1).length;
+    const g2cnt = finalCandidates.length - g1cnt;
+    console.log(`[hotplace] 합격: ${finalCandidates.length}개 (1등급 ${g1cnt}개, 2등급 ${g2cnt}개) → 상위 30개 저장`);
     const topCandidates = finalCandidates.slice(0, 30); // 한 지역 최대 30개
 
     // ── Phase 5: 최종 선별 + 저장 ─────────────────────────────────────────────
@@ -5373,6 +5410,7 @@ async function doHotplaceSearch() {
         }
 
         const lat = parseFloat(d.y), lng = parseFloat(d.x);
+        const grade = _getHotGrade(kakaoBlog, kakaoMap, kakaoScore ?? null, naverBlog);
         const h = {
           kakaoId:      id,
           name:         d.place_name || '',
@@ -5386,6 +5424,7 @@ async function doHotplaceSearch() {
           kakaoScore:   kakaoScore ?? null,
           naverBlog,
           hotScore,                // 종합 점수 (0~500)
+          grade,                   // 1=지도 기본표시 / 2=핫플탭에서만
           totalCount:   kakaoBlog + kakaoMap, // 카카오 기반만 (표시용)
           isClosed:     false,
           addedAt:      firebase.firestore.FieldValue.serverTimestamp(),
@@ -6577,12 +6616,18 @@ function setViewMode(btn, mode) {
   // 조건 필터는 반려동물/전체 모드에서만 표시
   const condRow = document.getElementById('frow-cond');
   if (condRow) condRow.style.display = (mode === 'hotplaces') ? 'none' : '';
-  // 핫플레이스 마커 표시/숨김
-  Object.values(hotplaceMarkers).forEach(({ marker }) => {
+  // 핫플레이스 마커 표시/숨김 (등급별 제어)
+  // · pets 모드: 전체 숨김
+  // · all  모드: 1등급만 표시
+  // · hotplaces 모드: 1·2등급 모두 표시
+  Object.values(hotplaceMarkers).forEach(({ marker, grade = 1 }) => {
     const inCluster = clusterGroup?.hasLayer(marker);
     if (mode === 'pets') {
       if (inCluster) clusterGroup.removeLayer(marker);
-    } else {
+    } else if (mode === 'all') {
+      if (grade === 1) { if (!inCluster) clusterGroup?.addLayer(marker); }
+      else             { if (inCluster)  clusterGroup.removeLayer(marker); }
+    } else { // hotplaces
       if (!inCluster) clusterGroup?.addLayer(marker);
     }
   });
