@@ -4759,8 +4759,13 @@ function addHotplaceMarker(h) {
 }
 
 function showHotplacePopup(h) {
-  const totalReviews = (h.kakaoBlog||h.blogCount||0) + (h.kakaoMap||h.reviewCount||0) + (h.naverBlog||0);
+  const kakaoReview = h.kakaoMap || h.reviewCount || 0;
+  const kakaoBlog   = h.kakaoBlog || h.blogCount || 0;
+  const hs = h.hotScore || _computeHotScore(kakaoBlog, kakaoReview, h.kakaoScore ?? null, h.naverBlog || 0);
   const cat = h.category ? h.category.split(' > ').pop() : '';
+  // 점수 등급 라벨
+  const scoreLabel = hs >= 400 ? '최상급' : hs >= 300 ? '상급' : hs >= 200 ? '우수' : '등록됨';
+  const scoreColor = hs >= 400 ? '#C8A400' : hs >= 300 ? '#E65100' : '#888';
 
   document.getElementById('drawer-content').innerHTML = `
     <div class="d-header">
@@ -4779,19 +4784,26 @@ function showHotplacePopup(h) {
       </div>
     </div>
     <div style="background:#FFF9E6;border-radius:12px;padding:14px;margin-top:12px;border:1.5px solid #FFD740">
-      <div style="font-size:13px;font-weight:700;color:#B8860B;margin-bottom:8px">⭐ 핫플레이스 지수</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+        <div style="font-size:13px;font-weight:700;color:#B8860B">⭐ 핫플 종합점수</div>
+        <div style="font-size:20px;font-weight:900;color:${scoreColor}">${hs}점 <span style="font-size:11px;font-weight:600">${scoreLabel}</span></div>
+      </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <div style="background:#FFF;border-radius:8px;padding:6px 12px;font-size:12px;color:#555;border:1px solid #FFE082">
-          카카오 블로그 <span style="font-weight:700;color:#E65100">${(h.kakaoBlog||h.blogCount||0).toLocaleString()}</span>
+          방문리뷰 <span style="font-weight:700;color:#E65100">${kakaoReview.toLocaleString()}개</span>
         </div>
+        ${h.kakaoScore != null && h.kakaoScore > 0 ? `
         <div style="background:#FFF;border-radius:8px;padding:6px 12px;font-size:12px;color:#555;border:1px solid #FFE082">
-          카카오 리뷰 <span style="font-weight:700;color:#E65100">${(h.kakaoMap||h.reviewCount||0).toLocaleString()}</span>
-        </div>
+          별점 <span style="font-weight:700;color:#E65100">★ ${h.kakaoScore.toFixed(1)}</span>
+        </div>` : ''}
         <div style="background:#FFF;border-radius:8px;padding:6px 12px;font-size:12px;color:#555;border:1px solid #FFE082">
-          네이버 블로그 <span style="font-weight:700;color:#03C75A">${(h.naverBlog||0).toLocaleString()}</span>
+          블로그 <span style="font-weight:700;color:#555">${kakaoBlog.toLocaleString()}건</span>
         </div>
+        ${(h.naverBlog||0) > 0 ? `
+        <div style="background:#FFF;border-radius:8px;padding:6px 12px;font-size:12px;color:#777;border:1px solid #eee">
+          네이버 <span style="font-weight:600;color:#03C75A">${(h.naverBlog||0).toLocaleString()}건</span> <span style="font-size:10px;color:#bbb">참고</span>
+        </div>` : ''}
       </div>
-      <div style="margin-top:10px;font-size:12px;color:#888">합산 리뷰 <span style="font-weight:700;color:#555">${totalReviews.toLocaleString()}</span>개${h.threshold ? ' (기준 ' + h.threshold.toLocaleString() + '+)' : ''}</div>
     </div>
     <div class="action-row" style="margin-top:16px">
       ${h.kakaoUrl ? `<button class="btn-act btn-primary" onclick="window.open('${h.kakaoUrl}','_blank','noopener')">
@@ -4900,39 +4912,84 @@ async function validateViewportHotplaces() {
 }
 
 // ══════════════════════════════════════════════════════════════════
-//  동적 임계치 계산 (지역 밀도 기반)
+//  핫플레이스 종합 점수 계산 (0 ~ 500점)
+//
+//  [신호 구성]
+//  ① 카카오맵 실방문리뷰  → 루트스케일, 최대 300점  ← 핵심 신호
+//  ② 카카오 별점 보정    → 리뷰 20개+ 시 ±80점     ← 품질 신호
+//  ③ 카카오 블로그 언급  → 루트스케일, 최대 80점    ← 화제성 신호
+//  ④ 네이버 블로그 인지도 → 계단형, 최대 40점       ← 보조 신호
+//
+//  네이버 블로그는 키워드 검색량이라 수백만이어도 최대 40점만 기여
+//  → "오늘하루" 같은 일반어 이름의 노이즈를 구조적으로 차단
 // ══════════════════════════════════════════════════════════════════
-function _computeHotThreshold(counts) {
-  // counts = Kakao(블로그+맵) + Naver(블로그+리뷰) 3소스 합산값 배열
-  // 네이버 블로그가 포함되면 수치가 3~5배 커지므로 임계치 상향 보정
-  const FLOOR = 400, CEIL = 5000;
-  if (!counts.length) return 800;
-  const sorted   = [...counts].sort((a, b) => b - a);
-  const top25pct = sorted[Math.floor(sorted.length * 0.25)] || 0;
-  const over500  = counts.filter(c => c >= 500).length; // 3소스 기준 density marker
-  let base;
-  if (over500 >= 30 || top25pct >= 1500) {
-    // 인기상업지역 (성수동·홍대·강남 등): 네이버 블로그 2000+ 흔함
-    base = Math.max(2000, top25pct * 0.55);
-  } else if (over500 >= 12 || top25pct >= 700) {
-    // 일반상업지역: 괜찮은 맛집은 네이버 500~1500
-    base = Math.max(800, top25pct * 0.50);
-  } else {
-    // 한적지역: 진짜 괜찮은 곳은 3소스 합산 400~800 수준
-    base = Math.max(400, top25pct * 0.45);
+function _computeHotScore(kakaoBlog, kakaoMap, kakaoRating, naverBlog) {
+  // ① 카카오맵 실방문리뷰 (핵심, 최대 300점)
+  //    30개=93점 / 60개=132점 / 150개=208점 / 300개+=300점
+  const s1 = Math.min(300, Math.round(Math.sqrt(Math.max(0, kakaoMap)) * 17));
+
+  // ② 별점 보정 (리뷰 30개 이상일 때만 유효)
+  //    4.5점+=+150 / 4.3점+=+100 / 4.0점+=+40 / 3.7점+=−30 / 3.7점 미만(리뷰50+)=−120
+  //    → 4.3점 이상이 진짜 의미있는 가게임을 반영
+  let s2 = 0;
+  if (kakaoRating != null && kakaoRating > 0 && kakaoMap >= 30) {
+    if      (kakaoRating >= 4.5) s2 = 150;
+    else if (kakaoRating >= 4.3) s2 = 100;
+    else if (kakaoRating >= 4.0) s2 = 40;
+    else if (kakaoRating >= 3.7) s2 = -30;
+    else                         s2 = kakaoMap >= 50 ? -120 : -50;
   }
-  return Math.min(CEIL, Math.max(FLOOR, Math.round(base / 100) * 100));
+
+  // ③ 카카오 블로그 언급 (화제성, 최대 80점)
+  //    100개=30점 / 500개=67점 / 700개+=80점
+  const s3 = Math.min(80, Math.round(Math.sqrt(Math.max(0, kakaoBlog)) * 3));
+
+  // ④ 네이버 블로그 인지도 (보조, 최대 40점)
+  //    ★ 쿼리가 이미 "이름+구" 방식으로 노이즈 차단됨 → 이 값은 신뢰도 높음
+  const s4 = naverBlog >= 30000 ? 40
+           : naverBlog >= 10000 ? 30
+           : naverBlog >= 3000  ? 20
+           : naverBlog >= 500   ? 10 : 0;
+
+  return Math.max(0, s1 + s2 + s3 + s4);
 }
 
-// ── 네이버 블로그 리뷰 수 조회 ─────────────────────────────────────────────
-// Firebase Function 프록시를 통해 호출 (CORS 우회)
+// ── 1등급 합격 판정 ──────────────────────────────────────────────
+// 조건 ①: 카카오맵 실방문리뷰 30개 이상
+// 조건 ②: 종합 점수 200점 이상
+function _isHotplaceQualified(kakaoBlog, kakaoMap, kakaoRating, naverBlog) {
+  if (kakaoMap < 30) return false;
+  return _computeHotScore(kakaoBlog, kakaoMap, kakaoRating, naverBlog) >= 200;
+}
+
+// ── 주소에서 구/군 단위 추출 (네이버 쿼리 지역 한정용) ─────────────────────────
+// "경기 성남시 분당구 수내동..." → "분당구"
+// "서울특별시 강남구 역삼동..."  → "강남구"
+function _extractDistrict(addr) {
+  if (!addr) return '';
+  const parts = addr.split(' ');
+  // 구·군 우선
+  const gu = parts.find(p => p.length >= 2 && (p.endsWith('구') || p.endsWith('군')));
+  if (gu) return gu;
+  // 없으면 시 단위
+  const si = parts.find(p => p.length >= 2 && p.endsWith('시') && p !== '특별시' && p !== '광역시');
+  return si || '';
+}
+
+// ── 네이버 블로그 수 조회 ────────────────────────────────────────────────────
+// Firebase Function 프록시 사용 (CORS 우회)
+// ★ 쿼리: "장소명 + 구" → 일반어 키워드 노이즈 구조적 차단
+//    예) "오늘하루" → "오늘하루 분당구"  (일상 포스트 필터링)
+//        "포크너"  → "포크너 분당구"    (진짜 방문 후기만 카운트)
 const _NAVER_PROXY_URL = 'https://asia-northeast3-hongsi-map.cloudfunctions.net/naverBlog';
 
-async function _fetchNaverBlogCount(name, naverCid, naverCs) {
-  // Naver Blog Search API (CORS 제약으로 Firebase Function 프록시 사용)
+async function _fetchNaverBlogCount(name, addr, naverCid, naverCs) {
   if (!naverCid || !naverCs || !name) return 0;
+  // 지역 한정 쿼리로 일반어 노이즈 차단
+  const district = _extractDistrict(addr);
+  const query = district ? `${name} ${district}` : name;
   try {
-    const url = `${_NAVER_PROXY_URL}?query=${encodeURIComponent(name)}&cid=${encodeURIComponent(naverCid)}&cs=${encodeURIComponent(naverCs)}`;
+    const url = `${_NAVER_PROXY_URL}?query=${encodeURIComponent(query)}&cid=${encodeURIComponent(naverCid)}&cs=${encodeURIComponent(naverCs)}`;
     const resp = await fetch(url);
     if (!resp.ok) return 0;
     const json = await resp.json();
@@ -5245,7 +5302,8 @@ async function doHotplaceSearch() {
       // Kakao Panel3 결과가 있는 장소만 대상 (데이터 없으면 어차피 필터링됨)
       const naverTargets = unique.filter(d => kakaoCountMap.has(d.id));
       const naverTasks = naverTargets.map(d => async () => {
-        const cnt = await _fetchNaverBlogCount(d.place_name, naverCid, naverCs);
+        const addr = d.road_address_name || d.address_name || '';
+        const cnt = await _fetchNaverBlogCount(d.place_name, addr, naverCid, naverCs);
         const id = d.id;
         const kk = kakaoCountMap.get(id);
 
@@ -5272,40 +5330,44 @@ async function doHotplaceSearch() {
       console.log(`[hotplace] 네이버 조회 완료: ${naverCountMap.size}개`);
     }
 
-    // ── Phase 4: 동적 임계치 계산 (3소스 합산 기준) ───────────────────────────
-    const allTotals = unique
+    // ── Phase 4: 종합점수 사전 계산 + 로그 ─────────────────────────────────────
+    // 종합점수 계산 → 합격 필터 → 점수순 정렬 → 상위 30개
+    const finalCandidates = unique
       .filter(d => kakaoCountMap.has(d.id))
       .map(d => {
-        const kk = kakaoCountMap.get(d.id);
-        return (kk.blog + kk.review) + (naverCountMap.get(d.id) || 0);
-      });
-    const dynamicThreshold = _computeHotThreshold(allTotals);
-    console.log(`[hotplace] 동적 임계치: ${dynamicThreshold} (샘플 ${allTotals.length}개, 3소스 합산 기준)`);
+        const kk  = kakaoCountMap.get(d.id);
+        const nb  = naverCountMap.get(d.id) || 0;
+        const hs  = _computeHotScore(kk.blog || 0, kk.review || 0, kk.score ?? null, nb);
+        return { d, kk, nb, hs };
+      })
+      .filter(({ kk, nb, hs }) => _isHotplaceQualified(kk.blog || 0, kk.review || 0, kk.score ?? null, nb))
+      .sort((a, b) => b.hs - a.hs); // 점수 내림차순 정렬
+
+    console.log(`[hotplace] 종합점수 200+ 합격: ${finalCandidates.length}개 (상위 30개만 저장)`);
+    const topCandidates = finalCandidates.slice(0, 30); // 한 지역 최대 30개
 
     // ── Phase 5: 최종 선별 + 저장 ─────────────────────────────────────────────
     let newHotCount = 0;
 
+    // 합격 기준 미달 임시 마커 미리 제거
+    const passedIds = new Set(topCandidates.map(c => c.d.id));
     for (const d of unique) {
+      if (!passedIds.has(d.id) && tempHotMarkers[d.id]) {
+        try { tempHotMarkers[d.id].remove(); } catch(e) {}
+        delete tempHotMarkers[d.id];
+      }
+    }
+
+    for (const { d, kk, nb: naverBlog, hs: hotScore } of topCandidates) {
       try {
         const id = d.id;
-        const kk = kakaoCountMap.get(id);
-        if (!kk) continue;
-
         const { blog: kakaoBlog, review: kakaoMap, score: kakaoScore, data } = kk;
-        const naverBlog = naverCountMap.get(id) || 0;
-        const totalCount = kakaoBlog + kakaoMap + naverBlog;
 
         // 폐업 체크
         const isClosed =
           data?.place_add_info?.status?.state === 'CLOSED' ||
           data?.basic_info?.operation?.closed_type === 'PERMANENT';
         if (isClosed) {
-          if (tempHotMarkers[id]) { try { tempHotMarkers[id].remove(); } catch(e){} delete tempHotMarkers[id]; }
-          continue;
-        }
-
-        if (totalCount < dynamicThreshold) {
-          // 임계치 미달 → 즉시 회색 마커 제거
           if (tempHotMarkers[id]) { try { tempHotMarkers[id].remove(); } catch(e){} delete tempHotMarkers[id]; }
           continue;
         }
@@ -5323,8 +5385,8 @@ async function doHotplaceSearch() {
           kakaoMap,
           kakaoScore:   kakaoScore ?? null,
           naverBlog,
-          totalCount,
-          threshold:    dynamicThreshold,
+          hotScore,                // 종합 점수 (0~500)
+          totalCount:   kakaoBlog + kakaoMap, // 카카오 기반만 (표시용)
           isClosed:     false,
           addedAt:      firebase.firestore.FieldValue.serverTimestamp(),
           lastVerified: firebase.firestore.FieldValue.serverTimestamp(),
@@ -5351,7 +5413,7 @@ async function doHotplaceSearch() {
       try { m.remove(); } catch(e) {}
     });
 
-    if (newHotCount > 0) showToast(`⭐ ${newHotCount}개 핫플레이스 발견! (기준: 리뷰 ${dynamicThreshold}+)`);
+    if (newHotCount > 0) showToast(`⭐ ${newHotCount}개 핫플레이스 발견!`);
     else showToast('이 지역에서 새로운 핫플을 찾지 못했어요');
 
   } catch(e) {
@@ -7143,7 +7205,7 @@ function renderList(filtered) {
     const vpBounds = map ? map.getBounds() : null;
     const hotCards = Object.values(hotplaceMarkers)
       .filter(({ data: h }) => !vpBounds || vpBounds.contains([h.lat, h.lng]))
-      .sort((a, b) => ((b.data.totalCount||0) - (a.data.totalCount||0)));
+      .sort((a, b) => ((b.data.hotScore||0) - (a.data.hotScore||0))); // 종합점수 내림차순
     if (hotCards.length) {
       if (_viewMode === 'all') html += `<div class="list-section-header"><div class="sec-line"></div>&nbsp;⭐ 핫플레이스 (${hotCards.length}개)&nbsp;<div class="sec-line"></div></div>`;
       html += hotCards.map(({ data: h }) => hotplaceCardHtml(h)).join('');
@@ -7182,9 +7244,16 @@ function renderList(filtered) {
 
 // ── 핫플레이스 목록 카드 렌더러 ──────────────────────────────────────────────
 function hotplaceCardHtml(h) {
-  const total = (h.kakaoBlog||h.blogCount||0) + (h.kakaoMap||h.reviewCount||0) + (h.naverBlog||0);
   const cat = h.category ? h.category.split(' > ').pop() : '';
   const addrShort = (h.addr || '').split(' ').slice(0, 3).join(' ');
+  const kakaoReview = h.kakaoMap || h.reviewCount || 0;
+  const hs = h.hotScore || 0;
+  // 점수 등급 색상: 400+=금색강조, 300+=금색, 200+=주황
+  const scoreColor = hs >= 400 ? '#C8A400' : hs >= 300 ? '#E65100' : '#888';
+  // 별점 표시 (있을 때만)
+  const ratingTag = (h.kakaoScore != null && h.kakaoScore > 0)
+    ? `<span class="tag t-gray">★ ${h.kakaoScore.toFixed(1)}</span>`
+    : '';
   return `
   <div class="place-card" onclick="openHotplaceCard('${h.kakaoId}')">
     <div class="pc-top">
@@ -7196,8 +7265,9 @@ function hotplaceCardHtml(h) {
     </div>
     <div class="pc-footer">
       <div class="pc-tags">
-        <span class="tag t-gold">리뷰 ${total.toLocaleString()}개</span>
-        ${h.threshold ? `<span class="tag t-gray">기준 ${h.threshold.toLocaleString()}+</span>` : ''}
+        <span class="tag t-gold">방문리뷰 ${kakaoReview.toLocaleString()}개</span>
+        ${ratingTag}
+        <span style="font-size:11px;color:${scoreColor};font-weight:700">점수 ${hs}</span>
       </div>
       <button class="card-view-btn" onclick="event.stopPropagation();openHotplaceCard('${h.kakaoId}')">보기</button>
     </div>
