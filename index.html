@@ -4951,12 +4951,12 @@ function _computeHotScore(kakaoBlog, kakaoMap, kakaoRating, naverBlog) {
   //    30개=93점 / 60개=132점 / 150개=208점 / 300개+=300점
   const s1 = Math.min(300, Math.round(Math.sqrt(Math.max(0, kakaoMap)) * 17));
 
-  // ② 별점 보정 (리뷰 30개 이상일 때만 유효)
+  // ② 별점 보정 (리뷰 15개 이상일 때 유효 — 4.6+ 명소는 리뷰가 적어도 인정)
   //    4.7점+=+200 / 4.6점+=+170 / 4.5점+=+150 / 4.3점+=+100 / 4.0점+=+40
   //    3.7점+=−30 / 3.7점 미만(리뷰50+)=−120
   //    → 4.6점 이상이 1등급 진짜 핫플. 4.3~4.5는 2등급 가볼만한 곳.
   let s2 = 0;
-  if (kakaoRating != null && kakaoRating > 0 && kakaoMap >= 30) {
+  if (kakaoRating != null && kakaoRating > 0 && kakaoMap >= 15) {
     if      (kakaoRating >= 4.7) s2 = 200;
     else if (kakaoRating >= 4.6) s2 = 170;
     else if (kakaoRating >= 4.5) s2 = 150;
@@ -4981,14 +4981,17 @@ function _computeHotScore(kakaoBlog, kakaoMap, kakaoRating, naverBlog) {
 }
 
 // ── 핫플 등급 판정 ──────────────────────────────────────────────
-// 1등급: 별점 4.6+ AND 종합점수 250+ → 지도 기본 표시 (정말 특별한 곳)
-// 2등급: 별점 4.3+ AND 종합점수 200+ → 핫플 탭 클릭 시만 표시 (가볼만한 곳)
+// 1등급: 별점 4.6+ AND 리뷰 15+ AND 종합점수 250+ → 지도 기본 표시 (정말 특별한 곳)
+//         리뷰 적어도 별점이 높은 명소(까페 종화 같은 곳) 포함
+// 2등급: 별점 4.3+ AND 리뷰 30+ AND 종합점수 200+ → 핫플 탭 클릭 시만 표시
 // 0     : 기준 미달
 function _getHotGrade(kakaoBlog, kakaoMap, kakaoRating, naverBlog) {
-  if (kakaoMap < 30) return 0;
+  if (kakaoMap < 10) return 0; // 최소 10개 미만이면 신뢰도 없음
   const hs = _computeHotScore(kakaoBlog, kakaoMap, kakaoRating, naverBlog);
-  if (kakaoRating != null && kakaoRating >= 4.6 && hs >= 250) return 1;
-  if (kakaoRating != null && kakaoRating >= 4.3 && hs >= 200) return 2;
+  // 1등급: 4.6+ 별점 + 리뷰 15+ + 점수 250+
+  if (kakaoRating != null && kakaoRating >= 4.6 && kakaoMap >= 15 && hs >= 250) return 1;
+  // 2등급: 4.3+ 별점 + 리뷰 30+ + 점수 200+
+  if (kakaoRating != null && kakaoRating >= 4.3 && kakaoMap >= 30 && hs >= 200) return 2;
   return 0;
 }
 // 합격 여부 (1등급 or 2등급이면 합격)
