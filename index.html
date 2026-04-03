@@ -1478,9 +1478,9 @@
       line-height:1; cursor:pointer; display:block; transition:transform .15s;
     }
     .m-hotstar-2:hover { transform:scale(1.15); }
-    /* 숨은 명소 별 마커 — 보라색 */
+    /* 숨은 명소 별 마커 — 연한 노란색 (금색보다 은은) */
     .m-hotstar-3 {
-      color:#9C27B0; text-shadow:0 1px 4px rgba(156,39,176,.35);
+      color:#FFE082; text-shadow:0 1px 3px rgba(180,140,0,.25);
       line-height:1; cursor:pointer; display:block; transition:transform .15s;
     }
     .m-hotstar-3:hover { transform:scale(1.15); }
@@ -4768,7 +4768,7 @@ function addHotplaceMarker(h) {
   if (hotplaceMarkers[h.kakaoId]) return; // 중복 방지
   const grade = h.grade ?? 1; // 기존 데이터(grade 없음) = 1등급 처리
   const base  = Math.max(20, (map ? getMarkerSizeForZoom(map.getZoom()) : 18) + 2);
-  // 1등급: 금색 ★, 2등급: 은빛 ★, 3등급(숨은명소): 보라색 ★ (약간 작음)
+  // 1등급: 금색 ★, 2등급: 은빛 ★, 3등급(숨은명소): 연한노란색 ★ (약간 작음)
   const sz    = grade === 1 ? base : Math.max(14, base - 4);
   const cls   = grade === 1 ? 'm-hotstar' : grade === 3 ? 'm-hotstar-3' : 'm-hotstar-2';
   const html  = `<div class="m-wrap"><div class="${cls}" style="font-size:${sz}px" data-hid="${h.kakaoId}">★</div></div>`;
