@@ -4775,8 +4775,8 @@ function addHotplaceMarker(h) {
   const icon  = L.divIcon({ html, className:'', iconSize:[sz+24, sz+12], iconAnchor:[sz/2+12, sz*0.85] });
   const m = L.marker([h.lat, h.lng], { icon })
     .on('click', e => { L.DomEvent.stopPropagation(e); showHotplacePopup(h); });
-  // 1등급 4.7+, 3등급(숨은명소): 기본 뷰(all)에서 표시. 1등급 4.7미만·2등급: hotplaces 탭에서만 표시.
-  const isTopGrade1 = grade === 1 && (h.kakaoScore ?? 0) >= 4.7;
+  // 1등급 4.8+, 3등급(숨은명소): 기본 뷰(all)에서 표시. 1등급 4.8미만·2등급: hotplaces 탭에서만 표시.
+  const isTopGrade1 = grade === 1 && (h.kakaoScore ?? 0) >= 4.8;
   const isDefaultVisible = isTopGrade1 || grade === 3;
   const shouldAdd = isDefaultVisible ? (_viewMode !== 'pets') : (_viewMode === 'hotplaces');
   if (shouldAdd) clusterGroup.addLayer(m);
@@ -6656,11 +6656,11 @@ function setViewMode(btn, mode) {
   if (condRow) condRow.style.display = (mode === 'hotplaces') ? 'none' : '';
   // 핫플레이스 마커 표시/숨김 (등급별 제어)
   // · pets 모드: 전체 숨김
-  // · all  모드: 1등급 4.7+ 만 표시 (디폴트)
-  // · hotplaces 모드: 1등급 전체(4.7미만 포함) + 2등급 모두 표시
+  // · all  모드: 1등급 4.8+ 만 표시 (디폴트)
+  // · hotplaces 모드: 1등급 전체(4.8미만 포함) + 2등급 모두 표시
   Object.values(hotplaceMarkers).forEach(({ marker, grade = 1, data: _d }) => {
-    const isTopGrade1 = grade === 1 && (_d?.kakaoScore ?? 0) >= 4.7;
-    const isDefaultVisible = isTopGrade1 || grade === 3; // 1등급 4.7+ 또는 숨은명소는 기본 표시
+    const isTopGrade1 = grade === 1 && (_d?.kakaoScore ?? 0) >= 4.8;
+    const isDefaultVisible = isTopGrade1 || grade === 3; // 1등급 4.8+ 또는 숨은명소는 기본 표시
     const inCluster = clusterGroup?.hasLayer(marker);
     if (mode === 'pets') {
       if (inCluster) clusterGroup.removeLayer(marker);
@@ -7290,10 +7290,10 @@ function renderList(filtered) {
     const vpBounds = map ? map.getBounds() : null;
     const hotCards = Object.values(hotplaceMarkers)
       .filter(({ data: h, grade = 1 }) => {
-        const isTopGrade1 = grade === 1 && (h.kakaoScore ?? 0) >= 4.7;
+        const isTopGrade1 = grade === 1 && (h.kakaoScore ?? 0) >= 4.8;
         const isDefaultVisible = isTopGrade1 || grade === 3; // 숨은명소도 기본 표시
         return (!vpBounds || vpBounds.contains([h.lat, h.lng])) &&
-          (_viewMode !== 'all' || isDefaultVisible); // all 모드: 1등급 4.7이상 + 숨은명소 표시
+          (_viewMode !== 'all' || isDefaultVisible); // all 모드: 1등급 4.8이상 + 숨은명소 표시
       })
       .sort((a, b) => ((b.data.hotScore||0) - (a.data.hotScore||0))); // 종합점수 내림차순
     if (hotCards.length) {
