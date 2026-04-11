@@ -1261,7 +1261,7 @@
     .like-btn:active { transform:scale(1.35); }
     /* 드로어 액션 행 좋아요 버튼 */
     .btn-act.like-btn { font-size:14px; color:#888; gap:4px; display:flex; align-items:center; }
-    .btn-act.like-btn.liked { color:#F07030; border-color:#F07030; }
+    .btn-act.like-btn.liked { color:#E53935; border-color:#E53935; }
 
     /* ── FAB (목록 버튼 — 하단 탭으로 대체됐으므로 숨김) ── */
     #fab-list { display:none !important; }
@@ -4784,6 +4784,7 @@ function addHotplaceMarker(h) {
 }
 
 function showHotplacePopup(h) {
+  window._currentHotplaceDrawer = h; // 관심 장소 버튼에서 참조
   const kakaoReview = h.kakaoMap || h.reviewCount || 0;
   const kakaoBlog   = h.kakaoBlog || h.blogCount || 0;
   const hs = h.hotScore || _computeHotScore(kakaoBlog, kakaoReview, h.kakaoScore ?? null, h.naverBlog || 0);
@@ -4842,12 +4843,97 @@ function showHotplacePopup(h) {
       ${h.kakaoUrl ? `<button class="btn-act btn-primary" onclick="window.open('${h.kakaoUrl}','_blank','noopener')">
         <i class="fa fa-location-dot"></i> 상세 보기
       </button>` : ''}
+      <button class="btn-act like-btn" id="hotplace-like-btn-${h.kakaoId}"
+        onclick="addHotplaceToFavorite(window._currentHotplaceDrawer)"
+        title="관심 장소 추가">☆ 관심 장소</button>
     </div>`;
+
+  // 관심 장소 버튼 상태 초기화 (place ID 매칭 후 업데이트)
+  setTimeout(() => _syncHotplaceLikeBtn(h), 50);
 
   document.getElementById('detail-drawer').classList.add('open');
   document.getElementById('drawer-overlay').classList.add('active');
   _drawerOpenAt = Date.now();
   if (typeof isMobile === 'function' && isMobile()) setMobileTab('map', true);
+}
+
+// ── 핫플레이스 관심 장소 버튼 상태 동기화 ─────────────────────────────────────
+function _syncHotplaceLikeBtn(h) {
+  const place = places.find(p => p.kakaoId === h.kakaoId);
+  const btn = document.getElementById(`hotplace-like-btn-${h.kakaoId}`);
+  if (!btn) return;
+  if (place && userLikedPlaceIds.has(place.id)) {
+    btn.textContent = '★ 관심 장소';
+    btn.classList.add('liked');
+    btn.title = '관심 장소 취소';
+  } else {
+    btn.textContent = '☆ 관심 장소';
+    btn.classList.remove('liked');
+    btn.title = '관심 장소 추가';
+  }
+}
+
+// ── 핫플레이스 → 관심 장소 추가/취소 ─────────────────────────────────────────
+async function addHotplaceToFavorite(h) {
+  if (!h) return;
+  if (!currentUser) { showToast('로그인이 필요해요 🔒'); return; }
+
+  // 1) 이미 places에 있는지 확인 (메모리)
+  let place = places.find(p => p.kakaoId === h.kakaoId);
+
+  // 2) 메모리에 없으면 Firestore에서 조회
+  if (!place && firebaseReady && db && h.kakaoId) {
+    try {
+      const snap = await db.collection('places').where('kakaoId', '==', h.kakaoId).limit(1).get();
+      if (!snap.empty) {
+        place = { ...snap.docs[0].data(), firestoreId: snap.docs[0].id };
+        if (!places.find(x => x.id == place.id)) {
+          places.push(place);
+          if (clusterGroup) { try { addMarker(place); } catch(e) {} }
+        }
+      }
+    } catch(e) { console.warn('[addHotplaceToFavorite] Firestore 조회 실패:', e); }
+  }
+
+  // 3) 그래도 없으면 places 컬렉션에 신규 등록
+  if (!place) {
+    showToast('📍 장소 등록 중...');
+    const cat  = impMapCat(h.category || '');
+    const area = impGuessArea(h.addr || '', h.addr || '');
+    const addrStr = h.addr || '';
+    const provinceMap = [
+      ['서울','서울'],['경기','경기'],['인천','인천'],['강원','강원'],
+      ['충북','충북'],['충남','충남'],['세종','세종'],['대전','대전'],
+      ['전북','전북'],['전남','전남'],['광주','광주'],['경북','경북'],
+      ['경남','경남'],['대구','대구'],['울산','울산'],['부산','부산'],['제주','제주']
+    ];
+    const province = provinceMap.find(([k]) => addrStr.includes(k))?.[1] || '';
+    const nextId = getNextPlaceId();
+    place = {
+      id: nextId, name: h.name, addr: addrStr,
+      phone: h.phone || '', kakaoUrl: h.kakaoUrl || '', kakaoId: h.kakaoId || '',
+      lat: h.lat, lng: h.lng,
+      cat, emoji: impCatEmoji(cat), area, province,
+      petStatus: 'confirmed',
+      large: null, small: null, indoor: null, outdoor: null,
+      cage: null, entryFee: null, stroller: null, note: '',
+      hours: [{ d: '영업시간', t: '카카오맵 확인' }],
+      active: true, source: 'hotplace_favorite', addedAt: new Date().toISOString(),
+    };
+    places.push(place);
+    if (_allKakaoIds && h.kakaoId) _allKakaoIds.add(h.kakaoId);
+    if (firebaseReady && db) {
+      const ref = db.collection('places').doc();
+      place.firestoreId = ref.id;
+      await ref.set(place).catch(e => console.warn('[addHotplaceToFavorite] 저장 실패:', e));
+    }
+    addMarker(place);
+    filterPlaces();
+  }
+
+  // 4) 관심 장소 토글
+  await toggleLikedPlace(place.id);
+  _syncHotplaceLikeBtn(h);
 }
 
 // ── Firestore hotplaces 뷰포트 로딩 (자동 — 모든 유저에게 표시) ──────────────
